@@ -35,7 +35,7 @@ _WIRE_DIR_COS_MIN = -0.35  # soft collinearity; allows gentle curves
 
 # Keynote tags: alphanumeric like A01 / B32 inside a small box.
 _KEYNOTE_RE = re.compile(r"^[A-Z]\d{2}$")
-_KEYNOTE_BOX_PAD_PT = 4.0
+_KEYNOTE_BOX_PAD_PT = 6.0  # include the small rectangle drawn around the tag
 
 # Reject leftover micro-noise and giant non-symbols after filtering.
 _MIN_CAND_AREA_PT2 = 6.0
@@ -426,6 +426,16 @@ def find_candidates(ctx: PageContext, viewport: BBox) -> list[Candidate]:
                 },
             )
         )
+    # Drop candidates that still touch a keynote tag bbox (geometry of the
+    # small rectangle can survive after the center-in-box filter).
+    if keynotes:
+        filtered: list[Candidate] = []
+        for c in candidates:
+            if any(_bbox_gap(c.bbox, kb) < 0.5 for kb in keynotes):
+                continue
+            filtered.append(c)
+        candidates = filtered
+
     candidates.sort(key=lambda c: (c.bbox[1], c.bbox[0]))
     return candidates
 
