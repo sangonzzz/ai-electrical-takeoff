@@ -2,40 +2,46 @@
 
 ## Estado
 
-M1 + M2 listos. Siguiente: M3 candidatos + classify.
+M1–M4 listos. Pipeline callable; overlays y JSON de las 4 hojas en `out/`.
 
 ## Hecho
 
-- M1: viewport + scale (tests + `out/debug/viewport_p{1..4}.png`)
-- M2: `extract_legend` + `legend_templates` + rule mapping SPEC §1–2
-  - Plan 1 ≥25 entries (fan, recessed, switch, GFI, smoke/CO)
-  - Debug: `out/debug/legend_p1.png`
-  - Mensaje a Agente 4
+- M1 viewport + scale
+- M2 legend + templates + rules
+- M3 candidates + classify (fan = 1 cluster; IoU templates; codes; NMS)
+- M4 `analyze_sheet` + CLI analyze + debug overlays
+- Resultados: `out/plan{1..4}.json`, `out/debug/detections_p{1..4}.png`
+- Mensajes a A3, A4, A5, A7, A8
 
 ## Cómo probarlo
 
 ```bash
 uv run pytest engine/tests/symbols/ -v
+uv run takeoff analyze data/plans/escondido_plans.pdf --page 0 --out out/plan1.json --debug --no-llm
 ```
 
 ## Siguiente
 
-- M3: `find_candidates` + `classify_candidates` + overlays + conteos por página
+- Bajar falsos positivos (switches/receptacles) con features + adjudication
+- Acelerar clustering O(n²) en planes densos (págs 3–4 ~20 s)
+- Iterar mirando overlays vs ground truth de Agente 7
 
 ## Bloqueos
 
-- Ninguno (LLM interpret_legend es opcional; pipeline M4 tolerará NotImplementedError)
+- Ninguno crítico. Accuracy aún no es “reviewer-ready” en todas las hojas.
 
 ## Decisions
 
-- Viewport: solo verticales negras con tramo *arriba* del título (Plan 4).
-- Legend: texto de descripción **dirigido por símbolo** (banda vertical entre peers de la misma columna) para no fusionar filas; pairing below para el ceiling fan.
-- Plumbing / attic / wiring: excluidos de `LegendEntry`.
+- Wiring filter: solo cadenas *alargadas*; blobs compactos (fan/luces) se conservan.
+- Ceiling fan: prior por tamaño (≥70 pt, aspect <1.35, ≥40 segs) además del template match.
+- Templates degenerados (lado <2.5 pt, p.ej. FC sliver) se ignoran.
+- NMS 8 pt por categoría.
+- CLI analyze: Agente 2 rellena el cuerpo (overlay + counts); skeleton sigue siendo A1.
 
 ## Needs from Santiago
 
-- (ninguno)
+- (ninguno) — cuando haya ground truth de conteos, priorizar falsos de switches/luces.
 
 ## Explicación para Santiago
 
-Ya tenemos el recorte del plano eléctrico (viewport) y la leyenda leída fila a fila. Cada fila de la leyenda guarda el dibujito del símbolo (para compararlo después con lo del plano) y el texto (para saber si es un abanico, un switch, un GFI, etc.). No usamos la IA para coordenadas: la geometría del PDF dice dónde está cada cosa. Lo siguiente es agrupar los trazos negros dentro del viewport en “candidatos” y compararlos con esas plantillas de la leyenda.
+El motor ya recorre cada hoja de punta a punta: encuentra el plano eléctrico, lee la leyenda, junta los trazos negros en símbolos (sin paredes ni cableado punteado), los compara con los dibujos de la leyenda y les pone tipo (abanico, switch, GFI…). El abanico del dormitorio sale como **un** símbolo gracias a no borrar sus aspas como si fueran cable. La salida es un JSON por plano más un PNG con cajas de colores. Todavía hay de más en switches/tomas; eso se limpia iterando con la evaluación y, si hace falta, con Claude solo para los dudosos (nunca para las coordenadas).

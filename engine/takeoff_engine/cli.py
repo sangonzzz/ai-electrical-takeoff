@@ -49,16 +49,24 @@ def analyze_cmd(
     with_bom: bool = typer.Option(True, "--bom/--no-bom"),
 ) -> None:
     """Analyze one sheet and write SheetResult JSON."""
-    from takeoff_engine.pipeline import analyze_sheet
+    from collections import Counter
+
+    from takeoff_engine.pipeline import analyze_sheet, write_debug_overlay
 
     result = analyze_sheet(pdf, page, use_llm=use_llm, with_bom=with_bom)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(result.model_dump_json(indent=2), encoding="utf-8")
     typer.echo(f"Wrote {out}")
+    counts = Counter(d.category.value for d in result.detections)
+    typer.echo(f"detections={len(result.detections)} by_category={dict(counts)}")
+    if result.warnings:
+        typer.echo(f"warnings={len(result.warnings)}")
     if debug:
         debug_dir = Path("out/debug")
         debug_dir.mkdir(parents=True, exist_ok=True)
-        typer.echo(f"Debug flag set; overlays go to {debug_dir}/ (Agente 7 overlay)")
+        overlay = debug_dir / f"detections_p{page + 1}.png"
+        write_debug_overlay(pdf, page, result, overlay)
+        typer.echo(f"Debug overlay: {overlay}")
 
 
 @app.command("eval")

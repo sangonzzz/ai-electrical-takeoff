@@ -54,12 +54,33 @@ Reads `SCALE: 1/4" = 1'-0"` under the title → `(draw_inches / real_feet) * 72`
 
 `legend_templates` returns `LegendTemplate(entry_id, bbox, segments, fills)` for 1:1 raster matching.
 
-## Candidates / classify
+## Candidates (`find_candidates`)
 
-*(Filled in M3.)*
+1. Keep black segments/fills whose bbox overlaps the viewport.
+2. Drop **walls**: axis-aligned strokes ≥22 pt, or shorter AA strokes hugging gray wall poché.
+3. Drop **wiring**: chains of short (2–12 pt) dashes linked by endpoint gap ≤4.5 pt — but **keep** compact dense chains (ceiling fan / light circles): aspect <2.2 with density >0.08, or near-square ≥40 pt.
+4. Drop **keynotes**: geometry under `A01`-style tags.
+5. Cluster remaining ink with bbox gap < `SYMBOL_CLUSTER_GAP_PT` (1.0). Second pass merges large neighbors (gap 3 pt) so fan blades stay one blob.
+
+## Classify (`classify_candidates`)
+
+1. Rasterize candidate and each legend template at 2 px/pt, same physical size (no rescale).
+2. Dilate masks (k=2) and score IoU at rotations 0/90/180/270.
+3. Hard size gate: area ratio >4 or max-side ratio >3 → score 0 (stops fan↔switch confusion).
+4. Hard prior: near-square cluster ≥70 pt with ≥40 segments → `ceiling_fan` (SPEC §2 #5).
+5. Attach code tokens within `CODE_TEXT_RADIUS_PT` (14); refine subtype per SPEC §2 priority.
+6. NMS: same category within 8 pt → keep highest confidence.
+7. Drop `junction_box` whose center lies inside a `ceiling_fan` bbox.
+8. `needs_review` when best <0.22 or top-two within 0.05.
+
+## Pipeline (`analyze_sheet`)
+
+`load_page → viewport/scale → legend (+ optional interpret_legend) → candidates → classify → optional adjudicate → detect_rooms/assign_rooms → optional wires/boxes`. `NotImplementedError` / teammate failures become `warnings`. CLI: `uv run takeoff analyze data/plans/escondido_plans.pdf --page 0 --out out/plan1.json --debug`.
 
 ## Known limits
 
 - Assumes sheet cells are framed by long black strokes (true for Escondido PAADU sheets).
 - Title must appear as a single bold span containing `ELECTRICAL PLAN`.
 - Legend description ownership can still slip on unusually tight rows; rules cover the Escondido set.
+- Candidate clustering is O(n²); Plan 3–4 take ~20 s. False positives remain (extra switches/lights); LLM adjudication + eval iteration are the next accuracy lever.
+- Fan-coil legend glyph sometimes extracts as a thin sliver and is skipped by the min-side gate.

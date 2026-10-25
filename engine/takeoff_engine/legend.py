@@ -150,6 +150,11 @@ def _seg_len(s: Segment) -> float:
     return math.hypot(s.x1 - s.x0, s.y1 - s.y0)
 
 
+def legend_bbox(ctx: PageContext) -> BBox:
+    """Return the electrical legend content region (for crops / Sheet.legend_bbox)."""
+    return _legend_region(ctx, find_legend_title(ctx))
+
+
 def find_legend_title(ctx: PageContext) -> BBox:
     """Find the electrical ``LEGEND`` title (not ``FLOOR FINISH LEGEND``)."""
     best: Word | None = None
