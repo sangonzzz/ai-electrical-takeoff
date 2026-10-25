@@ -18,7 +18,15 @@ from eval.baseline_compare import (
     flatten_baseline_rooms,
     try_baseline_vision,
 )
-from eval.io_truth import load_counts_yaml, load_detections_json, truth_totals
+from eval.corrections_metrics import accuracy_from_corrections, predicted_category_counts
+from eval.io_truth import (
+    counts_are_empty,
+    counts_from_detections,
+    load_corrections_json,
+    load_counts_yaml,
+    load_ground_truth_export,
+    truth_totals,
+)
 from eval.metrics import (
     DetectionMark,
     aggregate_room_counts,
@@ -97,8 +105,16 @@ def evaluate_plan(
     detections_truth: list[DetectionMark] | None,
     out_dir: Path,
     run_llm_baseline: bool = True,
+    corrections: list[dict[str, Any]] | None = None,
+    truth_source: str | None = None,
 ) -> dict[str, Any]:
-    """Compute metrics + overlay for one plan. ``plan_index`` is 1-based."""
+    """Compute metrics + overlay for one plan. ``plan_index`` is 1-based.
+
+    Prefer comparing the *pre-review* pipeline ``result`` against exported
+    detection truth. Corrections-log accuracy can run on the same plan when a
+    corrections list is provided (from the ground-truth export or
+    ``planN.corrections.json``).
+    """
     takeoff = compute_takeoff(result.rooms, result.detections)
     pred_rooms = predicted_counts_from_takeoff_rows(takeoff.rows)
     pred_totals = aggregate_room_counts(pred_rooms)
@@ -109,6 +125,7 @@ def evaluate_plan(
     plan: dict[str, Any] = {
         "page_index": result.sheet.page_index,
         "sheet_id": result.sheet.id,
+        "truth_source": truth_source,
         "count_errors": count_errors(pred_rooms, truth_counts),
         "room_exact_match": room_exact_match_rate(pred_rooms, truth_counts),
         "totals": totals_vs_truth(pred_totals, t_totals),
@@ -120,6 +137,12 @@ def evaluate_plan(
         match = match_detections(_marks_from_detections(result), detections_truth)
         plan["precision_recall"] = match.precision_recall_by_type()
         eval_marks = match.to_eval_marks()
+
+    if corrections:
+        plan["corrections_accuracy"] = accuracy_from_corrections(
+            corrections,
+            predicted_counts_by_category=predicted_category_counts(result.detections),
+        )
 
     overlay_path = out_dir / f"plan{plan_index}_overlay.png"
     render_overlay(pdf, result, overlay_path, eval_marks=eval_marks)
@@ -170,6 +193,9 @@ def run_eval(
     out_dir.mkdir(parents=True, exist_ok=True)
 
     loaded: dict[int, SheetResult] = dict(results or {})
+    # When the caller supplies results / results_dir, never fall through to the
+    # live pipeline for missing plans (avoids accidental LLM/network hangs in CI).
+    explicit_results = results is not None or results_dir is not None
     if results_dir is not None:
         results_dir = Path(results_dir)
         for n in range(1, 5):
@@ -197,26 +223,48 @@ def run_eval(
             }
             continue
         truth_counts = load_counts_yaml(gt_path)
+        truth_source = f"counts:{gt_path.name}"
 
         result = loaded.get(n)
-        if result is None:
+        if result is None and not explicit_results:
             result = _try_analyze(pdf, n - 1)
-        if result is None:
+        if result is None and not explicit_results:
             # Demo fallback: plan 1 can use the hand-made fixture so overlays/metrics
             # are exercisable before the symbol pipeline lands.
             if n == 1:
                 fixture = REPO_ROOT / "contracts" / "fixtures" / "sheet_result.sample.json"
                 if fixture.is_file():
                     result = _load_result(fixture)
-            if result is None:
-                report["plans"][plan_id] = {
-                    "skipped": True,
-                    "reason": "no SheetResult (pipeline not ready; pass --results-dir)",
-                }
-                continue
+        if result is None:
+            reason = (
+                "no SheetResult in results_dir"
+                if explicit_results
+                else "no SheetResult (pipeline not ready; pass --results-dir)"
+            )
+            report["plans"][plan_id] = {"skipped": True, "reason": reason}
+            continue
 
         det_path = ground_truth_dir / f"{plan_id}.detections.json"
-        det_truth = load_detections_json(det_path) if det_path.is_file() else None
+        det_truth: list[DetectionMark] | None = None
+        corrections: list[dict[str, Any]] = []
+        if det_path.is_file():
+            export = load_ground_truth_export(det_path)
+            det_truth = export.detections
+            corrections = list(export.corrections)
+            truth_source = f"detections:{det_path.name}"
+            # Prefer counts embedded in the API export; else derive from marks when
+            # the hand-count YAML is still an all-zero template.
+            if export.counts:
+                truth_counts = export.counts
+                truth_source += "+embedded_counts"
+            elif det_truth and counts_are_empty(truth_counts):
+                truth_counts = counts_from_detections(det_truth)
+                truth_source += "+derived_counts"
+
+        corr_path = ground_truth_dir / f"{plan_id}.corrections.json"
+        if corr_path.is_file():
+            corrections = load_corrections_json(corr_path)
+            truth_source += f"+corrections:{corr_path.name}"
 
         plan_report = evaluate_plan(
             plan_index=n,
@@ -226,6 +274,8 @@ def run_eval(
             detections_truth=det_truth,
             out_dir=out_dir,
             run_llm_baseline=run_llm_baseline,
+            corrections=corrections or None,
+            truth_source=truth_source,
         )
         report["plans"][plan_id] = plan_report
         overlay_paths.append(out_dir / f"plan{n}_overlay.png")

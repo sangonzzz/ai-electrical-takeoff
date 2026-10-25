@@ -42,12 +42,16 @@ PLANS: dict[int, dict[str, object]] = {
     },
     3: {
         "title": "Plan 3 — 2 bedrooms (sheet A3-111)",
+        # display_name list from Agente 3 detect_rooms (four closet labels).
         "rooms": [
             "Bath 1",
             "Bath 2",
             "Bed 1",
             "Bed 2",
-            "CL",
+            "CL 1",
+            "CL 2",
+            "CL 3",
+            "CL 4",
             "Hall",
             "Kitchen / Dining",
             "Living",
@@ -58,12 +62,14 @@ PLANS: dict[int, dict[str, object]] = {
     },
     4: {
         "title": "Plan 4 — 3 bedrooms (sheet A4-111)",
+        # display_name list from Agente 3 detect_rooms (two closet labels).
         "rooms": [
             "Bath 1",
             "Bath 2",
             "Bed 1",
             "Bed 2",
-            "CL",
+            "CL 1",
+            "CL 2",
             "Hallway",
             "Kitchen",
             "Living",

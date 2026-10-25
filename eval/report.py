@@ -50,6 +50,8 @@ def _to_markdown(report: dict[str, Any]) -> str:
             lines.append("")
             continue
 
+        if plan.get("truth_source"):
+            lines.append(f"- Truth source: `{plan['truth_source']}`")
         room_rate = plan.get("room_exact_match", {})
         lines.append(
             f"- Per-room exact-match rate: "
@@ -59,6 +61,47 @@ def _to_markdown(report: dict[str, Any]) -> str:
         if plan.get("overlay_png"):
             lines.append(f"- Overlay: `{plan['overlay_png']}`")
         lines.append("")
+
+        corr = plan.get("corrections_accuracy")
+        if corr:
+            lines.append("### Corrections-log accuracy (human review)")
+            lines.append("")
+            lines.append(
+                f"Deletes→FP **{corr['false_positives']}**, "
+                f"creates→FN **{corr['false_negatives']}**, "
+                f"type changes→misclass **{corr['misclassifications']}**, "
+                f"room changes→room errors **{corr['room_errors']}**."
+            )
+            lines.append("")
+            lines.append("#### Fans and lights (from corrections)")
+            lines.append("")
+            lines.append(
+                "| category | FP | FN | misclass | room err | pred | fp_rate | fn_rate |"
+            )
+            lines.append(
+                "|----------|---:|---:|---------:|---------:|-----:|--------:|--------:|"
+            )
+            for cat, row in (corr.get("highlight") or {}).items():
+                lines.append(
+                    f"| `{cat}` | {row.get('false_positives', 0)} | "
+                    f"{row.get('false_negatives', 0)} | {row.get('misclassifications', 0)} | "
+                    f"{row.get('room_errors', 0)} | {row.get('predicted', '—')} | "
+                    f"{row.get('fp_rate', 0):.2f} | {row.get('fn_rate', 0):.2f} |"
+                )
+            lines.append("")
+            lines.append("#### All categories (from corrections)")
+            lines.append("")
+            lines.append("| category | FP | FN | misclass | room err |")
+            lines.append("|----------|---:|---:|---------:|---------:|")
+            for cat, row in sorted((corr.get("by_category") or {}).items()):
+                if cat in (corr.get("highlight") or {}):
+                    continue
+                lines.append(
+                    f"| `{cat}` | {row.get('false_positives', 0)} | "
+                    f"{row.get('false_negatives', 0)} | {row.get('misclassifications', 0)} | "
+                    f"{row.get('room_errors', 0)} |"
+                )
+            lines.append("")
 
         # Highlight fans and lights first.
         lines.append("### Fans and lights (priority)")

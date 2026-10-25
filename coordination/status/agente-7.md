@@ -2,16 +2,24 @@
 
 ## Estado
 
-M1–M4 listos (lógica + tests). Falta que Agente 1 conecte `takeoff eval` y el step de CI.
+Eval soporta verdad por revisión en la app (detections.json + corrections log) y
+documenta el sesgo de esa verdad. Templates plan3/4 alineados con Agente 3.
 
 ## Hecho
 
-- **M1:** templates `eval/ground_truth/plan{1..4}.counts.yaml` (cuartos de la SPEC + Attic/Exterior, todas las claves `category.subtype` en 0) + `eval/COMO_CONTAR.md`.
-- **M2:** `overlay.render_overlay` (~150 dpi, rooms/detections/wires/boxes/labels, palette SPEC §10; eval_marks TP/FP/FN) + `export_overlays_pdf`.
-- **M3:** métricas (error por tipo/cuarto, exact-match por cuarto, totals vs truth, precision/recall a 10 pt) → `eval/reports/latest.md` + `.json` + PNGs; fans/lights destacados.
-- **M4:** comparación hybrid vs LLM (`baseline_compare`, cache bajo `.cache/llm/baseline_vision/`) + `eval/baseline.json` + `python -m eval.regression`.
-- Docs: `docs/modules/evaluation.md`. Tests: `engine/tests/eval/` (15 passed).
-- Mensajes a Agente 1 (wire CLI/CI) y a all (eval ready).
+- M1–M4 originales (templates, overlay, métricas espaciales, baseline, CI helper).
+- **Review-based truth:** `eval/io_truth.py` carga
+  `GET /api/sheets/{id}/ground-truth.json` guardado como
+  `planN.detections.json` (también lista bare / `corrections` embebidas).
+- **Corrections accuracy:** `eval/corrections_metrics.py` —
+  delete→FP, create→FN, type change→misclass, room change→room error;
+  tablas por categoría con fans/lights destacados; tasas si hay conteos predichos.
+- Runner + reporte Markdown incluyen `corrections_accuracy` y `truth_source`.
+- Si el YAML sigue en ceros, los counts se derivan de las detecciones exportadas.
+- Docs: sesgo de revisión + mitigación (filtro por categoría) en
+  `docs/modules/evaluation.md` y `eval/COMO_CONTAR.md`.
+- Plan 3/4: `CL 1`… según mensaje de Agente 3.
+- Mensaje a Agente 5 pidiendo el endpoint `ground-truth.json`.
 
 ## Cómo probarlo
 
@@ -19,47 +27,46 @@ M1–M4 listos (lógica + tests). Falta que Agente 1 conecte `takeoff eval` y el
 uv sync --all-packages --group dev
 uv run pytest engine/tests/eval -q
 
-# Overlay smoke (fixture Plan 1)
-uv run python -c "from pathlib import Path; from takeoff_engine.models import SheetResult; from takeoff_engine.overlay import render_overlay; r=SheetResult.model_validate_json(Path('contracts/fixtures/sheet_result.sample.json').read_text()); render_overlay('data/plans/escondido_plans.pdf', r, 'out/debug/agente7_overlay_plan1.png')"
-
-# Eval runner (sin CLI aún)
-uv run python -c "from eval.runner import run_eval; from pathlib import Path; from takeoff_engine.models import SheetResult; p=Path('out/eval_results'); p.mkdir(parents=True, exist_ok=True); Path('out/eval_results/plan1.json').write_text(Path('contracts/fixtures/sheet_result.sample.json').read_text()); run_eval(results_dir=p, run_llm_baseline=False)"
+# Tras exportar desde la API:
+#   eval/ground_truth/plan1.detections.json
+uv run takeoff eval --pdf data/plans/escondido_plans.pdf --out eval/reports
 ```
-
-Tras el wire de Agente 1: `make eval` / `uv run takeoff eval`.
 
 ## Siguiente
 
-- Esperar conteos a mano de Santiago.
-- Cuando haya `planN.detections.json`, precision/recall real en el reporte.
-- Ajustar umbrales en `eval/baseline.json` tras el primer eval real.
+- Agente 5: implementar `GET /api/sheets/{id}/ground-truth.json`.
+- Santiago: revisar en la app (una categoría a la vez) y guardar exports.
+- Ajustar `eval/baseline.json` tras el primer eval real con verdad revisada.
 
 ## Bloqueos
 
-- CLI `takeoff eval` y CI: pendiente Agente 1 (mensaje enviado).
-- Baseline LLM: pendiente Agente 4 (`baseline_vision_takeoff`).
-- Planes 2–4 en eval completo: hace falta SheetResult del pipeline (o `--results-dir`).
+- Endpoint `ground-truth.json` aún no existe en backend (pedido a Agente 5).
+  Mientras tanto se puede escribir el JSON a mano / desde `/corrections` + sheet.
 
 ## Decisions
 
-- Room names en templates usan `display_name` estilo fixture (`Laundry` para LNDRY, `CL 1`/`CL 2`, + `Attic`/`Exterior`).
-- Match de detecciones: greedy nearest neighbour, mismo `category.subtype`, radio 10 pt.
-- Si no hay resultados del pipeline, Plan 1 usa el fixture de contracts solo para smoke.
-- Package `eval/` en la raíz del repo (no dentro de `takeoff_engine`); CLI debe añadir repo root al `sys.path` o `pythonpath = ["."]`.
+- Verdad primaria = revisión en app + export; conteo ciego queda como calibración.
+- Counts embebidos o derivados de detections si el YAML está vacío (todo en 0).
+- Misclass/room se atribuyen a la categoría **antes** del update (lo que el sistema dijo).
+- Package `eval/` en la raíz; CLI ya cableado por Agente 1.
 
 ## Needs from Santiago
 
-1. Contar a mano los 4 planes y llenar los YAML (`eval/COMO_CONTAR.md`). **No mirar** salida del sistema mientras cuentas.
-2. (Opcional) Exportar detecciones revisadas a `eval/ground_truth/planN.detections.json` para precision/recall.
-3. Agente 1: conectar CLI + CI (ya hay mensaje).
+1. Revisar cada plan en la UI **por categoría** (fans → lights → resto).
+2. Guardar `ground-truth.json` como `eval/ground_truth/planN.detections.json`.
+3. Correr eval contra el resultado del pipeline **pre-corrección**.
 
 ## Explicación para Santiago
 
-Para saber si el sistema funciona no basta con “se ve bien”: comparamos contra una verdad contada a mano.
+Ya no hace falta contar todo a ciegas para defender el demo: corriges el plano en
+la app y exportas esa verdad.
 
-1. **Conteos por habitación:** tú llenas `planN.counts.yaml`. El eval resta predicho − verdad por cada tipo (`light.recessed`, `ceiling_fan…`, etc.) y marca el error.
-2. **Exact-match por cuarto:** un cuarto “pega” solo si *todas* las cantidades coinciden. El % de cuartos perfectos es la métrica fácil de explicar.
-3. **Totales de la casa:** misma idea a nivel plan; en el reporte **fans y luces van primero** porque es lo que más miran en la entrevista.
-4. **Precision / recall** (si hay JSON de posiciones): un acierto es “mismo tipo a ≤10 puntos del PDF”. Verde = acierto, rojo = inventó de más, naranja = se le escapó.
-5. **Overlay + PDF:** cada número del reporte se puede señalar en el plano. Eso es la respuesta a *“How did you know it worked?”*.
-6. **LLM solo vs híbrido:** cuando Agente 4 deje el baseline, la tabla muestra quién se equivoca menos por categoría.
+1. **detections.json:** el eval compara marcas del sistema con las tuyas (mismo
+   tipo a ≤10 pt). Verde/rojo/naranja en el overlay.
+2. **Log de correcciones:** cada delete cuenta como falso positivo, cada create
+   como falso negativo, cambiar tipo = clasificación mala, cambiar cuarto = error
+   de cuarto. Fans y luces salen primero en el reporte.
+3. **Sesgo:** al corregir sobre lo dibujado, uno tiende a “dejar pasar” lo que ya
+   está. Mitigación: filtro de categoría, una a la vez (sobre todo fans y luces).
+4. El YAML a mano sigue existiendo si quieres una verdad independiente para
+   contrastar ese sesgo.

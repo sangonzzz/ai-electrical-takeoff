@@ -6,24 +6,31 @@ Owner: Agente 7.
 
 Answers the interview question **"How did you know it worked?"** with evidence:
 
-1. Hand-count ground truth templates (`eval/ground_truth/planN.counts.yaml`) that Santiago
-   fills without looking at system output (`eval/COMO_CONTAR.md`).
-2. Overlays on the plan (`overlay.py`): every detection drawn; with eval marks, true positives
-   green, false positives red, false negatives orange.
-3. Metrics report (`eval/reports/latest.md` + `latest.json`): count error per type per room,
-   per-room exact-match rate, sheet totals vs truth, precision/recall when detection-level
-   truth exists.
-4. Optional baseline table: LLM-alone (`baseline_vision_takeoff`) vs hybrid.
-5. CI regression against `eval/baseline.json`.
+1. **Human review in the app** (preferred): correct marks on the plan, then export
+   `GET /api/sheets/{id}/ground-truth.json` → save as
+   `eval/ground_truth/planN.detections.json`.
+2. Optional hand-count templates (`eval/ground_truth/planN.counts.yaml`) —
+   see `eval/COMO_CONTAR.md` (independent of the UI).
+3. Overlays on the plan (`overlay.py`): every detection drawn; with eval marks, true
+   positives green, false positives red, false negatives orange.
+4. Metrics report (`eval/reports/latest.md` + `latest.json`): count error, room
+   exact-match, totals vs truth, precision/recall (10 pt), **and corrections-log
+   accuracy** (deletes→FP, creates→FN, type changes→misclass, room changes→room
+   errors). Fans and lights are highlighted.
+5. Optional baseline table: LLM-alone (`baseline_vision_takeoff`) vs hybrid.
+6. CI regression against `eval/baseline.json`.
 
 ## Layout
 
 | Path | Role |
 |------|------|
-| `eval/ground_truth/planN.counts.yaml` | Room → `category.subtype` → count (templates start at 0) |
-| `eval/ground_truth/planN.detections.json` | Optional list of `{category, subtype, center}` |
-| `eval/COMO_CONTAR.md` | Spanish instructions for hand counting |
-| `eval/metrics.py` | Pure metrics (no I/O) |
+| `eval/ground_truth/planN.detections.json` | Review export (API ground-truth.json) |
+| `eval/ground_truth/planN.corrections.json` | Optional corrections log export |
+| `eval/ground_truth/planN.counts.yaml` | Room → `category.subtype` → count templates |
+| `eval/COMO_CONTAR.md` | Spanish hand-count instructions (blind to UI) |
+| `eval/metrics.py` | Spatial match + count metrics |
+| `eval/corrections_metrics.py` | Accuracy from corrections log |
+| `eval/io_truth.py` | Load YAML / API export shapes |
 | `eval/runner.py` | Orchestration; entry for `takeoff eval` |
 | `eval/report.py` | Markdown + JSON writers |
 | `eval/baseline_compare.py` | Hybrid vs LLM-alone table |
@@ -31,18 +38,52 @@ Answers the interview question **"How did you know it worked?"** with evidence:
 | `eval/baseline.json` | Thresholds for regression |
 | `engine/takeoff_engine/overlay.py` | PNG overlay + multi-page PDF export |
 
+## Ground-truth export shape (`ground-truth.json`)
+
+Saved as `eval/ground_truth/planN.detections.json`. Agente 5 implements the endpoint;
+eval accepts this object (or a bare detections array):
+
+```json
+{
+  "schema_version": "1.0.0",
+  "source": "human_review",
+  "endpoint": "GET /api/sheets/{id}/ground-truth.json",
+  "sheet_id": "…",
+  "page_index": 0,
+  "plan": 1,
+  "exported_at": "2026-10-25T00:00:00Z",
+  "detections": [
+    {
+      "id": "uuid",
+      "category": "light",
+      "subtype": "recessed",
+      "center": { "x": 1000.0, "y": 200.0 },
+      "room_id": "…",
+      "room_name": "Living",
+      "status": "active"
+    }
+  ],
+  "corrections": [ ],
+  "counts": { }
+}
+```
+
+- Only `status != "deleted"` detections are used as spatial truth.
+- Room label keys tried in order: `room_name`, `room`, `display_name`.
+- If `counts` is missing and the YAML template is still all zeros, counts are
+  **derived** from the detection list for totals / room exact-match.
+- `corrections` may also live in `planN.corrections.json` (same shape as
+  `GET /api/sheets/{id}/corrections`).
+
+**Eval the pre-review pipeline result** against this file (not the post-edit sheet),
+or rely on the corrections log alone for FP/FN/misclass/room tallies.
+
 ## Algorithms
 
-### Count error
+### Count error / room exact-match / totals
 
-For each room and each `category.subtype` key present in pred or truth:
-
-`error = |pred_count - truth_count|`.
-
-### Per-room exact-match rate
-
-A room matches if every key in the union of pred and truth counts is equal.
-Rate = matched rooms / rooms present in truth.
+Unchanged: compare predicted takeoff rows to truth counts (YAML, embedded, or
+derived from detections).
 
 ### Detection matching (precision / recall)
 
@@ -50,16 +91,40 @@ When `planN.detections.json` exists:
 
 - Same `category.subtype` only.
 - Greedy nearest neighbour within **10 pt** (SPEC §11).
-- TP / FP / FN → precision = TP/(TP+FP), recall = TP/(TP+FN).
-- Also rolled up to bare `category` for fans/lights headlines.
+- TP / FP / FN → precision / recall; rolled up to bare `category` for headlines.
+
+### Corrections-log accuracy
+
+For `entity` in `{detection, detections}`:
+
+| Correction action | Metric |
+|-------------------|--------|
+| `delete` | false positive (system mark removed) |
+| `create` | false negative (reviewer added a miss) |
+| `update` with category/subtype change | misclassification |
+| `update` with `room_id` change | room error |
+
+Position-only updates are ignored. Per-category tables highlight **`ceiling_fan`**
+and **`light`**. When predicted category counts are available, rates use
+`fp/pred`, `fn/(pred−fp+fn)`, `misclass/pred`, `room_err/pred`.
 
 ### Overlay
 
-- Render the sheet **viewport** at ~**150 dpi** with PyMuPDF.
-- Draw room polygons (translucent), wires, boxes, detections.
-- Palette matches SPEC §10 / frontend.
-- `eval_marks`: TP green `#16A34A`, FP red `#DC2626`, FN orange `#EA580C` (X marks).
-- `export_overlays_pdf`: merges the four plan PNGs for the presentation.
+- Viewport at ~**150 dpi**; SPEC §10 palette; eval marks TP/FP/FN colors.
+- `export_overlays_pdf` for the presentation.
+
+## Known bias of review-based truth (and mitigation)
+
+**Bias:** when truth is built by correcting the system on the plan, reviewers tend
+to **accept what is already drawn**. Marks that look plausible get a pass; silent
+misses (especially in dense areas) and subtle subtype errors are under-reported.
+The corrections log then understates false negatives and misclassifications.
+
+**Mitigation:** review **one category at a time** with the UI category filter
+(fans only, then lights only, then switches, …). Walk the whole electrical
+viewport for that filter before moving on. Prefer finishing fans and lights first
+— those drive the interview score. Optionally cross-check with a blind hand count
+(`COMO_CONTAR.md`) on one plan.
 
 ## Parameters and thresholds
 
@@ -72,28 +137,20 @@ When `planN.detections.json` exists:
 ## How to run
 
 ```bash
-# Unit tests (always)
 uv run pytest engine/tests/eval -q
 
-# Full eval (needs Agente 1 to wire cli.py — see coordination message)
+# After saving API exports under eval/ground_truth/
 uv run takeoff eval --pdf data/plans/escondido_plans.pdf --out eval/reports
 
-# Or call the runner directly
-uv run python -c "from eval.runner import run_eval; run_eval()"
+# Or with pipeline JSON results
+uv run takeoff eval --results-dir out/results
 
-# CI regression (after a report exists)
-uv run python -m eval.regression --report eval/reports/latest.json --baseline eval/baseline.json
+uv run python -m eval.regression
 ```
-
-Pass precomputed `SheetResult` JSON files via `results_dir` with names `plan1.json` …
-when the symbol pipeline is not ready. Plan 1 falls back to
-`contracts/fixtures/sheet_result.sample.json` for smoke overlays.
 
 ## Known limits
 
-- Templates are zeros until Santiago hand-counts; a live eval against empty truth
-  will show large errors — that is expected.
-- LLM baseline soft-fails with a note if Agente 4 has not implemented
-  `baseline_vision_takeoff` or if there is no API key / cache.
-- Detection-level precision/recall only runs when `planN.detections.json` exists.
-- `cli.py` eval command is owned by Agente 1; this package is the implementation.
+- YAML templates stay zeros until filled or until a detections export derives counts.
+- LLM baseline soft-fails if Agente 4 baseline / cache is unavailable.
+- `GET /api/sheets/{id}/ground-truth.json` is implemented by Agente 5; eval already
+  accepts the documented payload when the file is present on disk.
