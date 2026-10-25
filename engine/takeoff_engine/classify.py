@@ -32,9 +32,15 @@ from takeoff_engine.types import Candidate, FillPath, PageContext, Segment, Word
 _PX_PER_PT = 2.0  # 2 px per PDF point — enough for ~8 pt circles
 _PAD_PT = 3.0
 _DILATE_K = 2  # morphological dilate radius in px before IoU
-_MIN_MATCH_SCORE = 0.22  # below → needs_review
-_CLOSE_SECOND_DELTA = 0.05  # top-two within this → needs_review
+# needs_review only for genuine ambiguity (target <15% of detections).
+# Same-category legend rows (gfci vs afci vs duplex) often score within 0.01 —
+# that is NOT ambiguous once codes refine the subtype.
+_WEAK_MATCH_SCORE = 0.30  # below this with no codes → needs_review
+_CROSS_CAT_DELTA = 0.10  # top-two different categories within this → needs_review
 _REJECT_SCORE = 0.16  # below → drop as not-a-symbol (noise)
+# Kept for docs / callers that referenced the old name.
+_MIN_MATCH_SCORE = _WEAK_MATCH_SCORE
+_CLOSE_SECOND_DELTA = _CROSS_CAT_DELTA
 _MIN_TEMPLATE_SIDE_PT = 2.5  # skip broken legend glyphs (e.g. FC sliver)
 
 # Switches/receptacles sit on walls (gray poche or wall outlines).
@@ -761,6 +767,42 @@ def _shape_boost(cand: Candidate, entry: LegendEntry) -> float:
     return boost
 
 
+def _should_needs_review(
+    *,
+    best_score: float,
+    second: float,
+    best_entry: LegendEntry,
+    second_entry: LegendEntry | None,
+    codes: list[str],
+    shape_forced: bool,
+) -> bool:
+    """Flag only genuine ambiguity — not same-glyph receptacle/switch rows.
+
+    Target: under ~15% of detections. Same-category legend variants (GFCI vs
+    AFCI vs duplex) routinely score within 0.01 of each other; codes resolve
+    subtype, so that must not trigger review.
+    """
+    if shape_forced:
+        return False
+    # Cross-category competition with a close runner-up.
+    if (
+        second_entry is not None
+        and second_entry.category is not None
+        and best_entry.category is not None
+        and second_entry.category != best_entry.category
+        and best_score - second < _CROSS_CAT_DELTA
+        and second > _REJECT_SCORE
+    ):
+        return True
+    # Weak geometry and no code token to disambiguate.
+    type_codes = [
+        c for c in codes if c.strip() and not re.match(r"^\+?\d", c.strip())
+    ]
+    if best_score < _WEAK_MATCH_SCORE and not type_codes:
+        return True
+    return False
+
+
 def classify_candidates(
     ctx: PageContext,
     candidates: list[Candidate],
@@ -770,7 +812,7 @@ def classify_candidates(
 ) -> list[Detection]:
     """Match candidates to legend templates and attach nearby code tokens.
 
-    Low-confidence or close top-two scores set ``needs_review=True``.
+    ``needs_review`` only for cross-category ties or weak uncoded matches.
     """
     usable = [e for e in legend if e.category is not None and e.id in templates]
     if not usable:
@@ -850,6 +892,8 @@ def classify_candidates(
         scores.sort(key=lambda t: t[0], reverse=True)
         best_score, best_rot, best_entry = scores[0]
         second = scores[1][0] if len(scores) > 1 else 0.0
+        second_entry = scores[1][2] if len(scores) > 1 else None
+        shape_forced = False
 
         if (
             best_score < _REJECT_SCORE
@@ -872,6 +916,7 @@ def classify_candidates(
                 light_entries[0],
             )
             best_score = max(best_score, 0.6)
+            shape_forced = True
         elif _is_circle_light_shape(cand) and light_entries:
             dense = int(cand.features.get("n_segments", 0)) >= _LIGHT_DENSE_SEGS
             wall_receptacle = (
@@ -890,6 +935,7 @@ def classify_candidates(
                     light_entries[0],
                 )
                 best_score = max(best_score, 0.55)
+                shape_forced = True
         else:
             wall_light = False
 
@@ -918,10 +964,12 @@ def classify_candidates(
                         light_entries[0],
                     )
                     best_score = max(best_score, 0.55)
+                    shape_forced = True
                 else:
                     continue
             else:
                 best_score = max(best_score, switch_iou)
+                shape_forced = True
 
         if best_score < _REJECT_SCORE and cat != Category.LIGHT:
             continue
@@ -973,8 +1021,13 @@ def classify_candidates(
             else:
                 subtype = "smoke"
 
-        needs_review = best_score < _MIN_MATCH_SCORE or (
-            best_score - second < _CLOSE_SECOND_DELTA and second > _REJECT_SCORE
+        needs_review = _should_needs_review(
+            best_score=best_score,
+            second=second,
+            best_entry=best_entry,
+            second_entry=second_entry,
+            codes=codes,
+            shape_forced=shape_forced,
         )
         confidence = float(max(0.0, min(1.0, best_score)))
 
