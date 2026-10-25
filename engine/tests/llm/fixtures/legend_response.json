@@ -1,0 +1,51 @@
+{
+  "entries": [
+    {
+      "entry_id": "leg-switch",
+      "category": "switch",
+      "subtype": "single_pole",
+      "code_meanings": {
+        "D": "dimmer",
+        "3D": "three-way dimmer",
+        "VS": "vacancy sensor",
+        "F": "fan switch",
+        "A": "astronomical timer / motion"
+      },
+      "combined": false,
+      "reason": "Legend row describes single-pole switch with letter codes."
+    },
+    {
+      "entry_id": "leg-fan",
+      "category": "ceiling_fan",
+      "subtype": "ceiling_fan",
+      "code_meanings": {},
+      "combined": false,
+      "reason": "Ceiling fan optional pre-wire; J at center is part of the fan."
+    },
+    {
+      "entry_id": "leg-sdma",
+      "category": "detector",
+      "subtype": "smoke_co",
+      "code_meanings": {
+        "SD/MA": "smoke and carbon monoxide combination"
+      },
+      "combined": true,
+      "reason": "Combined smoke/CO detector per legend text."
+    },
+    {
+      "entry_id": "leg-cw",
+      "category": null,
+      "subtype": null,
+      "code_meanings": {
+        "CW": "cold water (plumbing, not electrical)"
+      },
+      "combined": false,
+      "reason": "Plumbing symbol; not an electrical component."
+    }
+  ],
+  "_meta": {
+    "note": "Hand-shaped fixture matching legend_v1 tool schema. Replace with a real Anthropic recording once ANTHROPIC_API_KEY is available (see Needs from Santiago).",
+    "prompt_version": "legend_v1",
+    "model": "claude-sonnet-5-5"
+  }
+}

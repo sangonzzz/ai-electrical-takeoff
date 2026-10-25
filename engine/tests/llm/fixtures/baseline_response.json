@@ -1,0 +1,34 @@
+{
+  "rooms": [
+    {
+      "room_name": "LIVING",
+      "counts": {
+        "light": 4,
+        "light.recessed": 4,
+        "ceiling_fan": 1,
+        "ceiling_fan.ceiling_fan": 1,
+        "receptacle": 3,
+        "receptacle.duplex": 2,
+        "receptacle.afci": 1
+      }
+    },
+    {
+      "room_name": "BATH",
+      "counts": {
+        "exhaust_fan": 1,
+        "exhaust_fan.bath_exhaust": 1,
+        "light": 2,
+        "switch": 2,
+        "switch.single_pole": 2,
+        "receptacle": 1,
+        "receptacle.gfci": 1
+      }
+    }
+  ],
+  "notes": "BASELINE ONLY — approximate visual counts for hybrid vs LLM-alone comparison.",
+  "_meta": {
+    "note": "Fixture shaped like baseline_v1 tool output.",
+    "prompt_version": "baseline_v1",
+    "model": "claude-sonnet-5-5"
+  }
+}

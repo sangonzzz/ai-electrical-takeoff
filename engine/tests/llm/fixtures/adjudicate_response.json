@@ -1,0 +1,27 @@
+{
+  "items": [
+    {
+      "candidate_id": "cand-1",
+      "label": "switch.three_way_dimmer",
+      "confidence": 0.86,
+      "reason": "Dollar-sign switch with 3D code matches three-way dimmer in legend."
+    },
+    {
+      "candidate_id": "cand-2",
+      "label": "not_a_component",
+      "confidence": 0.91,
+      "reason": "Dashed polyline is wiring, not a device."
+    },
+    {
+      "candidate_id": "cand-3",
+      "label": "ceiling_fan.ceiling_fan",
+      "confidence": 0.88,
+      "reason": "Four-blade fan with center J counts as one ceiling fan."
+    }
+  ],
+  "_meta": {
+    "note": "Recorded-shape fixture for adjudicate_v1. No coordinates.",
+    "prompt_version": "adjudicate_v1",
+    "model": "claude-sonnet-5-5"
+  }
+}
