@@ -23,11 +23,15 @@ _WALL_MIN_LEN_PT = 22.0
 _WALL_AXIS_TOL_PT = 1.2
 _WALL_POCHE_PAD_PT = 1.5
 
-# Dashed wiring: short strokes that chain end-to-end (SPEC §8: dash ~4–10, gap ~2–4).
-_WIRE_MIN_LEN_PT = 2.0
+# Dashed wiring (remove BEFORE clustering). Dashes are open short strokes with a
+# real *gap* between ends — not the near-touching joints of flattened circles/fans.
+# Measured on Escondido: dash ~3–12 pt, gap median ~3.5 pt (typical 2–4.5).
+_WIRE_MIN_LEN_PT = 3.0
 _WIRE_MAX_LEN_PT = 12.0
-_WIRE_ENDPOINT_GAP_PT = 4.5
-_WIRE_CHAIN_MIN = 4  # at least this many dashes to call it wiring
+_WIRE_GAP_MIN_PT = 1.2  # below this = continuous symbol stroke, not a dash gap
+_WIRE_GAP_MAX_PT = 6.0
+_WIRE_CHAIN_MIN = 2  # two dashes across a gap already look like wiring, not a glyph
+_WIRE_DIR_COS_MIN = -0.35  # soft collinearity; allows gentle curves
 
 # Keynote tags: alphanumeric like A01 / B32 inside a small box.
 _KEYNOTE_RE = re.compile(r"^[A-Z]\d{2}$")
@@ -104,16 +108,97 @@ def _is_wall_segment(seg: Segment, gray_fills: list[FillPath]) -> bool:
     return False
 
 
-def _wire_segment_ids(segments: list[Segment], mask: list[bool]) -> set[int]:
-    """Mark short open strokes that form *elongated* dashed chains as wiring.
+def _seg_dir(s: Segment) -> tuple[float, float]:
+    dx, dy = s.x1 - s.x0, s.y1 - s.y0
+    L = math.hypot(dx, dy)
+    if L < 1e-9:
+        return (0.0, 0.0)
+    return (dx / L, dy / L)
 
-    Compact blobs of short strokes (ceiling-fan blades, light circles) also
-    chain by endpoint proximity — those must NOT be removed. We keep a chain
-    as wiring only when its bbox is elongated (or large and sparse).
+
+def _continuous_glyph_ids(segments: list[Segment], mask: list[bool]) -> set[int]:
+    """Segment ids that belong to continuous short-stroke glyphs (lights, fans).
+
+    Flattened Bezier joints touch with gap ≪ 1 pt. Those meshes must never be
+    absorbed into a dashed-wire chain that merely *approaches* the glyph.
     """
-    dashes: list[int] = []
+    shorts: list[int] = []
     for i, seg in enumerate(segments):
         if not mask[i]:
+            continue
+        # Include slightly shorter arcs (~2 pt) used by small circles.
+        if 1.5 <= _seg_len(seg) <= _WIRE_MAX_LEN_PT:
+            shorts.append(i)
+    if not shorts:
+        return set()
+
+    cell = 2.0
+    buckets: dict[tuple[int, int], list[tuple[int, float, float]]] = defaultdict(list)
+    for si in shorts:
+        s = segments[si]
+        for x, y in ((s.x0, s.y0), (s.x1, s.y1)):
+            buckets[(int(x // cell), int(y // cell))].append((si, x, y))
+
+    parent = {i: i for i in shorts}
+
+    def find(a: int) -> int:
+        while parent[a] != a:
+            parent[a] = parent[parent[a]]
+            a = parent[a]
+        return a
+
+    touch = 1.05  # continuous joint threshold (pt)
+    for si in shorts:
+        s = segments[si]
+        for x, y in ((s.x0, s.y0), (s.x1, s.y1)):
+            gx, gy = int(x // cell), int(y // cell)
+            for ox in (-1, 0, 1):
+                for oy in (-1, 0, 1):
+                    for sj, bx, by in buckets.get((gx + ox, gy + oy), []):
+                        if sj <= si:
+                            continue
+                        if math.hypot(x - bx, y - by) <= touch:
+                            parent[find(sj)] = find(si)
+
+    groups: dict[int, list[int]] = defaultdict(list)
+    for si in shorts:
+        groups[find(si)].append(si)
+
+    protected: set[int] = set()
+    for members in groups.values():
+        # A real glyph has several joined short strokes in a compact footprint.
+        if len(members) < 6:
+            continue
+        xs: list[float] = []
+        ys: list[float] = []
+        for i in members:
+            s = segments[i]
+            xs.extend([s.x0, s.x1])
+            ys.extend([s.y0, s.y1])
+        w = max(xs) - min(xs)
+        h = max(ys) - min(ys)
+        # Compact (light ~12, fan ~116) — not a room-length wire scribble.
+        if max(w, h) > 130.0:
+            continue
+        if min(w, h) < 5.0 and max(w, h) / max(min(w, h), 0.1) > 4.0:
+            continue  # thin elongated = leftover wall scrap
+        protected.update(members)
+    return protected
+
+
+def _wire_segment_ids(segments: list[Segment], mask: list[bool]) -> set[int]:
+    """Mark dashed-wiring strokes so they are removed *before* clustering.
+
+    Dashes are short open strokes (3–12 pt) that chain across a **gap** of
+    ~1.2–6 pt along a smooth curve. Continuous glyphs (circle lights, fan
+    blades) are protected first so a wire that approaches them cannot eat
+    their segments.
+    """
+    protected = _continuous_glyph_ids(segments, mask)
+
+    dashes: list[int] = []
+    for i, seg in enumerate(segments):
+        if not mask[i] or i in protected:
             continue
         length = _seg_len(seg)
         if _WIRE_MIN_LEN_PT <= length <= _WIRE_MAX_LEN_PT:
@@ -122,7 +207,14 @@ def _wire_segment_ids(segments: list[Segment], mask: list[bool]) -> set[int]:
     if len(dashes) < _WIRE_CHAIN_MIN:
         return set()
 
-    parent = {i: i for i in dashes}
+    cell = _WIRE_GAP_MAX_PT
+    buckets: dict[tuple[int, int], list[tuple[int, float, float]]] = defaultdict(list)
+    for di, si in enumerate(dashes):
+        s = segments[si]
+        for x, y in ((s.x0, s.y0), (s.x1, s.y1)):
+            buckets[(int(x // cell), int(y // cell))].append((di, x, y))
+
+    parent = list(range(len(dashes)))
 
     def find(a: int) -> int:
         while parent[a] != a:
@@ -130,56 +222,58 @@ def _wire_segment_ids(segments: list[Segment], mask: list[bool]) -> set[int]:
             a = parent[a]
         return a
 
-    def endpoints(i: int) -> tuple[tuple[float, float], tuple[float, float]]:
-        s = segments[i]
-        return (s.x0, s.y0), (s.x1, s.y1)
+    def unite(a: int, b: int) -> None:
+        ra, rb = find(a), find(b)
+        if ra != rb:
+            parent[rb] = ra
 
-    for a_idx in range(len(dashes)):
-        ia = dashes[a_idx]
-        a_ends = endpoints(ia)
-        for b_idx in range(a_idx + 1, len(dashes)):
-            ib = dashes[b_idx]
-            b_ends = endpoints(ib)
-            linked = False
-            for ax, ay in a_ends:
-                for bx, by in b_ends:
-                    if math.hypot(ax - bx, ay - by) <= _WIRE_ENDPOINT_GAP_PT:
-                        linked = True
-                        break
-                if linked:
-                    break
-            if linked:
-                parent[find(ib)] = find(ia)
+    dirs = [_seg_dir(segments[si]) for si in dashes]
+
+    for di, si in enumerate(dashes):
+        s = segments[si]
+        for x, y in ((s.x0, s.y0), (s.x1, s.y1)):
+            gx, gy = int(x // cell), int(y // cell)
+            for ox in (-1, 0, 1):
+                for oy in (-1, 0, 1):
+                    for dj, bx, by in buckets.get((gx + ox, gy + oy), []):
+                        if dj <= di:
+                            continue
+                        dist = math.hypot(x - bx, y - by)
+                        if dist < _WIRE_GAP_MIN_PT or dist > _WIRE_GAP_MAX_PT:
+                            continue
+                        dax, day = dirs[di]
+                        dbx, dby = dirs[dj]
+                        if dist > 1e-6:
+                            gx_, gy_ = (bx - x) / dist, (by - y) / dist
+                            align = max(
+                                abs(dax * gx_ + day * gy_),
+                                abs(dbx * gx_ + dby * gy_),
+                            )
+                        else:
+                            align = 1.0
+                        cos = abs(dax * dbx + day * dby)
+                        if cos < _WIRE_DIR_COS_MIN and align < 0.35:
+                            continue
+                        unite(di, dj)
 
     chains: dict[int, list[int]] = defaultdict(list)
-    for i in dashes:
-        chains[find(i)].append(i)
+    for di in range(len(dashes)):
+        chains[find(di)].append(dashes[di])
 
     wiring: set[int] = set()
     for members in chains.values():
         if len(members) < _WIRE_CHAIN_MIN:
             continue
-        xs: list[float] = []
-        ys: list[float] = []
-        total_len = 0.0
+        xs = []
+        ys = []
         for i in members:
             s = segments[i]
             xs.extend([s.x0, s.x1])
             ys.extend([s.y0, s.y1])
-            total_len += _seg_len(s)
         w = max(xs) - min(xs)
         h = max(ys) - min(ys)
-        if w < 1.0 or h < 1.0:
-            wiring.update(members)
-            continue
-        aspect = max(w, h) / min(w, h)
-        area = w * h
-        density = total_len / area  # stroke length per pt²
-        # Compact dense blobs (fan ~116², lights ~12²) → keep as symbols.
-        if aspect < 2.2 and min(w, h) >= 8.0 and density > 0.08:
-            continue
-        # Large near-square dense mass → fan.
-        if aspect < 1.6 and min(w, h) >= 40.0:
+        # Path-like: elongated or long total run. Skip tiny leftover clumps.
+        if max(w, h) < 16.0 and len(members) < 5:
             continue
         wiring.update(members)
     return wiring
