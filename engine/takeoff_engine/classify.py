@@ -856,9 +856,11 @@ def classify_candidates(
         _junctions_from_j_circles(ctx, candidates, fan_boxes, sheet_id, usable)
     )
 
-    # SD / SD/MA tokens that were absorbed into a fan cluster still need a
-    # detector mark (Fix 7 — bedroom SD next to the fan hub).
-    detections.extend(_smoke_from_orphan_tokens(ctx, detections, sheet_id, usable))
+    # Text-anchored detectors: every SD / SD/MA in the plan viewport maps to
+    # the circle+dot just above/beside it (R2 Fix 2).
+    detections.extend(
+        _detectors_from_sd_tokens(ctx, candidates, detections, sheet_id, usable)
+    )
 
     detections = _nms_detections(detections, dist_pt=8.0)
     return detections
@@ -907,20 +909,60 @@ def _junctions_from_j_circles(
     return out
 
 
-def _smoke_from_orphan_tokens(
+def _plan_bounds_from_candidates(
+    candidates: list[Candidate],
+) -> tuple[float, float, float, float] | None:
+    """Loose bbox of plan ink — used to keep legend SD tags out of detectors."""
+    if not candidates:
+        return None
+    x0 = min(c.bbox[0] for c in candidates)
+    y0 = min(c.bbox[1] for c in candidates)
+    x1 = max(c.bbox[2] for c in candidates)
+    y1 = max(c.bbox[3] for c in candidates)
+    pad = 20.0
+    return (x0 - pad, y0 - pad, x1 + pad, y1 + pad)
+
+
+def _center_dot_near(
+    ctx: PageContext, tx: float, ty: float, max_dist: float = 12.0
+) -> tuple[float, float] | None:
+    """Locate the smoke-detector center-dot fill just above/next to an SD token."""
+    best: tuple[float, float, float] | None = None  # dist, fx, fy
+    for f in ctx.black_fills:
+        fw, fh = f.x1 - f.x0, f.y1 - f.y0
+        # Center dots are tiny (~2×2 pt); reject half-discs / receptacle fills.
+        if not (1.0 <= fw <= 5.0 and 1.0 <= fh <= 5.0):
+            continue
+        fx, fy = 0.5 * (f.x0 + f.x1), 0.5 * (f.y0 + f.y1)
+        dist = math.hypot(fx - tx, fy - ty)
+        if dist > max_dist:
+            continue
+        # Prefer dots above the label (typical placement) then any neighbor.
+        prefer = dist + (0.0 if fy <= ty + 1.0 else 3.0)
+        if best is None or prefer < best[0]:
+            best = (prefer, fx, fy)
+    if best is None:
+        return None
+    return best[1], best[2]
+
+
+def _detectors_from_sd_tokens(
     ctx: PageContext,
+    candidates: list[Candidate],
     detections: list[Detection],
     sheet_id: str,
     usable: list[LegendEntry],
 ) -> list[Detection]:
-    """Emit smoke detections for SD tokens not already covered by a detector.
+    """For every viewport SD / SD/MA, emit a detector at the nearby circle+dot.
 
-    Restricted to tokens that sit inside a ceiling-fan bbox (bedroom SD next to
-    the hub) or within 25 pt of an existing plan detection — never legend text.
+    R2 Fix 2: tokens alone are authoritative; the glyph may be swallowed by a
+    fan cluster or scored as a recessed light, so we do not require a candidate.
     """
+    bounds = _plan_bounds_from_candidates(candidates)
+    if bounds is None:
+        return []
+    bx0, by0, bx1, by1 = bounds
     existing = [d for d in detections if d.category == Category.DETECTOR]
-    fans = [d for d in detections if d.category == Category.CEILING_FAN]
-    anchors = [d for d in detections if d.category != Category.DETECTOR]
     out: list[Detection] = []
     for w in ctx.words:
         raw = w.text.strip().upper()
@@ -930,11 +972,18 @@ def _smoke_from_orphan_tokens(
             continue
         wx = 0.5 * (w.bbox[0] + w.bbox[2])
         wy = 0.5 * (w.bbox[1] + w.bbox[3])
-        if any(math.hypot(d.center.x - wx, d.center.y - wy) < 12.0 for d in existing + out):
+        if not (bx0 <= wx <= bx1 and by0 <= wy <= by1):
             continue
-        in_fan = any(f.bbox.x0 <= wx <= f.bbox.x1 and f.bbox.y0 <= wy <= f.bbox.y1 for f in fans)
-        near_plan = any(math.hypot(a.center.x - wx, a.center.y - wy) < 25.0 for a in anchors)
-        if not (in_fan or near_plan):
+        dot = _center_dot_near(ctx, wx, wy, max_dist=12.0)
+        if dot is None:
+            # Fan-hub SD sometimes has the dot inside the fan ink; fall back to
+            # the token itself so bedroom SDs are not dropped.
+            cx, cy = wx, wy
+            notes = ["sd_token_no_dot"]
+        else:
+            cx, cy = dot
+            notes = ["sd_token_center_dot"]
+        if any(math.hypot(d.center.x - cx, d.center.y - cy) < 10.0 for d in existing + out):
             continue
         subtype = "smoke_co" if raw == "SD/MA" else "smoke"
         entry = next(
@@ -949,17 +998,17 @@ def _smoke_from_orphan_tokens(
                 category=Category.DETECTOR,
                 subtype=subtype,
                 codes=[w.text.strip()],
-                center=Point(x=wx, y=wy),
-                bbox=BBox(x0=wx - pad, y0=wy - pad, x1=wx + pad, y1=wy + pad),
+                center=Point(x=cx, y=cy),
+                bbox=BBox(x0=cx - pad, y0=cy - pad, x1=cx + pad, y1=cy + pad),
                 rotation_deg=0,
-                confidence=0.8,
+                confidence=0.88,
                 source="geometry",
-                needs_review=True,
+                needs_review=False,
                 evidence=Evidence(
                     legend_entry_id=entry.id if entry else None,
-                    match_score=0.8,
+                    match_score=0.88,
                     text_tokens=[w.text.strip()],
-                    notes=["orphan_sd_token"],
+                    notes=notes,
                 ),
             )
         )
