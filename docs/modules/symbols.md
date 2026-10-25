@@ -56,31 +56,70 @@ Reads `SCALE: 1/4" = 1'-0"` under the title → `(draw_inches / real_feet) * 72`
 
 ## Candidates (`find_candidates`)
 
+Order matters: remove non-symbol ink **before** clustering so dashes never join a switch or hide a recessed light.
+
 1. Keep black segments/fills whose bbox overlaps the viewport.
 2. Drop **walls**: axis-aligned strokes ≥22 pt, or shorter AA strokes hugging gray wall poché.
-3. Drop **wiring**: chains of short (2–12 pt) dashes linked by endpoint gap ≤4.5 pt — but **keep** compact dense chains (ceiling fan / light circles): aspect <2.2 with density >0.08, or near-square ≥40 pt.
-4. Drop **keynotes**: geometry under `A01`-style tags.
-5. Cluster remaining ink with bbox gap < `SYMBOL_CLUSTER_GAP_PT` (1.0). Second pass merges large neighbors (gap 3 pt) so fan blades stay one blob.
+3. Drop **dashed wiring** (Fix 1): short open polylines (~3–12 pt, no closure) that chain along a smooth curve with regular gaps (~1.2–6 pt). Continuous glyph strokes (endpoint gap &lt;1.2 pt) are protected so fan blades / light circles are not absorbed into a nearby wire chain.
+4. Drop **keynotes** (Fix 4): geometry whose center falls in / candidates that touch a pad around text matching `^[A-Z]\d{2}$` (A01, B14, …) — those tags were false `smoke_co`.
+5. Cluster remaining ink with bbox gap &lt; `SYMBOL_CLUSTER_GAP_PT` (1.0). Second pass merges large neighbors (gap 3 pt) so fan blades stay one blob.
+
+### Thresholds (candidates)
+
+| Name | Value | Why |
+|------|-------|-----|
+| Dash length | ~3–12 pt | Measured dash strokes on Escondido dashed home-runs |
+| `_WIRE_GAP_MIN_PT` | 1.2 | Below = continuous symbol stroke |
+| Wire gap max | ~6 pt | Typical dash spacing ~2–4.5 pt |
+| `_WIRE_CHAIN_MIN` | 2 | Two dashes across a gap already look like wiring |
+| Keynote pad | 6 pt | Cover the small rectangle around A01-style tags |
 
 ## Classify (`classify_candidates`)
 
 1. Rasterize candidate and each legend template at 2 px/pt, same physical size (no rescale).
 2. Dilate masks (k=2) and score IoU at rotations 0/90/180/270.
-3. Hard size gate: area ratio >4 or max-side ratio >3 → score 0 (stops fan↔switch confusion).
-4. Hard prior: near-square cluster ≥70 pt with ≥40 segments → `ceiling_fan` (SPEC §2 #5).
+3. Hard size gate: area ratio &gt;4 or max-side ratio &gt;3 → score 0.
+4. **Category rules** (precision pass — visual review of all 4 Escondido pages):
+
+| Rule | Behavior | Why |
+|------|----------|-----|
+| Switches / receptacles (Fix 2) | Center within ~8 pt of wall mask (gray fills + wall lines). Switch must match the `$` template (S crossing a vertical bar) with IoU ≥ ~0.45 | Dashes and free-field marks were 34→~11 switches on plan 1 |
+| Recessed lights (Fix 3) | Every circle-in-square glyph in the viewport → `light`. Default subtype `recessed`; `recessed_vapor_proof` only with a nearby `VP` token; `wall` only with the wall-tick shape | Plan 4 living room missed ~6 of ~10 circles before dash strip + force-light |
+| Keynotes (Fix 4) | Reject candidates that contain/touch `^[A-Z]\d{2}$` text or its box | Were classified as smoke_co |
+| Porch X markers (Fix 5) | Drop square-with-X at porch/post corners (not in legend) | Not devices |
+| Exhaust fan (Fix 5) | Requires a black fill (half-filled circle) | Outline-only hits were false exhausts |
+| Ceiling fan (Fix 6) | Requires a `J` token near the hub (≤8 pt of center **or** in the middle third of the bbox) **and** four blade loops (large near-square, enough segments). Template match alone is never enough | Door swings / cabinets must not become fans; plan 4 → 3 fans |
+| Smoke / smoke_co (Fix 7) | Circle + center-dot fill + `SD` or `SD/MA` token. `SD/MA` → `smoke_co`, `SD` → `smoke`. Orphan SD tokens inside a fan bbox (or &lt;25 pt of another plan detection) still emit a detector | Bedroom SD drawn inside the fan cluster was missed |
+| Junction vs fan | Drop `junction_box` whose center lies inside a `ceiling_fan` bbox | Spec: central J is the fan hub |
+
 5. Attach code tokens within `CODE_TEXT_RADIUS_PT` (14); refine subtype per SPEC §2 priority.
 6. NMS: same category within 8 pt → keep highest confidence.
-7. Drop `junction_box` whose center lies inside a `ceiling_fan` bbox.
-8. `needs_review` when best <0.22 or top-two within 0.05.
+7. `needs_review` when best &lt;0.22 or top-two within 0.05.
+
+### Rough expected counts (visual review)
+
+| Page | switches | ceiling_fan | smoke + smoke_co |
+|------|----------|-------------|------------------|
+| Plan 1 | ~11 | 1 | 1 + 1 |
+| Plan 4 | — | 3 | — |
+
+Re-check overlays: `out/debug/detections_p{1..4}.png` after each fix.
 
 ## Pipeline (`analyze_sheet`)
 
-`load_page → viewport/scale → legend (+ optional interpret_legend) → candidates → classify → optional adjudicate → detect_rooms/assign_rooms → optional wires/boxes`. `NotImplementedError` / teammate failures become `warnings`. CLI: `uv run takeoff analyze data/plans/escondido_plans.pdf --page 0 --out out/plan1.json --debug`.
+`load_page → viewport/scale → legend (+ optional interpret_legend) → candidates → classify → optional adjudicate → detect_rooms/assign_rooms → optional wires/boxes`. `NotImplementedError` / teammate failures become `warnings`.
+
+CLI page is **1-based** (plan number):
+
+```bash
+uv run takeoff analyze data/plans/escondido_plans.pdf --page 1 --out out/plan1.json --debug --no-llm --no-bom
+```
 
 ## Known limits
 
 - Assumes sheet cells are framed by long black strokes (true for Escondido PAADU sheets).
 - Title must appear as a single bold span containing `ELECTRICAL PLAN`.
 - Legend description ownership can still slip on unusually tight rows; rules cover the Escondido set.
-- Candidate clustering is O(n²); Plan 3–4 take ~20 s. False positives remain (extra switches/lights); LLM adjudication + eval iteration are the next accuracy lever.
+- Candidate clustering is O(n²); Plan 3–4 take ~20 s.
+- Receptacle counts are still high vs a strict visual count; wall proximity helps but legend look-alikes near walls remain.
 - Fan-coil legend glyph sometimes extracts as a thin sliver and is skipped by the min-side gate.
