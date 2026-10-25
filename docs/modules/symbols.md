@@ -78,7 +78,7 @@ Order matters: remove non-symbol ink **before** clustering so dashes never join 
 | IN ATTIC (R2.8) | Attic panel edges join wall mask; relax switch IoU inside panel; nudge centers into Attic | Spec: attic devices → room Attic |
 
 4. NMS same category 8 pt; then cross-category NMS for known collisions.
-5. `needs_review` when best <0.22 or top-two within 0.05.
+5. `needs_review` **only** when (a) top-two scores are close **and** different categories, or (b) weak match (&lt;0.30) with no type codes. Same-glyph receptacle/switch legend rows no longer flood review (target &lt;15%; measured ~5%).
 
 ### Duplex vs exhaust half-fill
 

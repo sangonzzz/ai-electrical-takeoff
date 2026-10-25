@@ -2,52 +2,55 @@
 
 ## Estado
 
-Precision round 2 listo (fixes 1–8). Overlays regenerados en `out/debug/`.
+Round 2 fixes 1–8 **committed locally** (ahead of `origin/main`). `needs_review` tightened to ~5%. **Needs Agente 1 to push.**
 
 ## Hecho
 
-### Round 1
-- Strip dashes before cluster; wall+$ switch gate; recessed force; keynotes; X markers; fan J+blades; SD tokens
+### Round 2 (local SHAs, not yet on GitHub as of this status)
 
-### Round 2
-1. `junction_box` only small circle + `J` (not fan hub) → JB count 0 on Escondido
-2. Text-anchored SD/SD/MA → center-dot (~12 pt); plan 4 has 5 detectors
-3. `EXT` → `exterior_wall` light
-4. Half-fill circle (no duplex slots) → exhaust; `IAQ` → indoor_air_quality (plan 1 bath found)
-5. Duplex half-fill → `afci_half_hot` (plan 1 kitchen)
-6. Cross NMS: detector beats overlapping recessed light
-7. Wall light = circle+cross+tick (bath vanity)
-8. IN ATTIC panel: wall-mask edges + switch IoU relax + center nudge → Attic room
+| # | Commit | Fix |
+|---|--------|-----|
+| 1 | `420b5cd` | junction_box = small J-circle only |
+| 2 | `eee3918` | SD/SD/MA text → center-dot |
+| 3 | `7ed0d8d` | EXT → exterior_wall (**last on origin**) |
+| 4 | `37d9285` | half-fill exhaust (not duplex); IAQ |
+| 5 | `72df08b` | AFCI half-hot from duplex half-fill |
+| 6 | `70606cf` | cross-category NMS (detector > light) |
+| 7 | `8d44973` | wall light = circle+cross+tick |
+| 8 | `f985438` | IN ATTIC light+switch |
+| — | `f2f4fc3` | docs + msg A7 |
+| — | *(new)* | `needs_review` only cross-cat / weak uncoded (~5%) |
+
+### needs_review
+
+Was ~75–90% (same-glyph receptacle rows within 0.01). Now only when top-two are **different categories** and close, or weak score with no codes. Plan 1–4: **4–6%**.
 
 ## Cómo probarlo
 
 ```bash
-uv run pytest engine/tests/symbols/ -v
+uv run pytest engine/tests/symbols/ -q
 uv run takeoff analyze data/plans/escondido_plans.pdf --page 1 --out out/plan1.json --debug --no-llm --no-bom
-# pages 1..4; overlays out/debug/detections_p{1..4}.png
+# pages 1..4
 ```
 
 ## Siguiente
 
-- Receptacle over-count if eval demands
-- Clustering speed on dense sheets
+- Agente 1: push `origin/main` through latest A2 commits
+- Agente 7: re-run eval after push
 
 ## Bloqueos
 
-- Ninguno. Pedir a Agente 7 re-run eval.
+- **Push:** only Agente 1 pushes; local is 6+ commits ahead of origin (items 4–8 + docs + needs_review).
 
 ## Decisions
 
-- JB: never template-only; geometry = circle containing `J`, outside fan bbox.
-- SD: token is authoritative; place at center-dot fill, not at text.
+- `needs_review`: ignore same-category legend ties; codes own subtype.
 - Half-disc: 2 duplex slots → half-hot; 4 circle chords → exhaust.
-- Cross-NMS only for known collisions (detector/light, exhaust/half-hot).
-- Attic: panel outline joins wall mask; ≤1 switch per panel.
 
 ## Needs from Santiago
 
-- (ninguno)
+- Ask Agente 1 to push, or confirm push so GitHub matches local round 2.
 
 ## Explicación para Santiago
 
-En la segunda pasada eliminamos las “cajas de unión” falsas (solo vale un círculo chico con J, no el hub del abanico). Los detectores se anclan al texto SD/SD/MA y al puntito negro de al lado — por eso el plan 4 ya no pierde los de los dormitorios. EXT marca la luz exterior; el extractor del baño es el semicírculo sin las dos rayitas de un tomacorriente; el half-hot de cocina es el semicírculo *con* esas rayitas. Si una luz empotrada cae encima de un SD, nos quedamos con el detector. La luz del tocador del baño es wall (círculo + cruz + patita). Y lo del cajón IN ATTIC (luz y switch) ya se detecta y cae en la habitación Attic.
+Los fixes 4–8 de la ronda 2 ya están hechos y commiteados en tu máquina (exhaust, half-hot, NMS, wall light, ático), pero GitHub se quedó en el fix 3 (EXT) porque solo Agente 1 hace push. Además bajé `needs_review` de ~80% a ~5%: antes casi todos los tomacorrientes salían “a revisar” porque GFCI/AFCI/duplex se parecen en el dibujo; ahora solo se marca si compiten **categorías distintas** o el match es flojo y sin código. Pedí a Agente 1 que suba esos commits.
