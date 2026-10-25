@@ -4,12 +4,14 @@ import {
   CATEGORY_LETTER,
   NEEDS_REVIEW_COLOR,
 } from "@/lib/colors";
-import type { Detection } from "@/types/contracts";
+import type { Category, Detection } from "@/types/contracts";
+import type { CategoryVisibility } from "@/store/uiStore";
 
 const MARK_R = 7;
 
 interface Props {
   detections: Detection[];
+  categoryVisibility: CategoryVisibility;
   selectedId: string | null;
   highlightedIds: Set<string>;
   onSelect: (id: string) => void;
@@ -18,12 +20,17 @@ interface Props {
 
 export function DetectionLayer({
   detections,
+  categoryVisibility,
   selectedId,
   highlightedIds,
   onSelect,
   onDragStart,
 }: Props) {
-  const active = detections.filter((d) => d.status !== "deleted");
+  const active = detections.filter(
+    (d) =>
+      d.status !== "deleted" &&
+      categoryVisibility[d.category as Category] !== false,
+  );
   const hasHighlight = highlightedIds.size > 0;
 
   return (
@@ -34,6 +41,8 @@ export function DetectionLayer({
         const highlighted = highlightedIds.has(det.id);
         const dimmed = hasHighlight && !highlighted && !selected;
         const opacity = dimmed ? 0.22 : 1;
+        // Strict boolean — never treat undefined / truthy strings as review.
+        const needsReview = det.needs_review === true;
 
         return (
           <g
@@ -51,7 +60,7 @@ export function DetectionLayer({
               onDragStart(det.id, e);
             }}
           >
-            {det.needs_review && (
+            {needsReview && (
               <circle
                 r={MARK_R + 3}
                 fill="none"

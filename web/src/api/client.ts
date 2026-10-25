@@ -2,9 +2,11 @@ import type { Bom, Detection, SheetResult, Takeoff } from "@/types/contracts";
 import {
   fixtureCreateDetection,
   fixtureDeleteDetection,
+  fixtureExportGroundTruth,
   fixtureGetJob,
   fixtureGetSheet,
   fixtureLoadDemo,
+  fixtureMarkReviewed,
   fixturePatchDetection,
   fixtureUndo,
 } from "./fixture";
@@ -12,13 +14,17 @@ import type {
   CorrectionEvent,
   DocumentSummary,
   JobInfo,
+  ReviewCompleteResponse,
   SheetBundle,
+  SheetDetailApi,
 } from "./types";
 
 export type DetectionMutationResult = {
   detection: Detection;
   takeoff: Takeoff;
 };
+
+export type { ReviewCompleteResponse };
 
 const useFixture = import.meta.env.VITE_USE_FIXTURE === "true";
 const apiBase = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "";
@@ -37,6 +43,34 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
   if (res.status === 204) return undefined as T;
   return (await res.json()) as T;
+}
+
+function detailToBundle(detail: SheetDetailApi): SheetBundle {
+  const result: SheetResult = {
+    schema_version: "1.0.0",
+    pipeline_version: detail.job?.pipeline_version ?? "api",
+    sheet: detail.sheet,
+    legend: detail.legend ?? [],
+    rooms: detail.rooms ?? [],
+    detections: detail.detections ?? [],
+    wire_runs: detail.wire_runs ?? [],
+    boxes: detail.boxes ?? [],
+    warnings: detail.warnings ?? [],
+  };
+  return {
+    result,
+    takeoff: detail.takeoff ?? undefined,
+    humanReviewed: detail.job?.human_reviewed ?? false,
+  };
+}
+
+function triggerDownload(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 export function isFixtureMode(): boolean {
@@ -70,8 +104,8 @@ export async function getDocument(documentId: string): Promise<DocumentSummary> 
 
 export async function getSheet(sheetId: string): Promise<SheetBundle> {
   if (useFixture) return fixtureGetSheet(sheetId);
-  const result = await request<SheetResult>(`/api/sheets/${sheetId}`);
-  return { result };
+  const detail = await request<SheetDetailApi>(`/api/sheets/${sheetId}`);
+  return detailToBundle(detail);
 }
 
 export async function getSheetTakeoff(sheetId: string): Promise<Takeoff> {
@@ -147,4 +181,38 @@ export async function healthCheck(): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+/** POST /api/sheets/{id}/review-complete — marks current run human_reviewed. */
+export async function markSheetReviewed(
+  sheetId: string,
+): Promise<ReviewCompleteResponse> {
+  if (useFixture) return fixtureMarkReviewed(sheetId);
+  return request<ReviewCompleteResponse>(`/api/sheets/${sheetId}/review-complete`, {
+    method: "POST",
+  });
+}
+
+/**
+ * GET /api/sheets/{id}/ground-truth.json — download active detections for eval.
+ * Triggers a browser file download.
+ */
+export async function downloadGroundTruth(sheetId: string): Promise<void> {
+  if (useFixture) {
+    const json = fixtureExportGroundTruth(sheetId);
+    triggerDownload(
+      new Blob([json], { type: "application/json" }),
+      `${sheetId}-ground-truth.json`,
+    );
+    return;
+  }
+  const res = await fetch(`${apiBase}/api/sheets/${sheetId}/ground-truth.json`);
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`${res.status} ${res.statusText}${text ? `: ${text}` : ""}`);
+  }
+  const blob = await res.blob();
+  const cd = res.headers.get("Content-Disposition");
+  const match = cd?.match(/filename="?([^"]+)"?/i);
+  triggerDownload(blob, match?.[1] ?? `${sheetId}-ground-truth.json`);
 }

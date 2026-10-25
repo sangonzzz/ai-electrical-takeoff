@@ -4,6 +4,7 @@ import type {
   CorrectionEvent,
   DocumentSummary,
   JobInfo,
+  ReviewCompleteResponse,
   SheetBundle,
   SheetSummary,
 } from "./types";
@@ -17,6 +18,7 @@ const DEMO_DOC_ID = "doc-escondido";
 let fixtureResult: SheetResult = structuredClone(sampleResult) as SheetResult;
 let corrections: CorrectionEvent[] = [];
 let undoStack: SheetResult[] = [];
+let humanReviewed = false;
 let undoEpoch = 0;
 const undoListeners = new Set<() => void>();
 
@@ -147,6 +149,7 @@ export function resetFixtureState(): void {
   fixtureResult = structuredClone(sampleResult) as SheetResult;
   corrections = [];
   undoStack = [];
+  humanReviewed = false;
   notifyUndo();
 }
 
@@ -182,6 +185,7 @@ export async function fixtureGetSheet(sheetId: string): Promise<SheetBundle> {
     takeoff: takeoffOf(result),
     bom: bomOf(result),
     corrections: [...corrections],
+    humanReviewed,
   };
 }
 
@@ -269,4 +273,29 @@ export async function fixtureUndo(): Promise<SheetBundle | null> {
 
 export function fixtureCanUndo(): boolean {
   return undoStack.length > 0;
+}
+
+export async function fixtureMarkReviewed(
+  sheetId: string,
+): Promise<ReviewCompleteResponse> {
+  humanReviewed = true;
+  return { sheet_id: sheetId, job_id: "job-fixture-0", human_reviewed: true };
+}
+
+/** Same shape as GET /api/sheets/{id}/ground-truth.json for Agente 7. */
+export function fixtureExportGroundTruth(sheetId: string): string {
+  const rooms = Object.fromEntries(
+    fixtureResult.rooms.map((r) => [r.id, r.display_name]),
+  );
+  const detections = fixtureResult.detections
+    .filter((d) => d.status !== "deleted")
+    .map((d) => ({
+      id: d.id,
+      category: d.category,
+      subtype: d.subtype,
+      center: { x: d.center.x, y: d.center.y },
+      room: d.room_id ? (rooms[d.room_id] ?? null) : null,
+    }));
+  void sheetId;
+  return `${JSON.stringify({ detections }, null, 2)}\n`;
 }

@@ -1,4 +1,14 @@
-import type { Bom, SheetResult, Takeoff } from "@/types/contracts";
+import type {
+  Bom,
+  Box,
+  Detection,
+  LegendEntry,
+  Room,
+  Sheet,
+  SheetResult,
+  Takeoff,
+  WireRun,
+} from "@/types/contracts";
 
 export type JobStatus = "queued" | "running" | "succeeded" | "failed";
 
@@ -7,6 +17,27 @@ export interface JobInfo {
   status: JobStatus;
   progress?: number | null;
   error?: string | null;
+  pipeline_version?: string | null;
+  human_reviewed?: boolean;
+}
+
+/** Backend GET /api/sheets/{id} shape (Agente 5). */
+export interface SheetDetailApi {
+  sheet: Sheet;
+  job?: JobInfo | null;
+  legend?: LegendEntry[];
+  rooms?: Room[];
+  detections?: Detection[];
+  wire_runs?: WireRun[];
+  boxes?: Box[];
+  takeoff?: Takeoff | null;
+  warnings?: string[];
+}
+
+export interface ReviewCompleteResponse {
+  sheet_id: string;
+  job_id: string;
+  human_reviewed: boolean;
 }
 
 export interface SheetSummary {
@@ -43,4 +74,5 @@ export interface SheetBundle {
   takeoff?: Takeoff;
   bom?: Bom | null;
   corrections?: CorrectionEvent[];
+  humanReviewed?: boolean;
 }

@@ -29,6 +29,17 @@ export const CATEGORY_LETTER: Record<Category, string> = {
   junction_box: "J",
 };
 
+/** Compact column headers for the takeoff table. */
+export const CATEGORY_SHORT: Record<Category, string> = {
+  ceiling_fan: "Fans",
+  light: "Lights",
+  switch: "Switches",
+  receptacle: "Receptacles",
+  exhaust_fan: "Exhaust",
+  detector: "Detectors",
+  junction_box: "J-box",
+};
+
 export const CATEGORY_LABEL: Record<Category, string> = {
   ceiling_fan: "Ceiling fan",
   light: "Light",
@@ -48,3 +59,8 @@ export const ALL_CATEGORIES: Category[] = [
   "detector",
   "junction_box",
 ];
+
+/** Humanize subtype keys for expanded takeoff rows. */
+export function formatSubtype(subtype: string): string {
+  return subtype.replace(/_/g, " ");
+}

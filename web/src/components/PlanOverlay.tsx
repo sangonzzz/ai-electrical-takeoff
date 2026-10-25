@@ -1,6 +1,6 @@
 import type { MouseEvent, ReactNode } from "react";
 import type { SheetResult } from "@/types/contracts";
-import type { LayerVisibility } from "@/store/uiStore";
+import type { CategoryVisibility, LayerVisibility } from "@/store/uiStore";
 import { BoxLayer } from "./overlay/BoxLayer";
 import { DetectionLayer } from "./overlay/DetectionLayer";
 import { RoomLayer } from "./overlay/RoomLayer";
@@ -9,6 +9,7 @@ import { WireLayer } from "./overlay/WireLayer";
 interface Props {
   result: SheetResult;
   layers: LayerVisibility;
+  categoryVisibility: CategoryVisibility;
   selectedId: string | null;
   highlightedIds: Set<string>;
   imageUrl: string | null;
@@ -24,6 +25,7 @@ interface Props {
 export function PlanOverlay({
   result,
   layers,
+  categoryVisibility,
   selectedId,
   highlightedIds,
   imageUrl,
@@ -49,9 +51,11 @@ export function PlanOverlay({
 
   return (
     <svg
+      data-plan-overlay
       viewBox={viewBox}
       width="100%"
       height="100%"
+      preserveAspectRatio="xMidYMid meet"
       className="block h-full w-full"
       onClick={handleClick}
       role="img"
@@ -76,6 +80,7 @@ export function PlanOverlay({
       {layers.detections && (
         <DetectionLayer
           detections={result.detections}
+          categoryVisibility={categoryVisibility}
           selectedId={selectedId}
           highlightedIds={highlightedIds}
           onSelect={onSelect}

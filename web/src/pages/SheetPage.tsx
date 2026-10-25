@@ -1,8 +1,11 @@
 import { useEffect } from "react";
 import { Link, useParams } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft } from "lucide-react";
-import { useSheetBundle } from "@/hooks/useSheetBundle";
+import type { SheetBundle } from "@/api/types";
+import { useSheetBundle, sheetQueryKey } from "@/hooks/useSheetBundle";
 import { PlanViewer } from "@/components/PlanViewer";
+import { ReviewActions } from "@/components/ReviewActions";
 import { RightPanel } from "@/components/RightPanel";
 import { Toolbar } from "@/components/Toolbar";
 import { useUiStore } from "@/store/uiStore";
@@ -10,6 +13,7 @@ import { defaultSubtype } from "@/lib/subtypes";
 
 export function SheetPage() {
   const { sheetId = "" } = useParams();
+  const queryClient = useQueryClient();
   const {
     sheetQuery,
     bomQuery,
@@ -83,6 +87,17 @@ export function SheetPage() {
         </Link>
         <div className="h-4 w-px bg-[var(--border)]" />
         <Toolbar canUndo={canUndo} onUndo={undo} />
+        <ReviewActions
+          sheetId={sheetId}
+          humanReviewed={sheetQuery.data?.humanReviewed ?? false}
+          onReviewed={() => {
+            queryClient.setQueryData(
+              sheetQueryKey(sheetId),
+              (old: SheetBundle | undefined) =>
+                old ? { ...old, humanReviewed: true } : old,
+            );
+          }}
+        />
         <div className="ml-auto text-[11px] text-[var(--muted)]">
           {result.detections.filter((d) => d.status !== "deleted").length} active marks
           {mode === "add" ? " · add mode" : ""}

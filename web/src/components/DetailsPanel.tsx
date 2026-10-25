@@ -80,6 +80,13 @@ export function DetailsPanel({ detection, rooms, onChange, onDelete }: Props) {
               </option>
             ))}
           </select>
+          <p className="text-[11px] text-[var(--muted)]">
+            Room name on plan is hidden by default (hover a room polygon to peek).
+            Current:{" "}
+            <span className="font-semibold text-[var(--ink)]">
+              {rooms.find((r) => r.id === detection.room_id)?.display_name ?? "Unassigned"}
+            </span>
+          </p>
         </Field>
 
         <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-[12px]">

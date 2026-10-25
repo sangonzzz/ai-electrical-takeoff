@@ -25,21 +25,37 @@ Tailwind CSS v4, lucide-react, Vitest + Testing Library.
 ## Screens
 
 1. **Home** — upload PDF or "Load demo plans"; 4 sheet cards; job status polled every 2 s.
-2. **Sheet view** — plan + overlay, toolbar (select / add / undo), right panel tabs:
-   Takeoff, Details, BOM, Corrections log.
+2. **Sheet view** — plan + overlay, toolbar (select / add / undo), category filter,
+   Fit control, review actions, right panel tabs: Takeoff, Details, BOM, Corrections.
 
 ## Overlay layers (SPEC palette)
 
-| Layer | Visual |
-|-------|--------|
-| Rooms | Translucent polygons + dark display names |
-| Detections | Category color + letter; dashed orange ring if `needs_review` |
-| Wires | Magenta dashed polyline + `"14/2 - 12.4 ft"` |
-| Boxes | Dark dashed rect + `"2G"` |
+| Layer | Default | Visual |
+|-------|---------|--------|
+| Rooms | on | Translucent polygons; **names on hover only** (plan already prints labels) |
+| Detections | on | Category color + letter; dashed orange ring **only if** `needs_review === true` |
+| Wires | on | Magenta dashed polyline + `"14/2 - 12.4 ft"` |
+| Boxes | **off** | Dark rect + `"2G"`; multi-gang (2+) emphasized |
 
 Colors (must match `overlay.py`): ceiling_fan `#7C3AED`, light `#F59E0B`,
 switch `#2563EB`, receptacle `#059669`, exhaust_fan `#0891B2`, detector `#DC2626`,
 junction_box `#6B7280`, wires `#DB2777`, boxes `#111827`, needs_review `#EA580C`.
+
+## Takeoff table
+
+- Column headers: short name + lucide icon (Fans, Lights, Switches, Receptacles,
+  Exhaust, Detectors, J-box).
+- Click a **room name** to expand subtype breakdown (e.g. Switches 3: dimmer, fan…).
+- Click a cell or subtype chip → highlight those marks on the plan.
+
+## Review workflow
+
+- **Category filter** — toggle each category on/off to review one type at a time
+  (mitigates acceptance bias; see eval docs).
+- **Fit** — auto fit-to-canvas on load / resize; Fit button re-centers.
+- **Mark sheet reviewed** → `POST /api/sheets/{id}/review-complete`
+- **Export ground truth** → `GET /api/sheets/{id}/ground-truth.json`
+  (Agente 7 `planN.detections.json` shape).
 
 ## Counting
 
@@ -64,12 +80,15 @@ Tested against `contracts/fixtures/takeoff.sample.expected.json`.
 
 ```
 web/src/
-  api/client.ts          fixture vs live API switch
+  api/client.ts          fixture vs live API switch (+ review / ground-truth)
   api/fixture.ts         in-memory demo state + undo
   lib/takeoff.ts         computeTakeoff + detectionIdsForCount
-  lib/colors.ts          SPEC palette
-  store/uiStore.ts       mode, layers, selection, highlight
+  lib/colors.ts          SPEC palette + short labels
+  store/uiStore.ts       mode, layers, category filter, selection, highlight
   components/PlanOverlay.tsx   SVG viewBox = viewport
+  components/TakeoffPanel.tsx  named columns + expandable subtypes
+  components/CategoryFilter.tsx
+  components/ReviewActions.tsx
   pages/HomePage.tsx, SheetPage.tsx
 ```
 
@@ -80,7 +99,8 @@ cd web
 pnpm install
 # Fixture demo (default via .env.example):
 pnpm dev
-# Tests / CI:
+# Against real API:
+# set VITE_USE_FIXTURE=false
 pnpm exec tsc --noEmit
 pnpm exec vitest run
 pnpm build

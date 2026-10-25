@@ -2,52 +2,53 @@
 
 ## Estado
 
-M1–M3 listos en fixture mode; M4 cableado contra API (esperando endpoints de Agente 5).
+Demo polish shipped: takeoff headers/subtypes, category filter, fit-to-screen, review/export wired to A5.
 
 ## Hecho
 
-- Scaffold Vite + React + TS + Tailwind v4 + TanStack Query + Zustand + zoom-pan-pinch + Vitest
-- Fixture mode (`VITE_USE_FIXTURE=true`): carga `sheet_result.sample.json`, overlay SVG con `viewBox` = viewport PDF
-- Capas: rooms, detections (palette SPEC + letra), wires (`14/2 - N ft`), boxes (`2G`), needs_review, legend, pan/zoom
-- Takeoff panel: `web/src/lib/takeoff.ts` espejo de `compute_takeoff`; click celda → highlight; tests vs fixture expected
-- CRUD: select, drag, add, edit type/room, delete + Del, undo; optimistic + rollback
-- Home: upload + Load demo plans + 4 sheet cards + polling 2 s (listo para backend)
-- Docs: `docs/modules/frontend.md`
+- Takeoff table: named columns + icons (Fans, Lights, …); room row expands subtype breakdown
+- `needs_review` ring only when `needs_review === true`
+- Boxes layer **off** by default; multi-gang (2G+) emphasized when on
+- Room name overlays hidden by default; show on polygon hover + in Details
+- Fit-to-screen on load/resize + Fit button; category filter to solo one type
+- Review workflow: Mark sheet reviewed (`POST …/review-complete`), Export ground truth (`GET …/ground-truth.json`)
+- `getSheet` normalizes Agente 5 `SheetDetailResponse` (incl. `human_reviewed`)
 
 ## Cómo probarlo
 
 ```bash
 cd web
 pnpm install
+# Against real backend (reviewer path):
+# VITE_USE_FIXTURE=false in web/.env
 pnpm dev
-# browser → http://localhost:5173 → "Load demo plans" → Open Plan 1
+# http://localhost:5173 → Load demo → open a sheet
+# Click room name in takeoff → expand subtypes; toggle category filter; Fit;
+# Mark sheet reviewed; Export ground truth
 pnpm exec tsc --noEmit
 pnpm exec vitest run
-pnpm build
 ```
 
 ## Siguiente
 
-- Conectar M4 a endpoints reales cuando Agente 5 anuncie /docs
-- Sustituir placeholder grid por `GET /api/sheets/{id}/image.png`
-- BOM real de Agente 8 vía API (hoy hay BOM demo en fixture)
+- Optional: wire undo to a backend endpoint if A5 adds one
+- Keep palette in sync with A7 overlay
 
 ## Bloqueos
 
-- Endpoints + contrato de respuestas de Agente 5 (FakeEngine OK)
-- Imagen del plan desde backend
+- Ninguno para la demo actual
 
 ## Decisions
 
-- En fixture, sheets 2–4 reusan geometría de Plan 1 con ids renombrados (demo de 4 cards)
-- BOM en fixture se deriva de wires/boxes del sample (no precios de `price_list.yaml`)
-- Drag: actualiza cache en cada frame; PATCH solo en mouseup
-- Undo local solo en fixture hasta que exista endpoint de undo
+- Boxes default off; 1-gang faint when boxes layer on
+- Room labels hover-only (plan raster already has text)
+- Category filter is independent of layer toggles
+- Ground-truth download uses browser blob + Content-Disposition filename
 
 ## Needs from Santiago
 
-- (ninguno por ahora; clave Anthropic no aplica al frontend)
+- (ninguno)
 
 ## Explicación para Santiago
 
-El frontend ya se puede demear sin backend: activás fixture mode, cargás los planes demo y ves el plano con cuartos, marcas de color, cables y cajas. La tabla de takeoff a la derecha cuenta igual que el motor en Python; si tocás un número, se iluminan exactamente esas marcas en el dibujo (eso es el momento clave de la demo). Podés agregar, mover, cambiar tipo/cuarto y borrar, y los totales cambian al toque. Cuando Agente 5 tenga la API, apagamos fixture y usamos upload + imagen real + BOM del servidor.
+Pulí la pantalla de demo con lo que pediste en la review: la tabla ahora dice Fans/Lights/… con íconos, y al hacer click en un cuarto se abren los subtipos (por ejemplo Switches 3: dimmer, fan…). El anillo naranja de “needs review” solo aparece si el flag es true. Las cajas arrancan apagadas; si las prendés, los 2G/3G se ven fuertes. Los nombres de cuarto no tapan el plano (hover o panel Details). El plano hace fit al cargar, hay filtro por categoría para revisar de a un tipo, y los botones “Mark sheet reviewed” / “Export ground truth” hablan con los endpoints nuevos de Agente 5.

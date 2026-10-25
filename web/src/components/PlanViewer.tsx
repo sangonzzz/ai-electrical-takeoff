@@ -1,7 +1,18 @@
-import { useCallback, useRef, type MouseEvent as ReactMouseEvent } from "react";
-import { TransformComponent, TransformWrapper } from "react-zoom-pan-pinch";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  type MouseEvent as ReactMouseEvent,
+} from "react";
+import {
+  TransformComponent,
+  TransformWrapper,
+  type ReactZoomPanPinchContentRef,
+} from "react-zoom-pan-pinch";
+import { Maximize2 } from "lucide-react";
 import type { SheetResult } from "@/types/contracts";
 import { useUiStore } from "@/store/uiStore";
+import { CategoryFilter } from "./CategoryFilter";
 import { ColorLegend } from "./ColorLegend";
 import { LayerToggles } from "./LayerToggles";
 import { PlanOverlay } from "./PlanOverlay";
@@ -10,10 +21,39 @@ interface Props {
   result: SheetResult;
   imageUrl: string | null;
   onAddAt: (x: number, y: number) => void;
-  /** Live position while dragging (cache only). */
   onDragMove: (id: string, x: number, y: number) => void;
-  /** Persist position when the pointer is released. */
   onDragEnd: (id: string, x: number, y: number) => void;
+}
+
+/** Scale so the plan's aspect fills the canvas (meet), then center. */
+function fitPlanToCanvas(
+  api: ReactZoomPanPinchContentRef,
+  container: HTMLElement,
+  viewport: { x0: number; y0: number; x1: number; y1: number },
+) {
+  const pad = 8;
+  const cw = Math.max(1, container.clientWidth - pad * 2);
+  const ch = Math.max(1, container.clientHeight - pad * 2);
+  const vw = Math.max(1, viewport.x1 - viewport.x0);
+  const vh = Math.max(1, viewport.y1 - viewport.y0);
+  // Content div is sized to the container; SVG meet-letterboxes inside it.
+  // Zoom so the letterboxed plan edge nearly touches the canvas edge.
+  const contentAspect = vw / vh;
+  const boxAspect = cw / ch;
+  // When content is wider than the box, width is the limiting edge at scale 1.
+  // When taller, height limits. Scale up so the limiting edge fills.
+  let scale = 1;
+  if (contentAspect > boxAspect) {
+    // width-limited at scale 1 already fills width; height has bars — scale by height/width ratio of bars?
+    // At scale 1, SVG width = cw, drawn height = cw / contentAspect. Want drawn height = ch → scale = ch / (cw/contentAspect)
+    const drawnH = cw / contentAspect;
+    scale = ch / Math.max(1, drawnH);
+  } else {
+    const drawnW = ch * contentAspect;
+    scale = cw / Math.max(1, drawnW);
+  }
+  scale = Math.min(Math.max(scale, 0.4), 8);
+  api.centerView(scale, 0);
 }
 
 export function PlanViewer({
@@ -25,9 +65,12 @@ export function PlanViewer({
 }: Props) {
   const mode = useUiStore((s) => s.mode);
   const layers = useUiStore((s) => s.layers);
+  const categoryVisibility = useUiStore((s) => s.categoryVisibility);
   const selectedId = useUiStore((s) => s.selectedDetectionId);
   const highlight = useUiStore((s) => s.highlight);
   const selectDetection = useUiStore((s) => s.selectDetection);
+  const transformRef = useRef<ReactZoomPanPinchContentRef>(null);
+  const canvasRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{
     id: string;
     startClientX: number;
@@ -37,6 +80,27 @@ export function PlanViewer({
   } | null>(null);
 
   const highlightedIds = new Set(highlight?.detectionIds ?? []);
+  const fitKey = `${result.sheet.id}:${imageUrl ?? "none"}`;
+
+  const fitToScreen = useCallback(() => {
+    const api = transformRef.current;
+    const container = canvasRef.current;
+    if (!api || !container) return;
+    fitPlanToCanvas(api, container, result.sheet.viewport);
+  }, [result.sheet.viewport]);
+
+  useEffect(() => {
+    const t = window.setTimeout(fitToScreen, 60);
+    return () => window.clearTimeout(t);
+  }, [fitKey, fitToScreen]);
+
+  useEffect(() => {
+    const container = canvasRef.current;
+    if (!container || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => fitToScreen());
+    ro.observe(container);
+    return () => ro.disconnect();
+  }, [fitToScreen]);
 
   const onBackgroundClick = useCallback(
     (pdfX: number, pdfY: number) => {
@@ -99,26 +163,41 @@ export function PlanViewer({
 
   return (
     <div className="relative flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--surface)]">
-      <div className="flex items-center justify-between gap-3 border-b border-[var(--border)] px-3 py-2">
-        <div className="min-w-0">
-          <div className="truncate text-sm font-semibold text-[var(--ink)]">
-            {result.sheet.title ?? result.sheet.sheet_number ?? "Sheet"}
+      <div className="flex flex-col gap-2 border-b border-[var(--border)] px-3 py-2">
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <div className="truncate text-sm font-semibold text-[var(--ink)]">
+              {result.sheet.title ?? result.sheet.sheet_number ?? "Sheet"}
+            </div>
+            <div className="text-[11px] text-[var(--muted)]">
+              Fit on load · scroll zoom · drag pan
+              {mode === "add" ? " · click plan to place" : ""}
+            </div>
           </div>
-          <div className="text-[11px] text-[var(--muted)]">
-            Viewport PDF pts · scroll to zoom · drag to pan
-            {mode === "add" ? " · click plan to place" : ""}
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={fitToScreen}
+              className="inline-flex items-center gap-1 rounded border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-[11px] font-medium text-[var(--ink)] hover:bg-[var(--surface-2)]"
+              title="Fit plan to canvas"
+            >
+              <Maximize2 size={12} /> Fit
+            </button>
+            <LayerToggles />
           </div>
         </div>
-        <LayerToggles />
+        <CategoryFilter />
       </div>
 
-      <div className="relative min-h-0 flex-1 bg-[#e8eef5]">
+      <div ref={canvasRef} className="relative min-h-0 flex-1 bg-[#e8eef5]">
         <TransformWrapper
+          ref={transformRef}
           initialScale={1}
-          minScale={0.4}
-          maxScale={8}
+          minScale={0.25}
+          maxScale={12}
           limitToBounds={false}
           doubleClick={{ disabled: true }}
+          wheel={{ step: 0.12 }}
         >
           <TransformComponent
             wrapperClass="!h-full !w-full"
@@ -128,6 +207,7 @@ export function PlanViewer({
               <PlanOverlay
                 result={result}
                 layers={layers}
+                categoryVisibility={categoryVisibility}
                 selectedId={selectedId}
                 highlightedIds={highlightedIds}
                 imageUrl={imageUrl}
