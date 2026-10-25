@@ -757,6 +757,17 @@ def classify_candidates(
         if cat == Category.CEILING_FAN and not _is_ceiling_fan_candidate(ctx, cand):
             continue
 
+        # Template-only "detector" without SD / SD/MA is almost always a keynote
+        # or a mis-hit — require the token (Fix 4 / Fix 7).
+        if cat == Category.DETECTOR:
+            up = {c.upper() for c in codes}
+            if "SD/MA" not in up and "SD" not in up:
+                continue
+            if "SD/MA" in up:
+                subtype = "smoke_co"
+            else:
+                subtype = "smoke"
+
         needs_review = best_score < _MIN_MATCH_SCORE or (
             best_score - second < _CLOSE_SECOND_DELTA and second > _REJECT_SCORE
         )
@@ -804,8 +815,71 @@ def classify_candidates(
             filtered.append(d)
         detections = filtered
 
+    # SD / SD/MA tokens that were absorbed into a fan cluster still need a
+    # detector mark (Fix 7 — bedroom SD next to the fan hub).
+    detections.extend(_smoke_from_orphan_tokens(ctx, detections, sheet_id, usable))
+
     detections = _nms_detections(detections, dist_pt=8.0)
     return detections
+
+
+def _smoke_from_orphan_tokens(
+    ctx: PageContext,
+    detections: list[Detection],
+    sheet_id: str,
+    usable: list[LegendEntry],
+) -> list[Detection]:
+    """Emit smoke detections for SD tokens not already covered by a detector.
+
+    Restricted to tokens that sit inside a ceiling-fan bbox (bedroom SD next to
+    the hub) or within 25 pt of an existing plan detection — never legend text.
+    """
+    existing = [d for d in detections if d.category == Category.DETECTOR]
+    fans = [d for d in detections if d.category == Category.CEILING_FAN]
+    anchors = [d for d in detections if d.category != Category.DETECTOR]
+    out: list[Detection] = []
+    for w in ctx.words:
+        raw = w.text.strip().upper()
+        if raw not in {"SD", "SD/MA"}:
+            continue
+        if w.size > 9.0:
+            continue
+        wx = 0.5 * (w.bbox[0] + w.bbox[2])
+        wy = 0.5 * (w.bbox[1] + w.bbox[3])
+        if any(math.hypot(d.center.x - wx, d.center.y - wy) < 12.0 for d in existing + out):
+            continue
+        in_fan = any(f.bbox.x0 <= wx <= f.bbox.x1 and f.bbox.y0 <= wy <= f.bbox.y1 for f in fans)
+        near_plan = any(math.hypot(a.center.x - wx, a.center.y - wy) < 25.0 for a in anchors)
+        if not (in_fan or near_plan):
+            continue
+        subtype = "smoke_co" if raw == "SD/MA" else "smoke"
+        entry = next(
+            (e for e in usable if e.category == Category.DETECTOR and e.subtype == subtype),
+            next((e for e in usable if e.category == Category.DETECTOR), None),
+        )
+        pad = 7.0
+        out.append(
+            Detection(
+                id=str(uuid.uuid4()),
+                sheet_id=sheet_id,
+                category=Category.DETECTOR,
+                subtype=subtype,
+                codes=[w.text.strip()],
+                center=Point(x=wx, y=wy),
+                bbox=BBox(x0=wx - pad, y0=wy - pad, x1=wx + pad, y1=wy + pad),
+                rotation_deg=0,
+                confidence=0.8,
+                source="geometry",
+                needs_review=True,
+                evidence=Evidence(
+                    legend_entry_id=entry.id if entry else None,
+                    match_score=0.8,
+                    text_tokens=[w.text.strip()],
+                    notes=["orphan_sd_token"],
+                ),
+            )
+        )
+    return out
 
 
 def _nms_detections(dets: list[Detection], dist_pt: float) -> list[Detection]:
