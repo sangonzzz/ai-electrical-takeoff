@@ -1,0 +1,17 @@
+# BOM routing assumptions (Agente 8). Shown in UI and docs/modules/bom.md.
+# Dashed plan lines show connectivity, not the real cable route in the walls/ceiling.
+
+ceiling_height_ft: 8.0
+switch_height_in: 48.0
+slack_ft_per_end: 1.0
+waste_fraction: 0.10
+
+# Cable is typically sold in 250 ft rolls at big-box stores.
+cable_roll_ft: 250
+
+# Measured on Escondido Plan 1 (page index 0), electrical viewport, 2026-10-25:
+# short black open strokes that form dashed wiring chains.
+dash_length_pt_median: 7.1
+dash_length_pt_range: [4.0, 10.0]
+gap_pt_median: 3.8
+gap_pt_range: [2.0, 4.5]

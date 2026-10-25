@@ -1,0 +1,246 @@
+# Sourced retail prices for BOM (Agente 8).
+# Never invent a price: if unverified, set verified: false and unit_price may be null.
+# captured_at is the date the URL was checked (ISO date).
+
+items:
+  - item_key: nm_14_2_roll_250
+    description: "Southwire 250 ft 14/2 NM-B (Romex SIMpull) with ground"
+    unit: roll
+    unit_price: 125.00
+    roll_ft: 250
+    source:
+      store: Home Depot
+      url: "https://www.homedepot.com/p/Southwire-250-ft-14-2-Romex-SIMpull-Solid-NM-B-W-G-Wire-28827469/202019377"
+    captured_at: "2026-10-25"
+    verified: true
+
+  - item_key: nm_14_3_roll_250
+    description: "Cerrowire/Southwire 250 ft 14/3 NM-B with ground (light blue)"
+    unit: roll
+    unit_price: 165.00
+    roll_ft: 250
+    source:
+      store: Home Depot
+      url: "https://www.homedepot.com/p/Cerrowire-250-ft-14-3-Light-Blue-Solid-CerroMax-SLiPWire-Copper-NM-B-Wire-147-14043G/325078833"
+    captured_at: "2026-10-25"
+    verified: true
+
+  - item_key: box_1gang
+    description: "Carlon 1-gang 14 cu in PVC old-work switch/outlet box (B114RB)"
+    unit: ea
+    unit_price: 2.37
+    source:
+      store: Home Depot
+      url: "https://www.homedepot.com/p/Carlon-1-Gang-14-cu-in-Electrical-PVC-Old-Work-Electrical-Switch-and-Outlet-Box-B114RB-B114RB/100404027"
+    captured_at: "2026-10-25"
+    verified: true
+
+  - item_key: box_2gang
+    description: "Carlon 2-gang 32 cu in PVC new-work box with bracket (B232BR)"
+    unit: ea
+    unit_price: 3.38
+    source:
+      store: Home Depot
+      url: "https://www.homedepot.com/p/Carlon-2-Gang-32-cu-in-PVC-New-Work-Electrical-Box-with-Bracket-B232BR-B232BR/202664442"
+    captured_at: "2026-10-25"
+    verified: true
+
+  - item_key: box_3gang
+    description: "Carlon 3-gang PVC new-work electrical box"
+    unit: ea
+    unit_price: null
+    source:
+      store: Home Depot
+      url: "https://www.homedepot.com/b/Electrical-Electrical-Boxes-Conduit-Fittings-Electrical-Boxes/N-5yc1vZc34n"
+    captured_at: "2026-10-25"
+    verified: false
+
+  - item_key: box_fan_rated
+    description: "Carlon 4 in 20 cu in PVC new-work ceiling box (fan-rated, B720R-SHK)"
+    unit: ea
+    unit_price: 8.38
+    source:
+      store: Home Depot
+      url: "https://www.homedepot.com/p/Carlon-4-in-20-cu-in-PVC-New-Work-Electrical-Ceiling-Box-B720R-SHK/100115858"
+    captured_at: "2026-10-25"
+    verified: true
+
+  - item_key: box_ceiling_round
+    description: "Carlon 4 in PVC new-work ceiling/fixture box (round/octagon)"
+    unit: ea
+    unit_price: 8.38
+    source:
+      store: Home Depot
+      url: "https://www.homedepot.com/p/Carlon-4-in-20-cu-in-PVC-New-Work-Electrical-Ceiling-Box-B720R-SHK/100115858"
+    captured_at: "2026-10-25"
+    verified: true
+
+  - item_key: plate_1gang
+    description: "Leviton 1-gang white duplex wall plate (88003-W)"
+    unit: ea
+    unit_price: 0.88
+    source:
+      store: Home Depot
+      url: "https://www.homedepot.com/p/Leviton-1-Gang-White-Duplex-Outlet-Receptacle-Plastic-Standard-Wall-Plate-1-Pack-88003-W-R52-88003-00W/100025171"
+    captured_at: "2026-10-25"
+    verified: true
+
+  - item_key: plate_2gang
+    description: "Leviton 2-gang white duplex nylon midway wall plate (PJ82-W)"
+    unit: ea
+    unit_price: 2.48
+    source:
+      store: Home Depot
+      url: "https://www.homedepot.com/p/Leviton-2-Gang-White-Duplex-Outlet-Receptacle-Nylon-Midway-Midsize-Wall-Plate-1-Pack-PJ82-W-R52-0PJ82-00W/202059881"
+    captured_at: "2026-10-25"
+    verified: true
+
+  - item_key: plate_3gang
+    description: "Leviton 3-gang white wall plate"
+    unit: ea
+    unit_price: null
+    source:
+      store: Home Depot
+      url: "https://www.homedepot.com/b/Electrical-Wall-Plates/N-5yc1vZc1xy"
+    captured_at: "2026-10-25"
+    verified: false
+
+  - item_key: weatherproof_cover
+    description: "Commercial Electric 1-gang metal weatherproof GFCI cover"
+    unit: ea
+    unit_price: 5.98
+    source:
+      store: Home Depot
+      url: "https://www.homedepot.com/p/Commercial-Electric-1-Gang-Metal-Weatherproof-GFCI-Electrical-Outlet-Cover-Gray-12249/334903675"
+    captured_at: "2026-10-25"
+    verified: true
+
+  - item_key: switch_single_pole
+    description: "Leviton 15A single-pole toggle switch white (1451-2W)"
+    unit: ea
+    unit_price: 0.98
+    source:
+      store: Home Depot
+      url: "https://www.homedepot.com/p/Leviton-15-Amp-Single-Pole-Toggle-Light-Switch-White-1451-2W-R52-01451-02W/100026991"
+    captured_at: "2026-10-25"
+    verified: true
+
+  - item_key: switch_three_way
+    description: "Leviton 15A 3-way toggle switch"
+    unit: ea
+    unit_price: 2.58
+    source:
+      store: Home Depot
+      url: "https://www.homedepot.com/p/Leviton-15-Amp-Preferred-Switch-White-RS115-2W-R62-RS115-02W/202027032"
+    captured_at: "2026-10-25"
+    verified: false
+
+  - item_key: switch_dimmer
+    description: "Residential dimmer switch (placeholder SKU)"
+    unit: ea
+    unit_price: null
+    source:
+      store: Home Depot
+      url: "https://www.homedepot.com/b/Electrical-Light-Switches/N-5yc1vZc33w"
+    captured_at: "2026-10-25"
+    verified: false
+
+  - item_key: switch_fan
+    description: "Fan-rated wall switch (placeholder SKU)"
+    unit: ea
+    unit_price: null
+    source:
+      store: Home Depot
+      url: "https://www.homedepot.com/b/Electrical-Light-Switches/N-5yc1vZc33w"
+    captured_at: "2026-10-25"
+    verified: false
+
+  - item_key: switch_other
+    description: "Specialty wall switch (vacancy / timer / 3-way dimmer)"
+    unit: ea
+    unit_price: null
+    source:
+      store: Home Depot
+      url: "https://www.homedepot.com/b/Electrical-Light-Switches/N-5yc1vZc33w"
+    captured_at: "2026-10-25"
+    verified: false
+
+  - item_key: receptacle_duplex
+    description: "15A duplex receptacle"
+    unit: ea
+    unit_price: null
+    source:
+      store: Home Depot
+      url: "https://www.homedepot.com/b/Electrical-Outlets-Receptacles/N-5yc1vZc1xz"
+    captured_at: "2026-10-25"
+    verified: false
+
+  - item_key: receptacle_gfci
+    description: "15A GFCI receptacle"
+    unit: ea
+    unit_price: null
+    source:
+      store: Home Depot
+      url: "https://www.homedepot.com/b/Electrical-Outlets-Receptacles/N-5yc1vZc1xz"
+    captured_at: "2026-10-25"
+    verified: false
+
+  - item_key: receptacle_other
+    description: "Specialty receptacle (AFCI / WP / 240V / dedicated)"
+    unit: ea
+    unit_price: null
+    source:
+      store: Home Depot
+      url: "https://www.homedepot.com/b/Electrical-Outlets-Receptacles/N-5yc1vZc1xz"
+    captured_at: "2026-10-25"
+    verified: false
+
+  - item_key: device_ceiling_fan
+    description: "Ceiling fan (fixture only; box priced separately)"
+    unit: ea
+    unit_price: null
+    source:
+      store: Home Depot
+      url: "https://www.homedepot.com/b/Lighting-Ceiling-Fans/N-5yc1vZc7oe"
+    captured_at: "2026-10-25"
+    verified: false
+
+  - item_key: device_light
+    description: "Light fixture (recessed / pendant / wall / exterior)"
+    unit: ea
+    unit_price: null
+    source:
+      store: Home Depot
+      url: "https://www.homedepot.com/b/Lighting/N-5yc1vZbvn"
+    captured_at: "2026-10-25"
+    verified: false
+
+  - item_key: device_exhaust_fan
+    description: "Bath / IAQ exhaust fan (integrated housing)"
+    unit: ea
+    unit_price: null
+    source:
+      store: Home Depot
+      url: "https://www.homedepot.com/b/Heating-Venting-Cooling-Bathroom-Fans/N-5yc1vZc4kz"
+    captured_at: "2026-10-25"
+    verified: false
+
+  - item_key: device_detector
+    description: "Smoke / smoke-CO detector"
+    unit: ea
+    unit_price: null
+    source:
+      store: Home Depot
+      url: "https://www.homedepot.com/b/Electrical-Fire-Safety-Smoke-Detectors/N-5yc1vZc1y0"
+    captured_at: "2026-10-25"
+    verified: false
+
+  - item_key: device_junction_box
+    description: "Standalone junction box device count (box hardware separate)"
+    unit: ea
+    unit_price: 0.0
+    source:
+      store: Home Depot
+      url: "https://www.homedepot.com/b/Electrical-Electrical-Boxes-Conduit-Fittings-Electrical-Boxes/N-5yc1vZc34n"
+    captured_at: "2026-10-25"
+    verified: true
