@@ -2,39 +2,35 @@
 
 ## Estado
 
-M1 listo (viewport + scale). Siguiente: M2 leyenda.
+M1 + M2 listos. Siguiente: M3 candidatos + classify.
 
 ## Hecho
 
-- `viewport.find_electrical_viewport` / `find_electrical_title` / `parse_scale`
-- Tests: 4 páginas (título + scale 18.0) y page 1 excluye mechanical `(500,450)`
-- Debug PNGs: `out/debug/viewport_p{1..4}.png` (revisados a ojo)
+- M1: viewport + scale (tests + `out/debug/viewport_p{1..4}.png`)
+- M2: `extract_legend` + `legend_templates` + rule mapping SPEC §1–2
+  - Plan 1 ≥25 entries (fan, recessed, switch, GFI, smoke/CO)
+  - Debug: `out/debug/legend_p1.png`
+  - Mensaje a Agente 4
 
 ## Cómo probarlo
 
 ```bash
-uv sync --all-packages --group dev
-uv run pytest engine/tests/symbols/test_viewport.py -v
-# Debug (regenerar PNGs):
-uv run python -c "from pathlib import Path; import pymupdf; from PIL import Image, ImageDraw; from takeoff_engine.pdf_context import load_page; from takeoff_engine.viewport import find_electrical_viewport, find_electrical_title, parse_scale; pdf=Path('data/plans/escondido_plans.pdf'); out=Path('out/debug'); out.mkdir(parents=True, exist_ok=True); doc=pymupdf.open(pdf); mat=pymupdf.Matrix(0.5,0.5); 
-"
+uv run pytest engine/tests/symbols/ -v
 ```
-
-O abrir directamente `out/debug/viewport_p1.png` … `viewport_p4.png`.
 
 ## Siguiente
 
-- M2: `extract_legend` + `legend_templates` + debug + mensaje a Agente 4
+- M3: `find_candidates` + `classify_candidates` + overlays + conteos por página
 
 ## Bloqueos
 
-- Ninguno
+- Ninguno (LLM interpret_legend es opcional; pipeline M4 tolerará NotImplementedError)
 
 ## Decisions
 
-- Celdas del sheet: solo líneas verticales negras con tramo *por encima* del título (Plan 4: el divisor en x≈1439 empieza debajo del título; hay que ignorarlo para no cortar el plano eléctrico).
-- Viewport bottom = `title.y0` (el dibujo está arriba del título + SCALE).
-- Título se busca en **spans** (una sola cadena `ELECTRICAL PLAN - PLAN N`), no en words tokenizados.
+- Viewport: solo verticales negras con tramo *arriba* del título (Plan 4).
+- Legend: texto de descripción **dirigido por símbolo** (banda vertical entre peers de la misma columna) para no fusionar filas; pairing below para el ceiling fan.
+- Plumbing / attic / wiring: excluidos de `LegendEntry`.
 
 ## Needs from Santiago
 
@@ -42,4 +38,4 @@ O abrir directamente `out/debug/viewport_p1.png` … `viewport_p4.png`.
 
 ## Explicación para Santiago
 
-En cada hoja hay tres planos (eléctrico, mecánico, finishes) separados por líneas de marco. Busco el título grande en negrita "ELECTRICAL PLAN - PLAN N", luego las líneas verticales largas que llegan *arriba* de ese título, y tomo la celda entre la vertical de la izquierda y la de la derecha. El viewport es esa celda por encima del título. Así en la página 1 el punto (1150,450) cae dentro y el (500,450) del plano mecánico queda fuera. La escala se lee del texto `SCALE: 1/4" = 1'-0"` debajo del título y da 18 puntos por pie. Todo es geometría vectorial, sin adivinar coordenadas con la IA.
+Ya tenemos el recorte del plano eléctrico (viewport) y la leyenda leída fila a fila. Cada fila de la leyenda guarda el dibujito del símbolo (para compararlo después con lo del plano) y el texto (para saber si es un abanico, un switch, un GFI, etc.). No usamos la IA para coordenadas: la geometría del PDF dice dónde está cada cosa. Lo siguiente es agrupar los trazos negros dentro del viewport en “candidatos” y compararlos con esas plantillas de la leyenda.

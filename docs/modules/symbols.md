@@ -34,11 +34,32 @@ Geometry decides **where**; the legend decides **what**. Plans are vector — po
 
 Reads `SCALE: 1/4" = 1'-0"` under the title → `(draw_inches / real_feet) * 72` = **18.0 pt/ft**. Fallback: `DEFAULT_PT_PER_FT` (18.0) with a warning.
 
-## Legend / candidates / classify
+## Legend (`extract_legend`)
 
-*(Filled in M2–M3.)*
+1. Find bold span whose text is exactly `LEGEND` (reject `FLOOR FINISH LEGEND`).
+2. Region = sheet cell around the title, down through the attic-access label.
+3. Cluster black segments/fills (gap < 1.5 pt); drop long underlines (>40 pt) and oversized blobs.
+4. For each symbol blob, collect ~9.6 pt description text in a vertical band between same-column peers (and below the blob for large symbols like the ceiling fan).
+5. Attach ~6.5 pt code tokens nearest to that symbol (closest-peer filter).
+6. `map_description` → category/subtype; exclude plumbing, attic access, wiring.
+
+### Thresholds
+
+| Name | Value | Why |
+|------|-------|-----|
+| `_SYMBOL_GAP_PT` | 1.5 | Same as plan clustering; `$` bar may not share endpoints |
+| `_DESC_LINE` window | symbol ± peers | Inter-row gaps ≈ multi-line gaps (~8–12 pt) |
+| `_CODE_RADIUS_PT` | 28 | Codes sit above/beside the glyph in the legend |
+| `_MAX_SYMBOL_*` | 130 pt | Ceiling fan ~116 pt; attic panel / rules are larger or excluded by text |
+
+`legend_templates` returns `LegendTemplate(entry_id, bbox, segments, fills)` for 1:1 raster matching.
+
+## Candidates / classify
+
+*(Filled in M3.)*
 
 ## Known limits
 
 - Assumes sheet cells are framed by long black strokes (true for Escondido PAADU sheets).
 - Title must appear as a single bold span containing `ELECTRICAL PLAN`.
+- Legend description ownership can still slip on unusually tight rows; rules cover the Escondido set.
