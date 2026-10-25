@@ -73,9 +73,20 @@ def analyze_cmd(
 def eval_cmd(
     pdf: Path | None = typer.Option(None, "--pdf", help="Plans PDF"),  # noqa: B008
     out: Path = typer.Option(Path("eval/reports"), "--out", "-o"),  # noqa: B008
+    results_dir: Path | None = typer.Option(  # noqa: B008
+        None, "--results-dir", help="Dir with plan1.json… SheetResult files"
+    ),
 ) -> None:
     """Run evaluation against ground truth (owned by Agente 7)."""
-    raise NotImplementedError("Agente 7: implement takeoff eval")
+    import sys
+
+    root = Path(__file__).resolve().parents[2]
+    if str(root) not in sys.path:
+        sys.path.insert(0, str(root))
+    from eval.runner import run_eval
+
+    run_eval(pdf=pdf, out_dir=out, results_dir=results_dir)
+    typer.echo(f"Wrote reports under {out}")
 
 
 @app.command("schema")

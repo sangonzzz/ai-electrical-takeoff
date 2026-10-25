@@ -2,54 +2,53 @@
 
 ## Estado
 
-Scaffold completo y pusheado a `main`. Listo para agentes 2–8.
+Integration pass 1: deps + eval CLI + docs verdes; E2E Docker bloqueado (daemon apagado); fixture UI OK.
 
 ## Hecho
 
-- Repo privado https://github.com/sangonzzz/ai-electrical-takeoff (`main`)
-- Identidad local `sangonzzz` / `santiagonzalezmora@gmail.com`
-- `docs/SPEC.md`, PDF en `data/plans/escondido_plans.pdf`
-- uv workspace Python 3.12 (`engine` + `backend`), `uv.lock`
-- Contratos completos: `models.py`, `types.py`, `takeoff.py`, `config.py`, `pdf_context.py`, `cli.py`
-- Stubs con firmas exactas para agentes 2–8
-- Fixtures + `contracts/schema.json` + `web/src/types/contracts.ts`
-- docker-compose, Makefile, coordination (DECISIONS, status, mensaje to-all)
-- Verificado: `uv run pytest` (5 passed), `uv run takeoff --help`, `docker compose config`
+- Inbox A2–A8: DECISIONS.md actualizado (rooms, LLM Sonnet tool_choice, BOM, frontend, backend, eval)
+- SPEC §1: CL Plan 3 = x4, Plan 4 = x2
+- Backend deps: `sqlalchemy[asyncio]` + `greenlet`; `.env.example` ENGINE/INLINE_JOBS
+- `takeoff eval` cableado; pytest pythonpath; eval/reports gitignore; CI regression step
+- Makefile `demo` → `backend/scripts/demo_upload.py`; compose alembic + PYTHONPATH + ENGINE=fake
+- README.md + docs/architecture.md (Mermaid)
+- Mensajes a A5, A6, A7, to-all
+- Tests: **82 passed, 8 skipped**; web vitest 5 + build OK; fixture UI: 4 sheets, marks, click total, BOM $20.65
 
 ## Cómo probarlo
 
 ```bash
 uv sync --all-packages --group dev
 uv run pytest
-uv run takeoff --help
-uv run takeoff schema
-docker compose config
+cd web && pnpm exec vitest run && pnpm build
+# Fixture UI:
+cd web && set VITE_USE_FIXTURE=true&& pnpm dev
+# Full stack (requires Docker Desktop running):
+docker compose up -d && make demo
 ```
 
 ## Siguiente
 
-- Cuando Santiago dé scope `workflow` al token `gh`, pushear `.github/workflows/ci.yml`
-- Integrar cuando Agente 2 entregue `analyze_sheet`
+- Arrancar Docker Desktop → E2E upload → 4 jobs → CRUD real
+- Pushear `.github/workflows/ci.yml` cuando haya scope `workflow`
+- `ENGINE=real` cuando pipeline + DB estén estables
 
 ## Bloqueos
 
-- Push de GitHub Actions CI requiere `gh auth refresh -h github.com -s workflow` (el token actual no tiene scope `workflow`). El archivo está en el working tree local.
+- Docker Desktop no está corriendo en esta máquina
+- Token `gh` sin scope `workflow` para Actions
 
 ## Decisions
 
-Ver `coordination/DECISIONS.md`. Extra: push inicial es un commit limpio sin trailer Co-authored-by (Cursor lo inyectaba en `git commit`); historial granular queda en rama local `scaffold-detailed`.
+Ver `coordination/DECISIONS.md` (pass de integración).
 
 ## Needs from Santiago
 
-- Correr: `gh auth refresh -h github.com -s workflow,repo,read:org,gist` y avisar para pushear el CI.
-- `ANTHROPIC_API_KEY` en `.env` cuando se pruebe LLM (Agente 4).
+1. Encender Docker Desktop y avisar para re-correr E2E.
+2. `gh auth refresh -h github.com -s workflow,repo,read:org,gist` para subir CI.
+3. Llenar `eval/ground_truth/planN.counts.yaml` (ver `eval/COMO_CONTAR.md`).
+4. Confirmar precios BOM `verified: false` (lista en status A8).
 
 ## Explicación para Santiago
 
-Armé la base del proyecto para que los otros siete agentes trabajen en paralelo sin pisarse.
-Los contratos Pydantic (`models.py`) definen exactamente qué es una detección, un cuarto, un takeoff, etc.
-`pdf_context` lee el PDF vectorial y separa trazos negros/grises y texto — sin eso nadie puede detectar símbolos.
-`compute_takeoff` es la única función que cuenta; el frontend tendrá que mirarla igual.
-Dejé stubs (`NotImplementedError`) con las firmas correctas para que cada agente sepa qué implementar.
-También dejé Docker, Makefile y el protocolo de mensajes en `coordination/`.
-El repo privado ya está en GitHub bajo tu cuenta `sangonzzz` (falta autorizar scope `workflow` para subir el CI).
+El sistema ya está armado de punta a punta en piezas: el motor detecta símbolos y cuartos en el PDF, Claude opcional interpreta la leyenda, el backend guarda trabajos por hoja, y el front muestra marcas + takeoff + BOM. En esta pasada de integración cableé dependencias del backend, el comando `takeoff eval`, el demo del Makefile y la documentación (README + diagramas). Los tests de Python y el build del front pasan. No pude levantar Docker (el motor de Desktop está apagado), así que el recorrido completo upload→4 jobs lo dejé pendiente; sí verifiqué el modo fixture del front: cargás demo, ves las 4 hojas, abrís Plan 1 con marcas de colores, tocás un total y se resaltan, y el BOM muestra un precio. Cuando enciendas Docker, re-corro el stack real.

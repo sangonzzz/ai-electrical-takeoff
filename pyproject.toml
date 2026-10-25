@@ -30,5 +30,6 @@ select = ["E", "F", "I", "UP", "B"]
 "engine/takeoff_engine/cli.py" = ["B008"]
 
 [tool.pytest.ini_options]
-testpaths = ["engine/tests"]
+testpaths = ["engine/tests", "backend/tests"]
+pythonpath = ["."]
 asyncio_mode = "auto"

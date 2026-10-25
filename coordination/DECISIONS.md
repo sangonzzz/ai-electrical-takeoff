@@ -35,10 +35,69 @@ Detections use `category` + `subtype`. Count keys are `category` and
 When several codes apply: `240V` > `MW` / `DW` / `H` / `FC` > `WP` > half-hot >
 `GFI` > `AFI` > plain duplex.
 
-## Scaffold decisions (Agente 1)
+## Rooms (Agente 3)
 
-- Git author email: public GitHub email `santiagonzalezmora@gmail.com` (emails API
-  lacked `user` scope; noreply fallback not needed).
-- Page 2 electrical viewport left out of `APPROX_VIEWPORTS` until Agente 2 derives it.
-- Unassigned detections still increment sheet `totals` so home totals match every
-  active mark on the plan.
+1. Open-plan split uses **Euclidean nearest label** (Voronoi) inside a shared
+   flood-fill region — not geodesic distance.
+2. Plan 3 has **4** `CL` labels in the electrical viewport; Plan 4 has **2**
+   (SPEC §1 updated to match). Keep all and number `CL 1`….
+3. Exterior room has an empty polygon; assignment = outside building footprint.
+4. Viewport comes from `find_electrical_viewport` (Agente 2), not `APPROX_VIEWPORTS`.
+
+## LLM (Agente 4)
+
+1. Vision tasks (`interpret_legend`, `adjudicate`, `baseline_vision_takeoff`) use
+   Sonnet (`ANTHROPIC_MODEL`, default `claude-sonnet-5-5`). Haiku is reserved for
+   future high-volume text-only work.
+2. Optional kwargs on the three public LLM functions: `usage`, `warnings`, `client`
+   — required scaffold signatures unchanged.
+3. No API key: warn + rules-only / empty adjudication / empty baseline; never raise.
+4. Adjudicate batches ~6 candidates; crop ~300 dpi, 18 pt pad, red outline.
+   Labels = `category.subtype` or `not_a_component`.
+5. **Sonnet 5.5 does not support forced tool use** (`tool` / `any` → HTTP 400).
+   Client uses `tool_choice: auto` + `strict: true` tools + prompt requiring one
+   `submit_result` call; maps as list-of-pairs for `additionalProperties: false`.
+
+## BOM (Agente 8)
+
+1. Routing: plan polyline length + vertical allowance from assumptions; **10% waste
+   applied in `compute_bom`**, not in `WireRun.total_length_ft`.
+2. Measured Plan 1 dash median **7.1 pt**, gap median **3.8 pt**; code windows
+   dash 3–12 pt, gap 1–6 pt.
+3. Cable: `nm_14_3` only when both ends are `three_way` or `three_way_dimmer`;
+   else `nm_14_2`.
+4. Boxes: recessed lights and exhaust fans → `kind: none`. Wall / pendant /
+   exterior lights → `ceiling_round`.
+5. Prices: Home Depot when verified; unverified SKUs left for Santiago (see A8 status).
+
+## Symbols / pipeline (Agente 2)
+
+1. Wiring filter keeps elongated dash chains; compact blobs (fans/lights) stay.
+2. Ceiling fan prior: size ≥70 pt, aspect <1.35, ≥40 segments, plus template match.
+3. Degenerate legend templates (side <2.5 pt) ignored; NMS 8 pt per category.
+
+## Frontend (Agente 6)
+
+1. Fixture sheets 2–4 reuse Plan 1 sample geometry with renamed ids (4 cards before
+   real analysis).
+2. Fixture BOM is a lightweight derivation of sample wires/boxes until API serves BOM.
+3. Drag commits PATCH only on mouseup; frames update React Query cache locally.
+
+## Backend (Agente 5)
+
+1. Job id = `analysis_runs.id` (no separate jobs table).
+2. `INLINE_JOBS=true` in tests; `ENGINE=fake` until real pipeline is default.
+3. Entity ids uniquified per run (`id__{runTag}`) for FakeEngine reanalyze.
+
+## Eval (Agente 7)
+
+1. Room names in GT templates use display_name style (`Laundry`, `CL 1`, Attic/Exterior).
+2. Detection match: greedy nearest neighbour, same `category.subtype`, ≤10 pt.
+3. Without pipeline results, Plan 1 eval smoke uses contracts fixture.
+
+## Scaffold / integration (Agente 1)
+
+- Git author: `sangonzzz` / `santiagonzalezmora@gmail.com`.
+- Unassigned detections still increment sheet `totals`.
+- `sqlalchemy[asyncio]` + `greenlet` required for async SQLAlchemy (backend).
+- CI workflow file may need `gh` token `workflow` scope to push to GitHub.

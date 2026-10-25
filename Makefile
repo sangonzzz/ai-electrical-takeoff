@@ -32,5 +32,6 @@ eval:
 	uv run takeoff eval --out eval/reports
 
 demo:
-	@echo "Start stack with: make up"
-	@echo "Then open http://localhost:5173 and load data/plans/escondido_plans.pdf"
+	@echo "Ensure stack is up: make up"
+	uv run python backend/scripts/demo_upload.py
+	@echo "Open http://localhost:5173"

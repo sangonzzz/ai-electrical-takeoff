@@ -75,9 +75,10 @@ Key facts:
 - **Room labels inside each electrical plan:**
   - Plan 1: BATH, BEDROOM / STUDIO, CL (x2), KITCHEN / DINING, LIVING, LNDRY
   - Plan 2: BATH, BED 1, BED 2, CL (x2), DINING, HALLWAY, KITCHEN, LIVING, LNDRY
-  - Plan 3: BATH 1, BATH 2, BED 1, BED 2, CL, HALL, KITCHEN / DINING, LIVING, LNDRY
-  - Plan 4: BATH 1, BATH 2, BED 1, BED 2, CL, HALLWAY, KITCHEN, LIVING, LNDRY, OPTIONAL BED 3, WALK-IN CLOSET
-  (Verify counts of CL per plan in code; bold text outside the viewport, like notes, must be excluded.)
+  - Plan 3: BATH 1, BATH 2, BED 1, BED 2, CL (x4 in electrical viewport — verified by rooms), HALL, KITCHEN / DINING, LIVING, LNDRY
+  - Plan 4: BATH 1, BATH 2, BED 1, BED 2, CL (x2 in electrical viewport — verified by rooms), HALLWAY, KITCHEN, LIVING, LNDRY, OPTIONAL BED 3, WALK-IN CLOSET
+  (Verify counts of CL per plan in code; bold text outside the viewport, like notes, must be excluded.
+   Repeated CL labels get display names CL 1, CL 2, … ordered L→R, T→B.)
 - **Open plan areas:** Living, Kitchen and Dining are often one open space with no walls between labels.
 - **Legend content (same on all 4 sheets, but read it per sheet):**
   - Switches ("$"): plain = single pole; `3D` = three-way dimmer; `VS` = vacancy sensor; `D` = dimmer; `F` = fan;
