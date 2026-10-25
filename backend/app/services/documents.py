@@ -63,6 +63,49 @@ def _new_queued_run(
     )
 
 
+async def _reuse_or_queue_sheet(
+    session: AsyncSession,
+    settings: Settings,
+    *,
+    sheet: Sheet,
+    file_hash: str,
+) -> tuple[AnalysisRun, bool]:
+    """Return (run, need_enqueue). Prefer succeeded / in-flight runs; never duplicate."""
+    pv = settings.pipeline_version
+
+    # 1) Explicit succeeded for (hash, page, pipeline_version)
+    succeeded = await find_succeeded_run(
+        session,
+        file_hash=file_hash,
+        page_index=sheet.page_index,
+        pipeline_version=pv,
+    )
+    if succeeded is not None:
+        sheet.current_run_id = succeeded.id
+        return succeeded, False
+
+    # 2) Current run already matches and is terminal-success or in flight
+    if sheet.current_run_id:
+        current = await session.get(AnalysisRun, sheet.current_run_id)
+        if current and current.pipeline_version == pv:
+            if current.status == "succeeded":
+                return current, False
+            if current.status in {"queued", "running"}:
+                return current, False
+
+    # 3) New analysis needed
+    run = _new_queued_run(
+        sheet_id=sheet.id,
+        file_hash=file_hash,
+        page_index=sheet.page_index,
+        pipeline_version=pv,
+    )
+    session.add(run)
+    await session.flush()
+    sheet.current_run_id = run.id
+    return run, True
+
+
 async def upload_document(
     session: AsyncSession,
     settings: Settings,
@@ -75,7 +118,7 @@ async def upload_document(
 
     Idempotency: same file_hash returns the existing document; sheets whose
     (file_hash, page_index, pipeline_version) already have a succeeded run
-    are not re-enqueued.
+    are not re-enqueued. In-flight queued/running jobs are also reused.
     """
     file_hash, path = store_pdf(settings, data)
 
@@ -106,7 +149,16 @@ async def upload_document(
         await session.flush()
 
         sheets_runs: list[tuple[Sheet, AnalysisRun]] = []
+        to_enqueue: list[str] = []
         for page_index, (w, h) in enumerate(page_sizes):
+            # Cross-document idempotency: another doc may already have analyzed
+            # this hash (should be rare; primary path is same Document row).
+            succeeded = await find_succeeded_run(
+                session,
+                file_hash=file_hash,
+                page_index=page_index,
+                pipeline_version=settings.pipeline_version,
+            )
             sheet = Sheet(
                 id=str(uuid4()),
                 document_id=doc.id,
@@ -118,60 +170,40 @@ async def upload_document(
             )
             session.add(sheet)
             await session.flush()
-            run = _new_queued_run(
-                sheet_id=sheet.id,
-                file_hash=file_hash,
-                page_index=page_index,
-                pipeline_version=settings.pipeline_version,
-            )
-            session.add(run)
-            await session.flush()
-            sheet.current_run_id = run.id
-            sheets_runs.append((sheet, run))
+            if succeeded is not None:
+                sheet.current_run_id = succeeded.id
+                sheets_runs.append((sheet, succeeded))
+            else:
+                run = _new_queued_run(
+                    sheet_id=sheet.id,
+                    file_hash=file_hash,
+                    page_index=page_index,
+                    pipeline_version=settings.pipeline_version,
+                )
+                session.add(run)
+                await session.flush()
+                sheet.current_run_id = run.id
+                sheets_runs.append((sheet, run))
+                to_enqueue.append(run.id)
         await session.commit()
-        if enqueue:
-            await _dispatch_jobs(settings, [r.id for _, r in sheets_runs])
+        if enqueue and to_enqueue:
+            await _dispatch_jobs(settings, to_enqueue)
         return doc, sheets_runs
 
-    # Existing document with same hash — reuse succeeded runs when possible
+    # Existing document with same hash — reuse succeeded / in-flight runs
     sheets_by_page = {s.page_index: s for s in doc.sheets}
     sheets_runs = []
+    to_enqueue = []
     for page_index in range(doc.page_count):
         sheet = sheets_by_page[page_index]
-        succeeded = await find_succeeded_run(
-            session,
-            file_hash=file_hash,
-            page_index=page_index,
-            pipeline_version=settings.pipeline_version,
+        run, need_enqueue = await _reuse_or_queue_sheet(
+            session, settings, sheet=sheet, file_hash=file_hash
         )
-        if succeeded is not None:
-            sheet.current_run_id = succeeded.id
-            sheets_runs.append((sheet, succeeded))
-            continue
-
-        if sheet.current_run_id:
-            current = await session.get(AnalysisRun, sheet.current_run_id)
-            if (
-                current
-                and current.pipeline_version == settings.pipeline_version
-                and current.status in {"queued", "running"}
-            ):
-                sheets_runs.append((sheet, current))
-                continue
-
-        run = _new_queued_run(
-            sheet_id=sheet.id,
-            file_hash=file_hash,
-            page_index=page_index,
-            pipeline_version=settings.pipeline_version,
-        )
-        session.add(run)
-        await session.flush()
-        sheet.current_run_id = run.id
         sheets_runs.append((sheet, run))
+        if need_enqueue:
+            to_enqueue.append(run.id)
 
     await session.commit()
-    to_enqueue = [r.id for _, r in sheets_runs if r.status == "queued"]
     if enqueue and to_enqueue:
         await _dispatch_jobs(settings, to_enqueue)
     return doc, sheets_runs

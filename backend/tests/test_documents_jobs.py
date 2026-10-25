@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 from httpx import AsyncClient
+from takeoff_engine import __version__ as ENGINE_VERSION
 
 
 @pytest.mark.asyncio
@@ -47,11 +48,20 @@ async def test_upload_idempotent_same_hash(client: AsyncClient, sample_pdf: Path
             "/api/documents",
             files={"file": ("escondido_plans.pdf", f, "application/pdf")},
         )
+    third = await client.post("/api/documents/demo")
     assert first.status_code == 202
     assert second.status_code == 202
-    assert first.json()["document_id"] == second.json()["document_id"]
-    # Same succeeded job ids reused
+    assert third.status_code == 202
+    doc_ids = {first.json()["document_id"], second.json()["document_id"], third.json()["document_id"]}
+    assert len(doc_ids) == 1
+    # Same succeeded job ids reused — no new queued analyses
     assert first.json()["sheets"][0]["job_id"] == second.json()["sheets"][0]["job_id"]
+    assert first.json()["sheets"][0]["job_id"] == third.json()["sheets"][0]["job_id"]
+    for sheet in first.json()["sheets"]:
+        job = await client.get(f"/api/jobs/{sheet['job_id']}")
+        assert job.json()["status"] == "succeeded"
+        # Package version, not the scaffold / agent-local PIPELINE_VERSION label
+        assert job.json()["pipeline_version"] == ENGINE_VERSION
 
 
 @pytest.mark.asyncio

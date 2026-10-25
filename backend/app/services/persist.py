@@ -155,7 +155,9 @@ def persist_sheet_result(run: AnalysisRun, result: SheetResult) -> None:
         )
 
     run.schema_version = result.schema_version
-    run.pipeline_version = result.pipeline_version
+    # Do NOT overwrite pipeline_version from the SheetResult: the run was created
+    # with settings.pipeline_version (engine package version) and that value is the
+    # idempotency key. Engine-internal labels (e.g. PIPELINE_VERSION) may differ.
     run.timings = dict(result.timings_ms)
     run.llm_usage = result.llm_usage.model_dump()
     run.warnings = list(result.warnings)

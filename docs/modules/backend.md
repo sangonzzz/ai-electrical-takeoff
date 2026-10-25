@@ -52,10 +52,15 @@ Same file SHA-256 returns the **same document**. For each page, if a `succeeded`
 
 | Env | Default | Meaning |
 |-----|---------|---------|
-| `ENGINE` | `fake` | `fake` = sample fixture; `real` = pipeline |
+| `ENGINE` | `real` | `real` = pipeline; `fake` = fixture (tests only) |
+| `pipeline_version` | `takeoff_engine.__version__` | Idempotency key stored on each run |
 | `ENABLE_LLM` / `ENABLE_BOM` | true | Passed through to the engine / BOM gate |
 | `INLINE_JOBS` | false | Run worker in-process (tests) |
 | `DATABASE_URL` / `REDIS_URL` | compose defaults | Postgres + Redis |
+
+Human review: `POST /api/sheets/{id}/review-complete` sets `human_reviewed` on the
+current run; `GET /api/sheets/{id}/ground-truth.json` exports active detections for
+Agente 7 (`planN.detections.json`).
 
 ## How to run
 

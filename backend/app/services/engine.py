@@ -9,6 +9,7 @@ import json
 import uuid
 from pathlib import Path
 
+from takeoff_engine import __version__ as ENGINE_PACKAGE_VERSION
 from takeoff_engine.models import SCHEMA_VERSION, SheetResult
 from takeoff_engine.pipeline import analyze_sheet
 
@@ -72,6 +73,7 @@ class FakeEngine:
             box.detection_ids = [_suffix_id(d, page_index) for d in box.detection_ids]
             box.sheet_id = sheet_id
 
+        result.pipeline_version = ENGINE_PACKAGE_VERSION
         result.warnings = [
             *result.warnings,
             f"FakeEngine: fixture data for page_index={page_index} (ENGINE=fake)",

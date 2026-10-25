@@ -95,6 +95,7 @@ class AnalysisRun(Base):
     llm_usage: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
     warnings: Mapped[list[Any]] = mapped_column(JSONB, nullable=False, default=list)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    human_reviewed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

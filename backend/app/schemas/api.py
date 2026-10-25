@@ -40,9 +40,16 @@ class JobStatusResponse(BaseModel):
     progress: float = 0.0
     error: str | None = None
     pipeline_version: str | None = None
+    human_reviewed: bool = False
     created_at: datetime | None = None
     started_at: datetime | None = None
     finished_at: datetime | None = None
+
+
+class ReviewCompleteResponse(BaseModel):
+    sheet_id: str
+    job_id: str
+    human_reviewed: bool = True
 
 
 class DocumentDetailResponse(BaseModel):

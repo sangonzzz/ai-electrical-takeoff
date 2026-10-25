@@ -1,7 +1,7 @@
 """Backend runtime settings (pydantic-settings).
 
 Env vars mirror SPEC section 9 feature flags plus DB/Redis/storage paths.
-ENGINE=fake keeps the API unblocked until Agente 2 finishes the pipeline.
+Default ENGINE=real; use ENGINE=fake only in tests / offline fixture mode.
 """
 
 from __future__ import annotations
@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from takeoff_engine import __version__ as ENGINE_PACKAGE_VERSION
 
 # Repo root: backend/app/settings.py -> parents[2]
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -34,8 +35,9 @@ class Settings(BaseSettings):
 
     cors_origins: list[str] = ["http://localhost:5173"]
 
-    engine: Literal["fake", "real"] = "fake"
-    pipeline_version: str = "0.1.0-scaffold"
+    engine: Literal["fake", "real"] = "real"
+    # Idempotency key: must match what we store on analysis_runs (package version).
+    pipeline_version: str = ENGINE_PACKAGE_VERSION
     # When true (tests), run analyze_sheet_job in-process instead of ARQ/Redis.
     inline_jobs: bool = False
 

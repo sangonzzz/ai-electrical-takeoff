@@ -80,6 +80,7 @@ def job_from_run(run: AnalysisRun) -> JobStatusResponse:
         progress=run.progress,
         error=run.error,
         pipeline_version=run.pipeline_version,
+        human_reviewed=bool(run.human_reviewed),
         created_at=run.created_at,
         started_at=run.started_at,
         finished_at=run.finished_at,

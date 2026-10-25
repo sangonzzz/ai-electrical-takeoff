@@ -112,5 +112,5 @@ class WorkerSettings:
     on_startup = startup
     on_shutdown = shutdown
     redis_settings = redis_settings_from_url(get_settings().redis_url)
-    max_jobs = 2
+    max_jobs = 4  # one concurrent job per Escondido sheet
     job_timeout = 600

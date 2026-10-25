@@ -20,6 +20,7 @@ from app.schemas.api import (
     DetectionPatch,
     EntityMutationResponse,
     ReanalyzeResponse,
+    ReviewCompleteResponse,
     SheetDetailResponse,
     WireRunCreate,
     WireRunPatch,
@@ -130,6 +131,60 @@ async def reanalyze(
         raise HTTPException(status_code=404, detail="document not found")
     run = await create_reanalyze_run(session, settings, sheet, doc, enqueue=True)
     return ReanalyzeResponse(sheet_id=sheet.id, job_id=run.id, status=run.status)
+
+
+@router.post(
+    "/api/sheets/{sheet_id}/review-complete",
+    response_model=ReviewCompleteResponse,
+)
+async def review_complete(sheet_id: str, session: DbSession) -> ReviewCompleteResponse:
+    """Mark the current succeeded run as human-reviewed (labeled for eval)."""
+    sheet = await get_sheet_or_404(session, sheet_id)
+    run = await require_succeeded_run(session, sheet)
+    run.human_reviewed = True
+    await session.commit()
+    return ReviewCompleteResponse(
+        sheet_id=sheet.id, job_id=run.id, human_reviewed=True
+    )
+
+
+@router.get("/api/sheets/{sheet_id}/ground-truth.json")
+async def ground_truth_json(sheet_id: str, session: DbSession) -> Response:
+    """Export active detections for Agente 7 ``planN.detections.json``.
+
+    Shape::
+
+        {"detections": [{"id", "category", "subtype", "center", "room"}, ...]}
+
+    ``room`` is the room display_name (eval ``DetectionMark.room``).
+    """
+    import json
+
+    sheet = await get_sheet_or_404(session, sheet_id)
+    run = await require_succeeded_run(session, sheet)
+    rooms, detections, *_ = load_run_entities(run)
+    room_names = {r.id: r.display_name for r in rooms}
+    payload = {
+        "detections": [
+            {
+                "id": d.id,
+                "category": d.category.value,
+                "subtype": d.subtype,
+                "center": {"x": d.center.x, "y": d.center.y},
+                "room": room_names.get(d.room_id) if d.room_id else None,
+            }
+            for d in detections
+            if d.status == "active"
+        ]
+    }
+    body = json.dumps(payload, indent=2) + "\n"
+    return Response(
+        content=body,
+        media_type="application/json",
+        headers={
+            "Content-Disposition": f'attachment; filename="{sheet_id}-ground-truth.json"'
+        },
+    )
 
 
 @router.get("/api/sheets/{sheet_id}/export.csv")
