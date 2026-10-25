@@ -18,8 +18,8 @@ EXPECTED_DISPLAY: dict[int, list[str]] = {
         "CL 1",
         "CL 2",
         "Kitchen / Dining",
+        "Laundry",
         "Living",
-        "Lndry",
     ],
     1: [
         "Bath",
@@ -30,8 +30,8 @@ EXPECTED_DISPLAY: dict[int, list[str]] = {
         "Dining",
         "Hallway",
         "Kitchen",
+        "Laundry",
         "Living",
-        "Lndry",
     ],
     2: [
         "Bath 1",
@@ -41,8 +41,8 @@ EXPECTED_DISPLAY: dict[int, list[str]] = {
         "CL",
         "Hall",
         "Kitchen / Dining",
+        "Laundry",
         "Living",
-        "Lndry",
     ],
     3: [
         "Bath 1",
@@ -52,8 +52,8 @@ EXPECTED_DISPLAY: dict[int, list[str]] = {
         "CL",
         "Hallway",
         "Kitchen",
+        "Laundry",
         "Living",
-        "Lndry",
         "Optional Bed 3",
         "Walk-In Closet",
     ],
@@ -113,3 +113,15 @@ def test_attic_label_present_plan1(plans_pdf: Path) -> None:
     viewport, _ = find_electrical_viewport(ctx)
     names = label_display_list(ctx, viewport)
     assert "Attic" in names
+
+
+def test_lndry_display_is_laundry(plans_pdf: Path) -> None:
+    """Eval templates use 'Laundry'; raw name stays LNDRY."""
+    ctx = load_page(plans_pdf, 0)
+    viewport, _ = find_electrical_viewport(ctx)
+    labels = extract_room_labels(ctx, viewport)
+    lndry = [lb for lb in labels if lb.raw == "LNDRY"]
+    assert len(lndry) == 1
+    assert lndry[0].display_base == "Laundry"
+    assert "Laundry" in label_display_list(ctx, viewport)
+    assert "Lndry" not in label_display_list(ctx, viewport)

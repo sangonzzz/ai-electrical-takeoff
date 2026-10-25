@@ -96,8 +96,22 @@ class _Label:
     is_attic: bool = False
 
 
+# Raw label → human display_name (``Room.name`` stays raw). Eval templates and
+# the UI must use these strings; keep in sync with ``eval/ground_truth/*.counts.yaml``.
+_DISPLAY_ALIASES: dict[str, str] = {
+    "LNDRY": "Laundry",
+    "LAUNDRY": "Laundry",
+}
+
+
 def _title_case_label(raw: str) -> str:
-    """Title-case a room label while keeping separators (/, -) intact."""
+    """Human display name for a room label (aliases + title-case).
+
+    ``LNDRY`` → ``Laundry`` so counts match eval templates; ``name`` stays raw.
+    """
+    key = raw.strip().upper()
+    if key in _DISPLAY_ALIASES:
+        return _DISPLAY_ALIASES[key]
     parts: list[str] = []
     buf = ""
     for ch in raw.strip():

@@ -27,8 +27,11 @@ Callers (Agente 2 pipeline, Agente 5 backend) must pass the **electrical** viewp
 3. Keep a label only if every token is in the SPEC §6 lexicon (or a number / `OPTIONAL` /
    hyphenated `WALK-IN`).
 4. Non-bold exact text **`IN ATTIC`** → attic marker (kind `attic` later).
-5. **Display names:** title-case the raw text. Repeated raw names get suffixes ordered
-   top-to-bottom, left-to-right: `CL 1`, `CL 2`. Unique names stay unsuffixed (`Living`).
+5. **Display names:** must match eval templates (`eval/ground_truth/planN.counts.yaml`).
+   Aliases: raw `LNDRY` → display `Laundry` (`Room.name` stays `LNDRY`). Other labels are
+   title-cased (`Kitchen / Dining`, `Bedroom / Studio`, `Bath 1`). Repeated raw names get
+   suffixes ordered top-to-bottom, left-to-right: `CL 1`, `CL 2`. Unique names stay
+   unsuffixed (`Living`).
 
 ### 2. Wall mask (~3 px / pt)
 

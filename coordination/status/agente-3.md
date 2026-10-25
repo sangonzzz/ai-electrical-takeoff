@@ -2,17 +2,18 @@
 
 ## Estado
 
-M1–M4 listos: labels, wall mask, polígonos, `assign_room` / `assign_rooms`.
+M1–M4 listos; `display_name` alineado con eval (`LNDRY` → `Laundry`).
 
 ## Hecho
 
-- `engine/takeoff_engine/rooms.py`: labels (lexicon + CL 1/2 + IN ATTIC), wall mask +
-  cierre de puertas (swing arcs + leaves), flood fill, split open-plan por nearest label,
-  Attic / Exterior, `assign_room` / `assign_rooms`.
-- Tests: `engine/tests/rooms/` (13 passing).
+- `engine/takeoff_engine/rooms.py`: labels, wall mask, polígonos, assign.
+- Alias de display: raw `LNDRY` → `display_name` `"Laundry"` (`name` sigue `LNDRY`).
+- Tests: `engine/tests/rooms/` (incluye `test_lndry_display_is_laundry`).
 - Debug: `out/debug/walls_pN.png`, `out/debug/rooms_pN.png`.
 - Docs: `docs/modules/rooms.md`.
-- Usa viewport de Agente 2 (`find_electrical_viewport`), ya no `APPROX_VIEWPORTS`.
+- Viewport: `find_electrical_viewport` (Agente 2).
+- Mensaje a Agente 7: listas exactas de `display_name` por plan; Plans 3–4 tienen más
+  `CL` que el template (`CL 1`… vs un solo `CL`).
 
 ## Cómo probarlo
 
@@ -22,17 +23,17 @@ uv run pytest engine/tests/rooms/ -v
 # Ver out/debug/walls_p1.png y out/debug/rooms_p1.png
 ```
 
-Sanity SPEC:
+Sanity SPEC / eval:
 
-- Punto ~(1275, 506) en página 1 → `Bedroom / Studio`
+- Punto ~(1275, 506) página 1 → `Bedroom / Studio`
 - Punto ~(1000, 780) → `Exterior`
-- Página 2: rooms `Kitchen` y `Dining` separadas
+- Página 2: `Kitchen` y `Dining` separadas
+- Label `LNDRY` → display `Laundry`
 
 ## Siguiente
 
-- Integración en `pipeline.py` (Agente 2).
-- Backend llama `assign_room` al mover detecciones (Agente 5).
-- Ajustar umbrales de puertas si eval muestra merges entre habitaciones.
+- Agente 7 actualiza templates Plan 3/4 (CL numerados).
+- Integración pipeline (Agente 2) / backend move (Agente 5) ya avisados.
 
 ## Bloqueos
 
@@ -40,11 +41,10 @@ Sanity SPEC:
 
 ## Decisions
 
-1. Open-plan: split Euclidean (Voronoi) dentro de la región compartida, no geodésico.
-2. Plan 3/4: el PDF tiene más labels `CL` que los listados en SPEC §1; los conservamos y
-   numeramos. Pedir a Agente 1 actualizar SPEC si hace falta.
-3. Exterior: polígono vacío; asignación = fuera del footprint (unión de interiores + attic).
-4. Tras mensaje de Agente 2, viewport = `find_electrical_viewport` (no APPROX).
+1. Open-plan: Voronoi euclidiano en la región compartida.
+2. Plan 3/4: más `CL` en el PDF que SPEC/templates; numeramos todos; Agente 7 debe
+   actualizar ground truth.
+3. `LNDRY` → display `Laundry` para match con eval.
 
 ## Needs from Santiago
 
@@ -52,12 +52,9 @@ Sanity SPEC:
 
 ## Explicación para Santiago
 
-Detecto las habitaciones del plano eléctrico en cuatro pasos. Primero leo las etiquetas
-en negrita (~9.5 pt) dentro del viewport y filtro con un léxico (Living, Kitchen, CL…).
-Los closets repetidos salen como CL 1, CL 2. Segundo, dibujo las paredes en una imagen
-(gris de muros + líneas negras) y cierro los huecos de las puertas usando los arcos grises
-de las hojas. Tercero, “inundo” desde cada etiqueta: si Living y Kitchen están en el mismo
-espacio abierto, parto la zona por la etiqueta más cercana (línea imaginaria, no un muro
-real). El cajón “IN ATTIC” es la habitación Attic; fuera del edificio es Exterior. Cuarto,
-`assign_room` dice a qué habitación pertenece un punto (el backend lo usa si mueves un
-símbolo). Todo se puede ver en `out/debug/rooms_p1.png`.
+Detecto habitaciones del plano eléctrico: etiquetas en negrita, paredes rasterizadas con
+puertas cerradas, flood-fill desde cada nombre, y en espacios abiertos parto por la
+etiqueta más cercana. `LNDRY` en el PDF se muestra como **Laundry** (el nombre crudo
+sigue siendo LNDRY). Attic es el cajón “IN ATTIC”; fuera del edificio es Exterior.
+`assign_room` dice a qué habitación pertenece un punto. En Plan 3 hay cuatro closets
+(CL 1–4) y en Plan 4 dos; se lo pedí a Agente 7 para que el eval coincida.
