@@ -306,22 +306,18 @@ def _refine_subtype(
         return base_subtype or "single_pole"
 
     if category == Category.RECEPTACLE:
-        # Half-hot: legend says so, or candidate has significant black fill.
-        if entry.subtype == "afci_half_hot" or (
-            cand.features.get("n_fills", 0) > 0 and "HALF" in entry.description.upper()
-        ):
-            if cand.features.get("n_fills", 0) > 0 or entry.subtype == "afci_half_hot":
-                # Still allow 240V etc. to win over half-hot per priority list —
-                # but half-hot is after WP in SPEC. Check priority list first.
-                pass
+        # Half-fill on *this* glyph is AFCI half-hot. Neighbor MW/GFI codes must
+        # not steal the subtype (R2 Fix 5); dedicated codes on the same mark
+        # (240V / WP) still win via a tight check below.
+        if int(cand.features.get("n_fills", 0)) > 0:
+            if "240V" in type_codes:
+                return "gfci_240v" if ("GFI" in type_codes or "GFCI" in type_codes) else "240v"
+            if "WP" in type_codes:
+                return "gfci_weatherproof"
+            return "afci_half_hot"
         for subtype, need, _ in _RECEPTACLE_PRIORITY:
             if need & type_codes:
                 return subtype
-        if entry.subtype == "afci_half_hot" or (
-            cand.features.get("n_fills", 0) > 0
-            and "HALF" in (entry.description or "").upper()
-        ):
-            return "afci_half_hot"
         if entry.subtype and entry.subtype in SUBTYPES["receptacle"]:
             return entry.subtype
         return "duplex"
@@ -796,8 +792,20 @@ def classify_candidates(
         mount = _parse_mount_height(codes)
         subtype = _refine_subtype(cat, best_entry.subtype, codes, cand, best_entry)
 
-        # Exhaust fan requires a black fill (half-disc) — Fix 5.
-        if cat == Category.EXHAUST_FAN and int(cand.features.get("n_fills", 0)) < 1:
+        # Exhaust fan requires a black fill (half-disc) — Fix 5 / R2 Fix 4.
+        if cat == Category.EXHAUST_FAN:
+            if int(cand.features.get("n_fills", 0)) < 1:
+                continue
+            # Duplex half-hot shares the half-disc; do not call it an exhaust.
+            if _has_duplex_slots_at(ctx, cand.center[0], cand.center[1]):
+                continue
+
+        # AFCI half-hot requires the half-fill; template-only hits are noise.
+        if (
+            cat == Category.RECEPTACLE
+            and subtype == "afci_half_hot"
+            and int(cand.features.get("n_fills", 0)) < 1
+        ):
             continue
 
         # Never emit ceiling_fan without J+blades (template alone is not enough).
@@ -870,6 +878,11 @@ def classify_candidates(
     # Half-filled circles that are not receptacles → exhaust / IAQ (R2 Fix 4).
     detections.extend(
         _exhausts_from_half_fills(ctx, candidates, detections, sheet_id, usable)
+    )
+
+    # Half-filled duplex → AFCI half-hot (R2 Fix 5).
+    detections.extend(
+        _halfhots_from_fills(ctx, candidates, detections, sheet_id, usable)
     )
 
     detections = _nms_detections(detections, dist_pt=8.0)
@@ -1182,6 +1195,74 @@ def _exhausts_from_half_fills(
                     match_score=0.87,
                     text_tokens=codes,
                     notes=["half_fill_exhaust"],
+                ),
+            )
+        )
+    return out
+
+
+def _halfhots_from_fills(
+    ctx: PageContext,
+    candidates: list[Candidate],
+    detections: list[Detection],
+    sheet_id: str,
+    usable: list[LegendEntry],
+) -> list[Detection]:
+    """Half-filled duplex receptacle → ``afci_half_hot`` (R2 Fix 5)."""
+    bounds = _plan_bounds_from_candidates(candidates)
+    if bounds is None:
+        return []
+    entry = next(
+        (
+            e
+            for e in usable
+            if e.category == Category.RECEPTACLE and e.subtype == "afci_half_hot"
+        ),
+        next((e for e in usable if e.category == Category.RECEPTACLE), None),
+    )
+    out: list[Detection] = []
+    for cx, cy in _half_disc_fills_in_bounds(ctx, bounds):
+        if not _has_duplex_slots_at(ctx, cx, cy):
+            continue
+        if any(
+            d.category == Category.RECEPTACLE
+            and d.subtype == "afci_half_hot"
+            and math.hypot(d.center.x - cx, d.center.y - cy) < 12.0
+            for d in detections + out
+        ):
+            continue
+        # Upgrade a nearby receptacle detection if present.
+        upgraded = False
+        for d in detections:
+            if d.category != Category.RECEPTACLE:
+                continue
+            if math.hypot(d.center.x - cx, d.center.y - cy) > 14.0:
+                continue
+            d.subtype = "afci_half_hot"
+            d.evidence.notes = list(d.evidence.notes) + ["half_fill_duplex"]
+            upgraded = True
+            break
+        if upgraded:
+            continue
+        pad = 8.0
+        out.append(
+            Detection(
+                id=str(uuid.uuid4()),
+                sheet_id=sheet_id,
+                category=Category.RECEPTACLE,
+                subtype="afci_half_hot",
+                codes=_codes_near_point(ctx, cx, cy, radius=10.0),
+                center=Point(x=cx, y=cy),
+                bbox=BBox(x0=cx - pad, y0=cy - pad, x1=cx + pad, y1=cy + pad),
+                rotation_deg=0,
+                confidence=0.9,
+                source="geometry",
+                needs_review=False,
+                evidence=Evidence(
+                    legend_entry_id=entry.id if entry else None,
+                    match_score=0.9,
+                    text_tokens=[],
+                    notes=["half_fill_duplex"],
                 ),
             )
         )
