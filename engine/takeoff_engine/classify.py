@@ -43,6 +43,15 @@ _WALL_DEVICE_MAX_DIST_PT = 8.0
 _SWITCH_MIN_IOU = 0.45
 _WALL_SEG_MIN_LEN_PT = 18.0
 
+# Recessed / circle-in-square lights (legend glyph ~12 pt).
+_LIGHT_SIDE_MIN_PT = 9.0
+_LIGHT_SIDE_MAX_PT = 22.0
+_LIGHT_ASPECT_MAX = 1.45
+# Dense circle-in-square (~64 segs) may merge with a neighbor → allow wider bbox.
+_LIGHT_DENSE_SEGS = 45
+_LIGHT_DENSE_MAX_SIDE_PT = 28.0
+_LIGHT_MIN_SEGS = 10
+
 # Mount height like +42" or +84
 _MOUNT_RE = re.compile(r"^\+?\s*(\d+)\s*\"?$")
 
@@ -308,11 +317,15 @@ def _refine_subtype(
     if category == Category.LIGHT:
         if "VP" in type_codes:
             return "recessed_vapor_proof"
-        if "EXT" in type_codes or any(c.startswith("+") for c in codes):
-            # Exterior often has +84 EXT
-            if "EXT" in type_codes:
-                return "exterior_wall"
-        return base_subtype or "recessed"
+        if "EXT" in type_codes:
+            return "exterior_wall"
+        # Wall-mounted: only with the wall-tick shape — never a plain circle.
+        if base_subtype == "wall" and _has_wall_tick(cand):
+            return "wall"
+        if base_subtype == "pendant" and "P" in type_codes:
+            return "pendant"
+        # Default for circle / circle-in-square glyphs.
+        return "recessed"
 
     if category == Category.DETECTOR:
         if "SD/MA" in type_codes or "MA" in type_codes:
@@ -331,6 +344,41 @@ def _refine_subtype(
         return "junction_box"
 
     return base_subtype or SUBTYPES[category.value][0]
+
+
+def _has_wall_tick(cand: Candidate) -> bool:
+    """Wall light has a short perpendicular tick; bbox is slightly non-square."""
+    w = float(cand.features.get("width", 0.0))
+    h = float(cand.features.get("height", 0.0))
+    if min(w, h) < 1.0:
+        return False
+    aspect = max(w, h) / min(w, h)
+    return aspect >= 1.12
+
+
+def _is_circle_light_shape(cand: Candidate) -> bool:
+    """Near-square compact glyph made of many short arcs (recessed / circle-in-square).
+
+    Black fills are left for exhaust/smoke (half-disc / center dot) — Fix 5/7.
+    Dense glyphs (≥45 segs) may share a bbox with a nearby stroke; allow a
+    slightly larger max side so they are not lost.
+    """
+    w = float(cand.features.get("width", 0.0))
+    h = float(cand.features.get("height", 0.0))
+    n = int(cand.features.get("n_segments", 0))
+    if int(cand.features.get("n_fills", 0)) > 0:
+        return False
+    if n < _LIGHT_MIN_SEGS:
+        return False
+    max_side = _LIGHT_DENSE_MAX_SIDE_PT if n >= _LIGHT_DENSE_SEGS else _LIGHT_SIDE_MAX_PT
+    if not (_LIGHT_SIDE_MIN_PT <= min(w, h) <= _LIGHT_SIDE_MAX_PT):
+        return False
+    if max(w, h) > max_side:
+        return False
+    aspect = max(w, h) / max(min(w, h), 0.1)
+    if n >= _LIGHT_DENSE_SEGS:
+        return aspect <= 2.0
+    return aspect <= _LIGHT_ASPECT_MAX
 
 
 def _build_wall_mask(
@@ -493,11 +541,33 @@ def classify_candidates(
         best_score, best_rot, best_entry = scores[0]
         second = scores[1][0] if len(scores) > 1 else 0.0
 
-        if best_score < _REJECT_SCORE:
+        if best_score < _REJECT_SCORE and not _is_circle_light_shape(cand):
             continue
 
         assert best_entry.category is not None
         cat = best_entry.category
+
+        # Circle / circle-in-square → always a light (Fix 3). Dense (≥45 segs)
+        # wins over a weak receptacle/switch score; sparse wall receptacles stay.
+        light_entries = [e for e in usable if e.category == Category.LIGHT]
+        if _is_circle_light_shape(cand) and light_entries:
+            dense = int(cand.features.get("n_segments", 0)) >= _LIGHT_DENSE_SEGS
+            wall_receptacle = (
+                cat == Category.RECEPTACLE
+                and _near_wall(wall_mask, cand.center[0], cand.center[1])
+                and not dense
+            )
+            if wall_receptacle:
+                pass
+            elif cat == Category.SWITCH and not dense:
+                pass
+            else:
+                cat = Category.LIGHT
+                best_entry = next(
+                    (e for e in light_entries if e.subtype == "recessed"),
+                    light_entries[0],
+                )
+                best_score = max(best_score, 0.55)
 
         # Wall devices: center must sit within ~8 pt of wall poche / wall lines.
         if cat in (Category.SWITCH, Category.RECEPTACLE):
@@ -508,9 +578,21 @@ def classify_candidates(
         if cat == Category.SWITCH:
             switch_iou = _best_switch_iou(ctx, cand, switch_tmpls)
             if switch_iou < _SWITCH_MIN_IOU:
-                continue
-            # Prefer the pure template IoU as confidence for switches.
-            best_score = max(best_score, switch_iou)
+                # Circle-in-square mis-scored as switch → light instead.
+                if _is_circle_light_shape(cand) and light_entries:
+                    cat = Category.LIGHT
+                    best_entry = next(
+                        (e for e in light_entries if e.subtype == "recessed"),
+                        light_entries[0],
+                    )
+                    best_score = max(best_score, 0.55)
+                else:
+                    continue
+            else:
+                best_score = max(best_score, switch_iou)
+
+        if best_score < _REJECT_SCORE and cat != Category.LIGHT:
+            continue
 
         codes = _codes_near_candidate(ctx, cand)
         mount = _parse_mount_height(codes)
