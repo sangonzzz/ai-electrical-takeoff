@@ -613,8 +613,65 @@ def _is_circle_light_shape(cand: Candidate) -> bool:
     return aspect <= _LIGHT_ASPECT_MAX
 
 
+def _attic_boxes(
+    ctx: PageContext,
+    bounds: tuple[float, float, float, float] | None = None,
+) -> list[tuple[float, float, float, float]]:
+    """BBoxes of ``IN ATTIC`` panels inside the plan (R2 Fix 8)."""
+    labels: list[tuple[float, float, tuple[float, float, float, float]]] = []
+    for w in ctx.words:
+        raw = w.text.strip().upper()
+        if raw != "ATTIC" and raw != "IN ATTIC":
+            continue
+        if w.size < 7.0 or w.size > 14.0:
+            continue
+        cx = 0.5 * (w.bbox[0] + w.bbox[2])
+        cy = 0.5 * (w.bbox[1] + w.bbox[3])
+        if bounds is not None:
+            bx0, by0, bx1, by1 = bounds
+            if not (bx0 <= cx <= bx1 and by0 <= cy <= by1):
+                continue
+        labels.append((cx, cy, w.bbox))
+
+    boxes: list[tuple[float, float, float, float]] = []
+    for cx, cy, lb in labels:
+        best: tuple[float, float, float, float] | None = None
+        best_area = float("inf")
+        for f in ctx.gray_fills:
+            fw, fh = abs(f.x1 - f.x0), abs(f.y1 - f.y0)
+            # Attic access panel is a small gray rectangle (~30–80 pt).
+            if not (25.0 <= fw <= 90.0 and 25.0 <= fh <= 90.0):
+                continue
+            if f.x0 <= cx <= f.x1 and f.y0 <= cy <= f.y1:
+                area = fw * fh
+                if area < best_area:
+                    best_area = area
+                    best = (f.x0, f.y0, f.x1, f.y1)
+        if best is None:
+            pad = 18.0
+            best = (lb[0] - pad, lb[1] - pad, lb[2] + pad, lb[3] + pad)
+        pad = 3.0
+        boxes.append((best[0] - pad, best[1] - pad, best[2] + pad, best[3] + pad))
+    return boxes
+
+
+def _in_attic_box(
+    x: float,
+    y: float,
+    attic_boxes: list[tuple[float, float, float, float]],
+    *,
+    shrink: float = 0.0,
+) -> bool:
+    """True if (x,y) lies in an attic panel (optional shrink to avoid neighbors)."""
+    for x0, y0, x1, y1 in attic_boxes:
+        if x0 + shrink <= x <= x1 - shrink and y0 + shrink <= y <= y1 - shrink:
+            return True
+    return False
+
+
 def _build_wall_mask(
-    ctx: PageContext, viewport: BBox | None = None
+    ctx: PageContext,
+    attic_boxes: list[tuple[float, float, float, float]] | None = None,
 ) -> np.ndarray:
     """Binary mask of walls at 1 px/pt for proximity tests (origin = page 0,0)."""
     # Page-sized mask is large (2592x1728) but cheap vs false switch flood.
@@ -642,6 +699,16 @@ def _build_wall_mask(
             mask,
             (int(round(s.x0)), int(round(s.y0))),
             (int(round(s.x1)), int(round(s.y1))),
+            255,
+            thickness=3,
+        )
+    # Attic panel outline counts as a wall so switches/lights on it pass the
+    # proximity gate (R2 Fix 8).
+    for x0, y0, x1, y1 in attic_boxes or ():
+        cv2.rectangle(
+            mask,
+            (int(round(x0)), int(round(y0))),
+            (int(round(x1)), int(round(y1))),
             255,
             thickness=3,
         )
@@ -715,7 +782,9 @@ def classify_candidates(
         for e in usable
         if e.category == Category.SWITCH and isinstance(templates.get(e.id), LegendTemplate)
     ]
-    wall_mask = _build_wall_mask(ctx)
+    plan_bounds = _plan_bounds_from_candidates(candidates)
+    attic_boxes = _attic_boxes(ctx, plan_bounds)
+    wall_mask = _build_wall_mask(ctx, attic_boxes)
     detections: list[Detection] = []
 
     for cand in candidates:
@@ -830,9 +899,17 @@ def classify_candidates(
                 continue
 
         # Switches must look like "$" (S crossing a bar), not a stray dash.
+        # Attic-box devices are small and often score a bit low (R2 Fix 8).
         if cat == Category.SWITCH:
             switch_iou = _best_switch_iou(ctx, cand, switch_tmpls)
-            if switch_iou < _SWITCH_MIN_IOU:
+            min_iou = (
+                0.28
+                if _in_attic_box(
+                    cand.center[0], cand.center[1], attic_boxes, shrink=2.0
+                )
+                else _SWITCH_MIN_IOU
+            )
+            if switch_iou < min_iou:
                 # Circle-in-square mis-scored as switch → light instead.
                 if _is_circle_light_shape(cand) and light_entries:
                     cat = Category.LIGHT
@@ -955,7 +1032,61 @@ def classify_candidates(
 
     detections = _nms_detections(detections, dist_pt=8.0)
     detections = _nms_cross_category(detections)
+    detections = _attic_switch_cap(detections, attic_boxes)
+    _nudge_attic_centers(detections, attic_boxes)
     return detections
+
+
+def _attic_switch_cap(
+    dets: list[Detection],
+    attic_boxes: list[tuple[float, float, float, float]],
+) -> list[Detection]:
+    """At most one switch per IN ATTIC panel (R2 Fix 8)."""
+    drop: set[str] = set()
+    for box in attic_boxes:
+        inside = [
+            d
+            for d in dets
+            if d.category == Category.SWITCH
+            and _in_attic_box(d.center.x, d.center.y, [box])
+        ]
+        if len(inside) <= 1:
+            continue
+        # Prefer the switch well inside the panel over one on the outer pad.
+        best = max(
+            inside,
+            key=lambda d: (
+                1 if _in_attic_box(d.center.x, d.center.y, [box], shrink=5.0) else 0,
+                d.confidence,
+            ),
+        )
+        for d in inside:
+            if d.id != best.id:
+                drop.add(d.id)
+    if not drop:
+        return dets
+    return [d for d in dets if d.id not in drop]
+
+
+def _nudge_attic_centers(
+    dets: list[Detection],
+    attic_boxes: list[tuple[float, float, float, float]],
+) -> None:
+    """Pull attic-edge device centers 2 pt inside the panel for room assign."""
+    for d in dets:
+        if d.category not in (Category.SWITCH, Category.LIGHT, Category.RECEPTACLE):
+            continue
+        for x0, y0, x1, y1 in attic_boxes:
+            # Near the panel (including our pad) but maybe outside the gray fill.
+            if not (x0 - 2 <= d.center.x <= x1 + 2 and y0 - 2 <= d.center.y <= y1 + 2):
+                continue
+            # Pull onto the panel interior so assign_rooms maps to Attic.
+            ix0, iy0, ix1, iy1 = x0 + 8.0, y0 + 8.0, x1 - 8.0, y1 - 8.0
+            nx = min(max(d.center.x, ix0), ix1)
+            ny = min(max(d.center.y, iy0), iy1)
+            if nx != d.center.x or ny != d.center.y:
+                d.center = Point(x=nx, y=ny)
+            break
 
 
 def _junctions_from_j_circles(
