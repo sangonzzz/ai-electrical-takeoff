@@ -867,6 +867,11 @@ def classify_candidates(
         _exterior_from_ext_tokens(ctx, candidates, detections, sheet_id, usable)
     )
 
+    # Half-filled circles that are not receptacles → exhaust / IAQ (R2 Fix 4).
+    detections.extend(
+        _exhausts_from_half_fills(ctx, candidates, detections, sheet_id, usable)
+    )
+
     detections = _nms_detections(detections, dist_pt=8.0)
     return detections
 
@@ -1014,6 +1019,169 @@ def _detectors_from_sd_tokens(
                     match_score=0.88,
                     text_tokens=[w.text.strip()],
                     notes=notes,
+                ),
+            )
+        )
+    return out
+
+
+def _short_aa_near(
+    ctx: PageContext, cx: float, cy: float, radius: float = 9.0
+) -> tuple[list[tuple[float, float, float]], list[tuple[float, float, float]]]:
+    """Short axis-aligned strokes near a point → (verticals, horizontals)."""
+    verts: list[tuple[float, float, float]] = []
+    hors: list[tuple[float, float, float]] = []
+    for s in ctx.black_segments:
+        mx, my = 0.5 * (s.x0 + s.x1), 0.5 * (s.y0 + s.y1)
+        if math.hypot(mx - cx, my - cy) > radius:
+            continue
+        dx, dy = abs(s.x1 - s.x0), abs(s.y1 - s.y0)
+        length = math.hypot(dx, dy)
+        if not (1.5 <= length <= 3.5):
+            continue
+        if dx <= 0.8:
+            verts.append((mx, my, length))
+        elif dy <= 0.8:
+            hors.append((mx, my, length))
+    return verts, hors
+
+
+def _has_duplex_slots_at(ctx: PageContext, cx: float, cy: float) -> bool:
+    """Receptacle duplex = two interior slots; circles leave four edge chords."""
+    verts, hors = _short_aa_near(ctx, cx, cy, radius=9.0)
+
+    def _exactly_two_paired(
+        items: list[tuple[float, float, float]], sep_axis: int
+    ) -> bool:
+        if len(items) != 2:
+            return False
+        a, b = items[0], items[1]
+        sep = abs(a[sep_axis] - b[sep_axis])
+        along = abs(a[1 - sep_axis] - b[1 - sep_axis])
+        return 5.0 <= sep <= 12.0 and along <= 2.5
+
+    # Four left/right chords ⇒ circle outline (exhaust), not duplex slots.
+    if len(verts) >= 4:
+        return False
+    if len(verts) == 2 and _exactly_two_paired(verts, 0):
+        return True
+    # Rotated duplex (rare): two horizontal slots, not a circle's top/bottom pair
+    # when vertical chords are already absent.
+    if len(hors) == 2 and _exactly_two_paired(hors, 1) and len(verts) <= 1:
+        return True
+    return False
+
+
+def _half_disc_fills_in_bounds(
+    ctx: PageContext, bounds: tuple[float, float, float, float]
+) -> list[tuple[float, float]]:
+    """Centers of semicircle-sized black fills inside the plan bounds."""
+    bx0, by0, bx1, by1 = bounds
+    out: list[tuple[float, float]] = []
+    for f in ctx.black_fills:
+        fw, fh = f.x1 - f.x0, f.y1 - f.y0
+        if not (5.0 <= max(fw, fh) <= 12.0 and 4.0 <= min(fw, fh) <= 10.0):
+            continue
+        aspect = max(fw, fh) / max(min(fw, fh), 0.1)
+        # Half-discs are mildly elongated; near-square blobs are other fills.
+        if not (1.15 <= aspect <= 1.7):
+            continue
+        cx, cy = 0.5 * (f.x0 + f.x1), 0.5 * (f.y0 + f.y1)
+        if bx0 <= cx <= bx1 and by0 <= cy <= by1:
+            out.append((cx, cy))
+    return out
+
+
+def _codes_near_point(
+    ctx: PageContext, x: float, y: float, radius: float = 14.0
+) -> list[str]:
+    hits: list[tuple[float, str]] = []
+    for w in ctx.words:
+        if w.size > 9.0:
+            continue
+        raw = w.text.strip()
+        if not raw or len(raw) > 8:
+            continue
+        wx = 0.5 * (w.bbox[0] + w.bbox[2])
+        wy = 0.5 * (w.bbox[1] + w.bbox[3])
+        dist = math.hypot(wx - x, wy - y)
+        if dist <= radius:
+            hits.append((dist, raw))
+    hits.sort()
+    return [t for _, t in hits]
+
+
+def _exhausts_from_half_fills(
+    ctx: PageContext,
+    candidates: list[Candidate],
+    detections: list[Detection],
+    sheet_id: str,
+    usable: list[LegendEntry],
+) -> list[Detection]:
+    """Emit bath/IAQ exhaust from half-disc fills that are not receptacles (R2 Fix 4)."""
+    bounds = _plan_bounds_from_candidates(candidates)
+    if bounds is None:
+        return []
+    bx0, by0, bx1, by1 = bounds
+    iaq_pts: list[tuple[float, float]] = []
+    for w in ctx.words:
+        if w.text.strip().upper() != "IAQ" or w.size > 9.0:
+            continue
+        wx = 0.5 * (w.bbox[0] + w.bbox[2])
+        wy = 0.5 * (w.bbox[1] + w.bbox[3])
+        if bx0 <= wx <= bx1 and by0 <= wy <= by1:
+            iaq_pts.append((wx, wy))
+
+    out: list[Detection] = []
+    for cx, cy in _half_disc_fills_in_bounds(ctx, bounds):
+        # Duplex half-hot uses the same half-disc ink — leave those for Fix 5.
+        if _has_duplex_slots_at(ctx, cx, cy):
+            continue
+        # Exhaust glyphs are circles: expect several short outline chords.
+        verts, hors = _short_aa_near(ctx, cx, cy, radius=9.0)
+        if len(verts) < 2 or (len(verts) < 4 and len(hors) < 2):
+            continue
+        if any(
+            d.category == Category.EXHAUST_FAN
+            and math.hypot(d.center.x - cx, d.center.y - cy) < 12.0
+            for d in detections + out
+        ):
+            continue
+        codes = _codes_near_point(ctx, cx, cy, radius=14.0)
+        near_iaq = any(math.hypot(ix - cx, iy - cy) < 18.0 for ix, iy in iaq_pts)
+        if "IAQ" in {c.upper() for c in codes} or near_iaq:
+            subtype = "indoor_air_quality"
+            if "IAQ" not in {c.upper() for c in codes}:
+                codes = list(codes) + ["IAQ"]
+        else:
+            subtype = "bath_exhaust"
+        entry = next(
+            (
+                e
+                for e in usable
+                if e.category == Category.EXHAUST_FAN and e.subtype == subtype
+            ),
+            next((e for e in usable if e.category == Category.EXHAUST_FAN), None),
+        )
+        pad = 8.0
+        out.append(
+            Detection(
+                id=str(uuid.uuid4()),
+                sheet_id=sheet_id,
+                category=Category.EXHAUST_FAN,
+                subtype=subtype,
+                codes=codes,
+                center=Point(x=cx, y=cy),
+                bbox=BBox(x0=cx - pad, y0=cy - pad, x1=cx + pad, y1=cy + pad),
+                rotation_deg=0,
+                confidence=0.87,
+                source="geometry",
+                needs_review=False,
+                evidence=Evidence(
+                    legend_entry_id=entry.id if entry else None,
+                    match_score=0.87,
+                    text_tokens=codes,
+                    notes=["half_fill_exhaust"],
                 ),
             )
         )
