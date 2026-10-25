@@ -293,6 +293,8 @@ def _refine_subtype(
     codes: list[str],
     cand: Candidate,
     entry: LegendEntry,
+    *,
+    wall_light: bool = False,
 ) -> str:
     """Apply SPEC §2 code priority on top of the legend row's subtype."""
     upper = {c.upper() for c in codes}
@@ -327,8 +329,7 @@ def _refine_subtype(
             return "recessed_vapor_proof"
         if "EXT" in type_codes:
             return "exterior_wall"
-        # Wall-mounted: only with the wall-tick shape — never a plain circle.
-        if base_subtype == "wall" and _has_wall_tick(cand):
+        if wall_light or (base_subtype == "wall" and _has_wall_tick(cand)):
             return "wall"
         if base_subtype == "pendant" and "P" in type_codes:
             return "pendant"
@@ -362,6 +363,52 @@ def _has_wall_tick(cand: Candidate) -> bool:
         return False
     aspect = max(w, h) / min(w, h)
     return aspect >= 1.12
+
+
+def _is_wall_light_shape(ctx: PageContext, cand: Candidate) -> bool:
+    """Circle + cross + wall tick, no enclosing square (R2 Fix 7).
+
+    Recessed lights are near-square circle-in-square (~64 segs). Wall lights are
+    elongated by the tick toward the wall and have a + through the circle.
+    Receptacles are AA-heavy; the circle outline is mostly short diagonals.
+    """
+    w = float(cand.features.get("width", 0.0))
+    h = float(cand.features.get("height", 0.0))
+    n = int(cand.features.get("n_segments", 0))
+    if int(cand.features.get("n_fills", 0)) > 0:
+        return False
+    if n < 16 or n > 35:
+        return False
+    if not (8.0 <= min(w, h) <= 16.0 and 16.0 <= max(w, h) <= 32.0):
+        return False
+    aspect = max(w, h) / max(min(w, h), 0.1)
+    if aspect < 1.5:
+        return False
+    verts = 0
+    hors = 0
+    diag = 0
+    cx, cy = cand.center
+    for i in cand.segment_ids:
+        s = ctx.black_segments[i]
+        dx, dy = abs(s.x1 - s.x0), abs(s.y1 - s.y0)
+        length = math.hypot(dx, dy)
+        if length < 1.2:
+            continue
+        if dx > 0.8 and dy > 0.8:
+            diag += 1
+            continue
+        if not (1.5 <= length <= 6.0):
+            continue
+        mx, my = 0.5 * (s.x0 + s.x1), 0.5 * (s.y0 + s.y1)
+        if math.hypot(mx - cx, my - cy) > max(w, h) * 0.55:
+            continue
+        if dx <= 0.8:
+            verts += 1
+        elif dy <= 0.8:
+            hors += 1
+    if diag < 8:
+        return False
+    return verts >= 1 and hors >= 1
 
 
 def _touches_keynote(ctx: PageContext, cand: Candidate) -> bool:
@@ -735,7 +782,11 @@ def classify_candidates(
         best_score, best_rot, best_entry = scores[0]
         second = scores[1][0] if len(scores) > 1 else 0.0
 
-        if best_score < _REJECT_SCORE and not _is_circle_light_shape(cand):
+        if (
+            best_score < _REJECT_SCORE
+            and not _is_circle_light_shape(cand)
+            and not _is_wall_light_shape(ctx, cand)
+        ):
             continue
 
         assert best_entry.category is not None
@@ -744,7 +795,15 @@ def classify_candidates(
         # Circle / circle-in-square → always a light (Fix 3). Dense (≥45 segs)
         # wins over a weak receptacle/switch score; sparse wall receptacles stay.
         light_entries = [e for e in usable if e.category == Category.LIGHT]
-        if _is_circle_light_shape(cand) and light_entries:
+        wall_light = _is_wall_light_shape(ctx, cand)
+        if wall_light and light_entries:
+            cat = Category.LIGHT
+            best_entry = next(
+                (e for e in light_entries if e.subtype == "wall"),
+                light_entries[0],
+            )
+            best_score = max(best_score, 0.6)
+        elif _is_circle_light_shape(cand) and light_entries:
             dense = int(cand.features.get("n_segments", 0)) >= _LIGHT_DENSE_SEGS
             wall_receptacle = (
                 cat == Category.RECEPTACLE
@@ -762,6 +821,8 @@ def classify_candidates(
                     light_entries[0],
                 )
                 best_score = max(best_score, 0.55)
+        else:
+            wall_light = False
 
         # Wall devices: center must sit within ~8 pt of wall poche / wall lines.
         if cat in (Category.SWITCH, Category.RECEPTACLE):
@@ -790,7 +851,14 @@ def classify_candidates(
 
         codes = _codes_near_candidate(ctx, cand)
         mount = _parse_mount_height(codes)
-        subtype = _refine_subtype(cat, best_entry.subtype, codes, cand, best_entry)
+        subtype = _refine_subtype(
+            cat,
+            best_entry.subtype,
+            codes,
+            cand,
+            best_entry,
+            wall_light=wall_light if cat == Category.LIGHT else False,
+        )
 
         # Exhaust fan requires a black fill (half-disc) — Fix 5 / R2 Fix 4.
         if cat == Category.EXHAUST_FAN:
