@@ -42,21 +42,32 @@ app = typer.Typer(
 @app.command("analyze")
 def analyze_cmd(
     pdf: Path = typer.Argument(..., exists=True, help="Path to the plans PDF"),  # noqa: B008
-    page: int = typer.Option(0, "--page", "-p", help="0-based page index"),
+    page: int = typer.Option(
+        1,
+        "--page",
+        "-p",
+        help="Plan/page number 1..4 (Plan 1 = first sheet). Internally converted to 0-based page_index.",
+        min=1,
+    ),
     out: Path = typer.Option(Path("out/sheet_result.json"), "--out", "-o"),  # noqa: B008
     debug: bool = typer.Option(False, "--debug", help="Write debug PNGs to out/debug/"),
     use_llm: bool = typer.Option(True, "--llm/--no-llm"),
     with_bom: bool = typer.Option(True, "--bom/--no-bom"),
 ) -> None:
-    """Analyze one sheet and write SheetResult JSON."""
+    """Analyze one sheet and write SheetResult JSON.
+
+    ``--page`` is the human plan number (1 = Plan 1). Engine APIs still use
+    0-based ``page_index``.
+    """
     from collections import Counter
 
     from takeoff_engine.pipeline import analyze_sheet, write_debug_overlay
 
-    result = analyze_sheet(pdf, page, use_llm=use_llm, with_bom=with_bom)
+    page_index = page - 1
+    result = analyze_sheet(pdf, page_index, use_llm=use_llm, with_bom=with_bom)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(result.model_dump_json(indent=2), encoding="utf-8")
-    typer.echo(f"Wrote {out}")
+    typer.echo(f"Wrote {out} (plan {page}, page_index={page_index})")
     counts = Counter(d.category.value for d in result.detections)
     typer.echo(f"detections={len(result.detections)} by_category={dict(counts)}")
     if result.warnings:
@@ -64,8 +75,8 @@ def analyze_cmd(
     if debug:
         debug_dir = Path("out/debug")
         debug_dir.mkdir(parents=True, exist_ok=True)
-        overlay = debug_dir / f"detections_p{page + 1}.png"
-        write_debug_overlay(pdf, page, result, overlay)
+        overlay = debug_dir / f"detections_p{page}.png"
+        write_debug_overlay(pdf, page_index, result, overlay)
         typer.echo(f"Debug overlay: {overlay}")
 
 

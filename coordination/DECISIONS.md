@@ -101,3 +101,6 @@ When several codes apply: `240V` > `MW` / `DW` / `H` / `FC` > `WP` > half-hot >
 - Unassigned detections still increment sheet `totals`.
 - `sqlalchemy[asyncio]` + `greenlet` required for async SQLAlchemy (backend).
 - CI workflow file may need `gh` token `workflow` scope to push to GitHub.
+- **CLI `--page` is 1-based** (Plan 1..4). Convert with `page_index = page - 1` before
+  calling `analyze_sheet` / `load_page`. Contracts and engine APIs stay 0-based
+  `page_index`. Do not squash or rewrite git history; Cursor co-author trailers OK.

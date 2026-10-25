@@ -2,7 +2,7 @@
 
 ## Estado
 
-Integration pass 1: deps + eval CLI + docs verdes; E2E Docker bloqueado (daemon apagado); fixture UI OK.
+v0.1.0 listo para tag. CLI `--page` ahora 1-based (Plan 1..4). E2E Docker aún pendiente.
 
 ## Hecho
 

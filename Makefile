@@ -26,7 +26,7 @@ schema:
 	fi
 
 analyze:
-	uv run takeoff analyze data/plans/escondido_plans.pdf --page 0 --out out/sheet_result.json --debug
+	uv run takeoff analyze data/plans/escondido_plans.pdf --page 1 --out out/sheet_result.json --debug
 
 eval:
 	uv run takeoff eval --out eval/reports

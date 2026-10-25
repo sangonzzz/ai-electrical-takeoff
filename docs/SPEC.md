@@ -166,7 +166,8 @@ ai-electrical-takeoff/
       llm/                       Claude client, prompts, cache, tasks (Agente 4)
       wires.py, boxes.py, bom.py, pricing.py   bill of materials (Agente 8)
       overlay.py                 static PNG/PDF overlays for debugging and reports (Agente 7)
-      cli.py                     `takeoff` CLI (Agente 1 skeleton, Agente 2 owns analyze, Agente 7 owns eval)
+      cli.py                     `takeoff` CLI (Agente 1 skeleton, Agente 2 owns analyze, Agente 7 owns eval).
+                                 CLI `--page` is plan number 1..4; `page_index` in APIs/models stays 0-based.
     tests/                       pytest, one folder per module owner
     prompts/                     versioned prompt files (Agente 4)
   backend/                       FastAPI app + ARQ worker + SQLAlchemy + Alembic (Agente 5)

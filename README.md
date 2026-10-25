@@ -42,11 +42,14 @@ pipeline is selected. Set `ENGINE=real` once `analyze_sheet` is the production p
 ## CLI
 
 ```bash
-uv run takeoff analyze data/plans/escondido_plans.pdf --page 0 --out out/plan1.json --debug
+# --page is the plan number 1..4 (Plan 1 = first sheet). Internally page_index is 0-based.
+uv run takeoff analyze data/plans/escondido_plans.pdf --page 1 --out out/plan1.json --debug
+uv run takeoff analyze data/plans/escondido_plans.pdf --page 2 --out out/plan2.json --debug
 uv run takeoff eval --pdf data/plans/escondido_plans.pdf --out eval/reports
 uv run takeoff eval --results-dir out --out eval/reports
 uv run takeoff schema
 ```
+
 
 ## Evaluation
 
