@@ -52,7 +52,11 @@ async def test_upload_idempotent_same_hash(client: AsyncClient, sample_pdf: Path
     assert first.status_code == 202
     assert second.status_code == 202
     assert third.status_code == 202
-    doc_ids = {first.json()["document_id"], second.json()["document_id"], third.json()["document_id"]}
+    doc_ids = {
+        first.json()["document_id"],
+        second.json()["document_id"],
+        third.json()["document_id"],
+    }
     assert len(doc_ids) == 1
     # Same succeeded job ids reused — no new queued analyses
     assert first.json()["sheets"][0]["job_id"] == second.json()["sheets"][0]["job_id"]
