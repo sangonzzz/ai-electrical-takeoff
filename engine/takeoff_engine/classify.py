@@ -886,6 +886,7 @@ def classify_candidates(
     )
 
     detections = _nms_detections(detections, dist_pt=8.0)
+    detections = _nms_cross_category(detections)
     return detections
 
 
@@ -1387,6 +1388,63 @@ def _nms_detections(dets: list[Detection], dist_pt: float) -> list[Detection]:
                 suppressed = True
                 break
         if not suppressed:
+            kept.append(d)
+    kept.sort(key=lambda d: (d.bbox.y0, d.bbox.x0))
+    return kept
+
+
+def _bbox_overlap_frac(a: BBox, b: BBox) -> float:
+    """Intersection area / min(area(a), area(b))."""
+    ix0, iy0 = max(a.x0, b.x0), max(a.y0, b.y0)
+    ix1, iy1 = min(a.x1, b.x1), min(a.y1, b.y1)
+    if ix1 <= ix0 or iy1 <= iy0:
+        return 0.0
+    inter = (ix1 - ix0) * (iy1 - iy0)
+    aa = max((a.x1 - a.x0) * (a.y1 - a.y0), 1e-6)
+    bb = max((b.x1 - b.x0) * (b.y1 - b.y0), 1e-6)
+    return inter / min(aa, bb)
+
+
+def _cross_winner(a: Detection, b: Detection) -> Detection | None:
+    """Which overlapping detection to keep, or None to keep both (R2 Fix 6).
+
+    Only resolve known collisions; unrelated nearby devices stay.
+    """
+    pair = frozenset({a.category, b.category})
+    if pair == frozenset({Category.DETECTOR, Category.LIGHT}):
+        return a if a.category == Category.DETECTOR else b
+    if pair == frozenset({Category.EXHAUST_FAN, Category.RECEPTACLE}):
+        if a.subtype == "afci_half_hot":
+            return a
+        if b.subtype == "afci_half_hot":
+            return b
+        return a if a.confidence >= b.confidence else b
+    return None
+
+
+def _nms_cross_category(dets: list[Detection]) -> list[Detection]:
+    """One symbol → one detection when boxes overlap across categories (R2 Fix 6)."""
+    dets = sorted(dets, key=lambda d: d.confidence, reverse=True)
+    kept: list[Detection] = []
+    for d in dets:
+        replaced_or_suppressed = False
+        for i, k in enumerate(kept):
+            if k.category == d.category:
+                continue
+            centers_close = (
+                math.hypot(k.center.x - d.center.x, k.center.y - d.center.y) < 10.0
+            )
+            boxes_overlap = _bbox_overlap_frac(k.bbox, d.bbox) >= 0.35
+            if not (centers_close or boxes_overlap):
+                continue
+            winner = _cross_winner(k, d)
+            if winner is None:
+                continue  # keep both (e.g. SD inside fan)
+            if winner is d:
+                kept[i] = d
+            replaced_or_suppressed = True
+            break
+        if not replaced_or_suppressed:
             kept.append(d)
     kept.sort(key=lambda d: (d.bbox.y0, d.bbox.x0))
     return kept
