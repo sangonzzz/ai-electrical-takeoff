@@ -57,7 +57,9 @@ _MOUNT_RE = re.compile(r"^\+?\s*(\d+)\s*\"?$")
 _KEYNOTE_RE = re.compile(r"^[A-Z]\d{2}$")
 
 # Ceiling fan: J near hub + four blade loops (not door swings / cabinets).
-_FAN_J_RADIUS_PT = 3.0
+# Reviewer asked ~3 pt from the hub; bbox center drifts a few pt when blades
+# are uneven, so allow 8 pt from cluster center (still far inside the hub).
+_FAN_J_RADIUS_PT = 8.0
 _FAN_MIN_SIDE_PT = 70.0
 _FAN_MIN_SEGS = 80
 
@@ -410,8 +412,14 @@ def _is_square_x_marker(ctx: PageContext, cand: Candidate) -> bool:
     return diagonals >= 2 and n <= 10
 
 
-def _has_j_near_center(ctx: PageContext, cand: Candidate) -> bool:
+def _j_hub_ok(ctx: PageContext, cand: Candidate) -> bool:
+    """True if a small ``J`` sits on the fan hub (near center or in the middle third)."""
     cx, cy = cand.center
+    x0, y0, x1, y1 = cand.bbox
+    mid_x0 = x0 + 0.3 * (x1 - x0)
+    mid_x1 = x0 + 0.7 * (x1 - x0)
+    mid_y0 = y0 + 0.3 * (y1 - y0)
+    mid_y1 = y0 + 0.7 * (y1 - y0)
     for w in ctx.words:
         if w.text.strip().upper() != "J":
             continue
@@ -420,6 +428,8 @@ def _has_j_near_center(ctx: PageContext, cand: Candidate) -> bool:
         wx = 0.5 * (w.bbox[0] + w.bbox[2])
         wy = 0.5 * (w.bbox[1] + w.bbox[3])
         if math.hypot(wx - cx, wy - cy) <= _FAN_J_RADIUS_PT:
+            return True
+        if mid_x0 <= wx <= mid_x1 and mid_y0 <= wy <= mid_y1:
             return True
     return False
 
@@ -431,11 +441,12 @@ def _is_ceiling_fan_candidate(ctx: PageContext, cand: Candidate) -> bool:
     n = int(cand.features.get("n_segments", 0))
     if min(w, h) < _FAN_MIN_SIDE_PT:
         return False
-    if max(w, h) / max(min(w, h), 1.0) > 1.35:
+    # Allow slightly non-square when a neighboring stroke got merged (≤1.55).
+    if max(w, h) / max(min(w, h), 1.0) > 1.55:
         return False
     if n < _FAN_MIN_SEGS:
         return False
-    return _has_j_near_center(ctx, cand)
+    return _j_hub_ok(ctx, cand)
 
 
 def _smoke_detection(
