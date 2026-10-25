@@ -1,0 +1,123 @@
+{
+  "sheet_id": "sheet-plan1",
+  "rows": [
+    {
+      "room_id": "room-living",
+      "room_name": "Living",
+      "counts": {
+        "ceiling_fan": 1,
+        "ceiling_fan.ceiling_fan": 1,
+        "detector": 1,
+        "detector.smoke": 1,
+        "light": 2,
+        "light.recessed": 1,
+        "light.wall": 1,
+        "receptacle": 1,
+        "receptacle.duplex": 1,
+        "switch": 3,
+        "switch.fan": 1,
+        "switch.single_pole": 1,
+        "switch.three_way": 1
+      }
+    },
+    {
+      "room_id": "room-kitchen-dining",
+      "room_name": "Kitchen / Dining",
+      "counts": {
+        "light": 1,
+        "light.pendant": 1,
+        "receptacle": 1,
+        "receptacle.gfci": 1,
+        "switch": 1,
+        "switch.dimmer": 1
+      }
+    },
+    {
+      "room_id": "room-bath",
+      "room_name": "Bath",
+      "counts": {
+        "exhaust_fan": 1,
+        "exhaust_fan.bath_exhaust": 1,
+        "light": 1,
+        "light.recessed_vapor_proof": 1
+      }
+    },
+    {
+      "room_id": "room-bedroom",
+      "room_name": "Bedroom / Studio",
+      "counts": {
+        "ceiling_fan": 1,
+        "ceiling_fan.fan_light": 1,
+        "detector": 1,
+        "detector.smoke_co": 1,
+        "receptacle": 1,
+        "receptacle.afci": 1
+      }
+    },
+    {
+      "room_id": "room-cl-1",
+      "room_name": "CL 1",
+      "counts": {}
+    },
+    {
+      "room_id": "room-cl-2",
+      "room_name": "CL 2",
+      "counts": {}
+    },
+    {
+      "room_id": "room-lndry",
+      "room_name": "Laundry",
+      "counts": {}
+    },
+    {
+      "room_id": "room-attic",
+      "room_name": "Attic",
+      "counts": {
+        "exhaust_fan": 1,
+        "exhaust_fan.indoor_air_quality": 1,
+        "junction_box": 1,
+        "junction_box.junction_box": 1
+      }
+    },
+    {
+      "room_id": "room-exterior",
+      "room_name": "Exterior",
+      "counts": {
+        "light": 1,
+        "light.exterior_wall": 1,
+        "receptacle": 1,
+        "receptacle.gfci_weatherproof": 1
+      }
+    }
+  ],
+  "totals": {
+    "ceiling_fan": 2,
+    "ceiling_fan.ceiling_fan": 1,
+    "ceiling_fan.fan_light": 1,
+    "detector": 2,
+    "detector.smoke": 1,
+    "detector.smoke_co": 1,
+    "exhaust_fan": 2,
+    "exhaust_fan.bath_exhaust": 1,
+    "exhaust_fan.indoor_air_quality": 1,
+    "junction_box": 1,
+    "junction_box.junction_box": 1,
+    "light": 5,
+    "light.exterior_wall": 1,
+    "light.pendant": 1,
+    "light.recessed": 1,
+    "light.recessed_vapor_proof": 1,
+    "light.wall": 1,
+    "receptacle": 4,
+    "receptacle.afci": 1,
+    "receptacle.duplex": 1,
+    "receptacle.gfci": 1,
+    "receptacle.gfci_weatherproof": 1,
+    "switch": 4,
+    "switch.dimmer": 1,
+    "switch.fan": 1,
+    "switch.single_pole": 1,
+    "switch.three_way": 1
+  },
+  "unassigned": {}
+}

@@ -1,0 +1,2158 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/sangonzzz/ai-electrical-takeoff/contracts/schema.json",
+  "title": "AI Electrical Takeoff Contracts",
+  "description": "Schema version 1.0.0",
+  "$defs": {
+    "Point": {
+      "properties": {
+        "x": {
+          "title": "X",
+          "type": "number"
+        },
+        "y": {
+          "title": "Y",
+          "type": "number"
+        }
+      },
+      "required": [
+        "x",
+        "y"
+      ],
+      "title": "Point",
+      "type": "object"
+    },
+    "BBox": {
+      "properties": {
+        "x0": {
+          "title": "X0",
+          "type": "number"
+        },
+        "y0": {
+          "title": "Y0",
+          "type": "number"
+        },
+        "x1": {
+          "title": "X1",
+          "type": "number"
+        },
+        "y1": {
+          "title": "Y1",
+          "type": "number"
+        }
+      },
+      "required": [
+        "x0",
+        "y0",
+        "x1",
+        "y1"
+      ],
+      "title": "BBox",
+      "type": "object"
+    },
+    "Evidence": {
+      "properties": {
+        "legend_entry_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Legend Entry Id"
+        },
+        "match_score": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Match Score"
+        },
+        "text_tokens": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Text Tokens",
+          "type": "array"
+        },
+        "llm_label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Llm Label"
+        },
+        "llm_reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Llm Reason"
+        },
+        "notes": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Notes",
+          "type": "array"
+        }
+      },
+      "title": "Evidence",
+      "type": "object"
+    },
+    "Detection": {
+      "$defs": {
+        "BBox": {
+          "properties": {
+            "x0": {
+              "title": "X0",
+              "type": "number"
+            },
+            "y0": {
+              "title": "Y0",
+              "type": "number"
+            },
+            "x1": {
+              "title": "X1",
+              "type": "number"
+            },
+            "y1": {
+              "title": "Y1",
+              "type": "number"
+            }
+          },
+          "required": [
+            "x0",
+            "y0",
+            "x1",
+            "y1"
+          ],
+          "title": "BBox",
+          "type": "object"
+        },
+        "Category": {
+          "enum": [
+            "ceiling_fan",
+            "light",
+            "switch",
+            "receptacle",
+            "exhaust_fan",
+            "detector",
+            "junction_box"
+          ],
+          "title": "Category",
+          "type": "string"
+        },
+        "Evidence": {
+          "properties": {
+            "legend_entry_id": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Legend Entry Id"
+            },
+            "match_score": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Match Score"
+            },
+            "text_tokens": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "title": "Text Tokens",
+              "type": "array"
+            },
+            "llm_label": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Llm Label"
+            },
+            "llm_reason": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Llm Reason"
+            },
+            "notes": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "title": "Notes",
+              "type": "array"
+            }
+          },
+          "title": "Evidence",
+          "type": "object"
+        },
+        "Point": {
+          "properties": {
+            "x": {
+              "title": "X",
+              "type": "number"
+            },
+            "y": {
+              "title": "Y",
+              "type": "number"
+            }
+          },
+          "required": [
+            "x",
+            "y"
+          ],
+          "title": "Point",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "sheet_id": {
+          "title": "Sheet Id",
+          "type": "string"
+        },
+        "category": {
+          "$ref": "#/$defs/Category"
+        },
+        "subtype": {
+          "title": "Subtype",
+          "type": "string"
+        },
+        "codes": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Codes",
+          "type": "array"
+        },
+        "mount_height_in": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Mount Height In"
+        },
+        "center": {
+          "$ref": "#/$defs/Point"
+        },
+        "bbox": {
+          "$ref": "#/$defs/BBox"
+        },
+        "rotation_deg": {
+          "default": 0,
+          "enum": [
+            0,
+            90,
+            180,
+            270
+          ],
+          "title": "Rotation Deg",
+          "type": "integer"
+        },
+        "room_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Room Id"
+        },
+        "room_source": {
+          "default": "auto",
+          "enum": [
+            "auto",
+            "manual"
+          ],
+          "title": "Room Source",
+          "type": "string"
+        },
+        "confidence": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Confidence",
+          "type": "number"
+        },
+        "source": {
+          "enum": [
+            "geometry",
+            "llm",
+            "user"
+          ],
+          "title": "Source",
+          "type": "string"
+        },
+        "status": {
+          "default": "active",
+          "enum": [
+            "active",
+            "deleted"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "needs_review": {
+          "default": false,
+          "title": "Needs Review",
+          "type": "boolean"
+        },
+        "evidence": {
+          "$ref": "#/$defs/Evidence"
+        }
+      },
+      "required": [
+        "id",
+        "sheet_id",
+        "category",
+        "subtype",
+        "center",
+        "bbox",
+        "confidence",
+        "source"
+      ],
+      "title": "Detection",
+      "type": "object"
+    },
+    "Room": {
+      "$defs": {
+        "Point": {
+          "properties": {
+            "x": {
+              "title": "X",
+              "type": "number"
+            },
+            "y": {
+              "title": "Y",
+              "type": "number"
+            }
+          },
+          "required": [
+            "x",
+            "y"
+          ],
+          "title": "Point",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "sheet_id": {
+          "title": "Sheet Id",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "display_name": {
+          "title": "Display Name",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "interior",
+            "exterior",
+            "attic"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "polygon": {
+          "items": {
+            "$ref": "#/$defs/Point"
+          },
+          "title": "Polygon",
+          "type": "array"
+        },
+        "label_point": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Point"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "source": {
+          "default": "auto",
+          "enum": [
+            "auto",
+            "manual"
+          ],
+          "title": "Source",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "sheet_id",
+        "name",
+        "display_name",
+        "kind",
+        "polygon"
+      ],
+      "title": "Room",
+      "type": "object"
+    },
+    "LegendEntry": {
+      "$defs": {
+        "BBox": {
+          "properties": {
+            "x0": {
+              "title": "X0",
+              "type": "number"
+            },
+            "y0": {
+              "title": "Y0",
+              "type": "number"
+            },
+            "x1": {
+              "title": "X1",
+              "type": "number"
+            },
+            "y1": {
+              "title": "Y1",
+              "type": "number"
+            }
+          },
+          "required": [
+            "x0",
+            "y0",
+            "x1",
+            "y1"
+          ],
+          "title": "BBox",
+          "type": "object"
+        },
+        "Category": {
+          "enum": [
+            "ceiling_fan",
+            "light",
+            "switch",
+            "receptacle",
+            "exhaust_fan",
+            "detector",
+            "junction_box"
+          ],
+          "title": "Category",
+          "type": "string"
+        }
+      },
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "description": {
+          "title": "Description",
+          "type": "string"
+        },
+        "codes": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Codes",
+          "type": "array"
+        },
+        "category": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Category"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "subtype": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Subtype"
+        },
+        "combined": {
+          "default": false,
+          "title": "Combined",
+          "type": "boolean"
+        },
+        "symbol_bbox": {
+          "$ref": "#/$defs/BBox"
+        },
+        "interpreted_by": {
+          "default": "rules",
+          "enum": [
+            "rules",
+            "llm"
+          ],
+          "title": "Interpreted By",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "description",
+        "symbol_bbox"
+      ],
+      "title": "LegendEntry",
+      "type": "object"
+    },
+    "WireRun": {
+      "$defs": {
+        "Point": {
+          "properties": {
+            "x": {
+              "title": "X",
+              "type": "number"
+            },
+            "y": {
+              "title": "Y",
+              "type": "number"
+            }
+          },
+          "required": [
+            "x",
+            "y"
+          ],
+          "title": "Point",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "sheet_id": {
+          "title": "Sheet Id",
+          "type": "string"
+        },
+        "points": {
+          "items": {
+            "$ref": "#/$defs/Point"
+          },
+          "title": "Points",
+          "type": "array"
+        },
+        "from_detection_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "From Detection Id"
+        },
+        "to_detection_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "To Detection Id"
+        },
+        "cable_type": {
+          "enum": [
+            "nm_14_2",
+            "nm_14_3"
+          ],
+          "title": "Cable Type",
+          "type": "string"
+        },
+        "plan_length_ft": {
+          "title": "Plan Length Ft",
+          "type": "number"
+        },
+        "vertical_allowance_ft": {
+          "title": "Vertical Allowance Ft",
+          "type": "number"
+        },
+        "total_length_ft": {
+          "title": "Total Length Ft",
+          "type": "number"
+        },
+        "confidence": {
+          "title": "Confidence",
+          "type": "number"
+        },
+        "source": {
+          "enum": [
+            "geometry",
+            "user"
+          ],
+          "title": "Source",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "sheet_id",
+        "points",
+        "from_detection_id",
+        "to_detection_id",
+        "cable_type",
+        "plan_length_ft",
+        "vertical_allowance_ft",
+        "total_length_ft",
+        "confidence",
+        "source"
+      ],
+      "title": "WireRun",
+      "type": "object"
+    },
+    "Box": {
+      "$defs": {
+        "BBox": {
+          "properties": {
+            "x0": {
+              "title": "X0",
+              "type": "number"
+            },
+            "y0": {
+              "title": "Y0",
+              "type": "number"
+            },
+            "x1": {
+              "title": "X1",
+              "type": "number"
+            },
+            "y1": {
+              "title": "Y1",
+              "type": "number"
+            }
+          },
+          "required": [
+            "x0",
+            "y0",
+            "x1",
+            "y1"
+          ],
+          "title": "BBox",
+          "type": "object"
+        },
+        "Point": {
+          "properties": {
+            "x": {
+              "title": "X",
+              "type": "number"
+            },
+            "y": {
+              "title": "Y",
+              "type": "number"
+            }
+          },
+          "required": [
+            "x",
+            "y"
+          ],
+          "title": "Point",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "sheet_id": {
+          "title": "Sheet Id",
+          "type": "string"
+        },
+        "center": {
+          "$ref": "#/$defs/Point"
+        },
+        "bbox": {
+          "$ref": "#/$defs/BBox"
+        },
+        "kind": {
+          "enum": [
+            "device",
+            "fan_rated",
+            "ceiling_round",
+            "none"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "gangs": {
+          "title": "Gangs",
+          "type": "integer"
+        },
+        "detection_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Detection Ids",
+          "type": "array"
+        },
+        "cover": {
+          "enum": [
+            "plate",
+            "weatherproof_cover",
+            "none"
+          ],
+          "title": "Cover",
+          "type": "string"
+        },
+        "source": {
+          "enum": [
+            "geometry",
+            "user"
+          ],
+          "title": "Source",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "sheet_id",
+        "center",
+        "bbox",
+        "kind",
+        "gangs",
+        "detection_ids",
+        "cover",
+        "source"
+      ],
+      "title": "Box",
+      "type": "object"
+    },
+    "SheetImage": {
+      "$defs": {
+        "Point": {
+          "properties": {
+            "x": {
+              "title": "X",
+              "type": "number"
+            },
+            "y": {
+              "title": "Y",
+              "type": "number"
+            }
+          },
+          "required": [
+            "x",
+            "y"
+          ],
+          "title": "Point",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Url"
+        },
+        "dpi": {
+          "title": "Dpi",
+          "type": "integer"
+        },
+        "origin": {
+          "$ref": "#/$defs/Point"
+        },
+        "width_px": {
+          "title": "Width Px",
+          "type": "integer"
+        },
+        "height_px": {
+          "title": "Height Px",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "dpi",
+        "origin",
+        "width_px",
+        "height_px"
+      ],
+      "title": "SheetImage",
+      "type": "object"
+    },
+    "Sheet": {
+      "$defs": {
+        "BBox": {
+          "properties": {
+            "x0": {
+              "title": "X0",
+              "type": "number"
+            },
+            "y0": {
+              "title": "Y0",
+              "type": "number"
+            },
+            "x1": {
+              "title": "X1",
+              "type": "number"
+            },
+            "y1": {
+              "title": "Y1",
+              "type": "number"
+            }
+          },
+          "required": [
+            "x0",
+            "y0",
+            "x1",
+            "y1"
+          ],
+          "title": "BBox",
+          "type": "object"
+        },
+        "Point": {
+          "properties": {
+            "x": {
+              "title": "X",
+              "type": "number"
+            },
+            "y": {
+              "title": "Y",
+              "type": "number"
+            }
+          },
+          "required": [
+            "x",
+            "y"
+          ],
+          "title": "Point",
+          "type": "object"
+        },
+        "SheetImage": {
+          "properties": {
+            "url": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Url"
+            },
+            "dpi": {
+              "title": "Dpi",
+              "type": "integer"
+            },
+            "origin": {
+              "$ref": "#/$defs/Point"
+            },
+            "width_px": {
+              "title": "Width Px",
+              "type": "integer"
+            },
+            "height_px": {
+              "title": "Height Px",
+              "type": "integer"
+            }
+          },
+          "required": [
+            "dpi",
+            "origin",
+            "width_px",
+            "height_px"
+          ],
+          "title": "SheetImage",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "document_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Document Id"
+        },
+        "page_index": {
+          "title": "Page Index",
+          "type": "integer"
+        },
+        "sheet_number": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sheet Number"
+        },
+        "title": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Title"
+        },
+        "page_width": {
+          "title": "Page Width",
+          "type": "number"
+        },
+        "page_height": {
+          "title": "Page Height",
+          "type": "number"
+        },
+        "viewport": {
+          "$ref": "#/$defs/BBox"
+        },
+        "legend_bbox": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BBox"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "scale_pt_per_ft": {
+          "title": "Scale Pt Per Ft",
+          "type": "number"
+        },
+        "image": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SheetImage"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "id",
+        "page_index",
+        "page_width",
+        "page_height",
+        "viewport",
+        "scale_pt_per_ft"
+      ],
+      "title": "Sheet",
+      "type": "object"
+    },
+    "LlmUsage": {
+      "properties": {
+        "calls": {
+          "default": 0,
+          "title": "Calls",
+          "type": "integer"
+        },
+        "input_tokens": {
+          "default": 0,
+          "title": "Input Tokens",
+          "type": "integer"
+        },
+        "output_tokens": {
+          "default": 0,
+          "title": "Output Tokens",
+          "type": "integer"
+        },
+        "cost_usd": {
+          "default": 0.0,
+          "title": "Cost Usd",
+          "type": "number"
+        },
+        "cache_hits": {
+          "default": 0,
+          "title": "Cache Hits",
+          "type": "integer"
+        }
+      },
+      "title": "LlmUsage",
+      "type": "object"
+    },
+    "SheetResult": {
+      "$defs": {
+        "BBox": {
+          "properties": {
+            "x0": {
+              "title": "X0",
+              "type": "number"
+            },
+            "y0": {
+              "title": "Y0",
+              "type": "number"
+            },
+            "x1": {
+              "title": "X1",
+              "type": "number"
+            },
+            "y1": {
+              "title": "Y1",
+              "type": "number"
+            }
+          },
+          "required": [
+            "x0",
+            "y0",
+            "x1",
+            "y1"
+          ],
+          "title": "BBox",
+          "type": "object"
+        },
+        "Box": {
+          "properties": {
+            "id": {
+              "title": "Id",
+              "type": "string"
+            },
+            "sheet_id": {
+              "title": "Sheet Id",
+              "type": "string"
+            },
+            "center": {
+              "$ref": "#/$defs/Point"
+            },
+            "bbox": {
+              "$ref": "#/$defs/BBox"
+            },
+            "kind": {
+              "enum": [
+                "device",
+                "fan_rated",
+                "ceiling_round",
+                "none"
+              ],
+              "title": "Kind",
+              "type": "string"
+            },
+            "gangs": {
+              "title": "Gangs",
+              "type": "integer"
+            },
+            "detection_ids": {
+              "items": {
+                "type": "string"
+              },
+              "title": "Detection Ids",
+              "type": "array"
+            },
+            "cover": {
+              "enum": [
+                "plate",
+                "weatherproof_cover",
+                "none"
+              ],
+              "title": "Cover",
+              "type": "string"
+            },
+            "source": {
+              "enum": [
+                "geometry",
+                "user"
+              ],
+              "title": "Source",
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "sheet_id",
+            "center",
+            "bbox",
+            "kind",
+            "gangs",
+            "detection_ids",
+            "cover",
+            "source"
+          ],
+          "title": "Box",
+          "type": "object"
+        },
+        "Category": {
+          "enum": [
+            "ceiling_fan",
+            "light",
+            "switch",
+            "receptacle",
+            "exhaust_fan",
+            "detector",
+            "junction_box"
+          ],
+          "title": "Category",
+          "type": "string"
+        },
+        "Detection": {
+          "properties": {
+            "id": {
+              "title": "Id",
+              "type": "string"
+            },
+            "sheet_id": {
+              "title": "Sheet Id",
+              "type": "string"
+            },
+            "category": {
+              "$ref": "#/$defs/Category"
+            },
+            "subtype": {
+              "title": "Subtype",
+              "type": "string"
+            },
+            "codes": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "title": "Codes",
+              "type": "array"
+            },
+            "mount_height_in": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Mount Height In"
+            },
+            "center": {
+              "$ref": "#/$defs/Point"
+            },
+            "bbox": {
+              "$ref": "#/$defs/BBox"
+            },
+            "rotation_deg": {
+              "default": 0,
+              "enum": [
+                0,
+                90,
+                180,
+                270
+              ],
+              "title": "Rotation Deg",
+              "type": "integer"
+            },
+            "room_id": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Room Id"
+            },
+            "room_source": {
+              "default": "auto",
+              "enum": [
+                "auto",
+                "manual"
+              ],
+              "title": "Room Source",
+              "type": "string"
+            },
+            "confidence": {
+              "maximum": 1,
+              "minimum": 0,
+              "title": "Confidence",
+              "type": "number"
+            },
+            "source": {
+              "enum": [
+                "geometry",
+                "llm",
+                "user"
+              ],
+              "title": "Source",
+              "type": "string"
+            },
+            "status": {
+              "default": "active",
+              "enum": [
+                "active",
+                "deleted"
+              ],
+              "title": "Status",
+              "type": "string"
+            },
+            "needs_review": {
+              "default": false,
+              "title": "Needs Review",
+              "type": "boolean"
+            },
+            "evidence": {
+              "$ref": "#/$defs/Evidence"
+            }
+          },
+          "required": [
+            "id",
+            "sheet_id",
+            "category",
+            "subtype",
+            "center",
+            "bbox",
+            "confidence",
+            "source"
+          ],
+          "title": "Detection",
+          "type": "object"
+        },
+        "Evidence": {
+          "properties": {
+            "legend_entry_id": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Legend Entry Id"
+            },
+            "match_score": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Match Score"
+            },
+            "text_tokens": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "title": "Text Tokens",
+              "type": "array"
+            },
+            "llm_label": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Llm Label"
+            },
+            "llm_reason": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Llm Reason"
+            },
+            "notes": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "title": "Notes",
+              "type": "array"
+            }
+          },
+          "title": "Evidence",
+          "type": "object"
+        },
+        "LegendEntry": {
+          "properties": {
+            "id": {
+              "title": "Id",
+              "type": "string"
+            },
+            "description": {
+              "title": "Description",
+              "type": "string"
+            },
+            "codes": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "title": "Codes",
+              "type": "array"
+            },
+            "category": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/Category"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "subtype": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Subtype"
+            },
+            "combined": {
+              "default": false,
+              "title": "Combined",
+              "type": "boolean"
+            },
+            "symbol_bbox": {
+              "$ref": "#/$defs/BBox"
+            },
+            "interpreted_by": {
+              "default": "rules",
+              "enum": [
+                "rules",
+                "llm"
+              ],
+              "title": "Interpreted By",
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "description",
+            "symbol_bbox"
+          ],
+          "title": "LegendEntry",
+          "type": "object"
+        },
+        "LlmUsage": {
+          "properties": {
+            "calls": {
+              "default": 0,
+              "title": "Calls",
+              "type": "integer"
+            },
+            "input_tokens": {
+              "default": 0,
+              "title": "Input Tokens",
+              "type": "integer"
+            },
+            "output_tokens": {
+              "default": 0,
+              "title": "Output Tokens",
+              "type": "integer"
+            },
+            "cost_usd": {
+              "default": 0.0,
+              "title": "Cost Usd",
+              "type": "number"
+            },
+            "cache_hits": {
+              "default": 0,
+              "title": "Cache Hits",
+              "type": "integer"
+            }
+          },
+          "title": "LlmUsage",
+          "type": "object"
+        },
+        "Point": {
+          "properties": {
+            "x": {
+              "title": "X",
+              "type": "number"
+            },
+            "y": {
+              "title": "Y",
+              "type": "number"
+            }
+          },
+          "required": [
+            "x",
+            "y"
+          ],
+          "title": "Point",
+          "type": "object"
+        },
+        "Room": {
+          "properties": {
+            "id": {
+              "title": "Id",
+              "type": "string"
+            },
+            "sheet_id": {
+              "title": "Sheet Id",
+              "type": "string"
+            },
+            "name": {
+              "title": "Name",
+              "type": "string"
+            },
+            "display_name": {
+              "title": "Display Name",
+              "type": "string"
+            },
+            "kind": {
+              "enum": [
+                "interior",
+                "exterior",
+                "attic"
+              ],
+              "title": "Kind",
+              "type": "string"
+            },
+            "polygon": {
+              "items": {
+                "$ref": "#/$defs/Point"
+              },
+              "title": "Polygon",
+              "type": "array"
+            },
+            "label_point": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/Point"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "source": {
+              "default": "auto",
+              "enum": [
+                "auto",
+                "manual"
+              ],
+              "title": "Source",
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "sheet_id",
+            "name",
+            "display_name",
+            "kind",
+            "polygon"
+          ],
+          "title": "Room",
+          "type": "object"
+        },
+        "Sheet": {
+          "properties": {
+            "id": {
+              "title": "Id",
+              "type": "string"
+            },
+            "document_id": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Document Id"
+            },
+            "page_index": {
+              "title": "Page Index",
+              "type": "integer"
+            },
+            "sheet_number": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Sheet Number"
+            },
+            "title": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Title"
+            },
+            "page_width": {
+              "title": "Page Width",
+              "type": "number"
+            },
+            "page_height": {
+              "title": "Page Height",
+              "type": "number"
+            },
+            "viewport": {
+              "$ref": "#/$defs/BBox"
+            },
+            "legend_bbox": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/BBox"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "scale_pt_per_ft": {
+              "title": "Scale Pt Per Ft",
+              "type": "number"
+            },
+            "image": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/SheetImage"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            }
+          },
+          "required": [
+            "id",
+            "page_index",
+            "page_width",
+            "page_height",
+            "viewport",
+            "scale_pt_per_ft"
+          ],
+          "title": "Sheet",
+          "type": "object"
+        },
+        "SheetImage": {
+          "properties": {
+            "url": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Url"
+            },
+            "dpi": {
+              "title": "Dpi",
+              "type": "integer"
+            },
+            "origin": {
+              "$ref": "#/$defs/Point"
+            },
+            "width_px": {
+              "title": "Width Px",
+              "type": "integer"
+            },
+            "height_px": {
+              "title": "Height Px",
+              "type": "integer"
+            }
+          },
+          "required": [
+            "dpi",
+            "origin",
+            "width_px",
+            "height_px"
+          ],
+          "title": "SheetImage",
+          "type": "object"
+        },
+        "WireRun": {
+          "properties": {
+            "id": {
+              "title": "Id",
+              "type": "string"
+            },
+            "sheet_id": {
+              "title": "Sheet Id",
+              "type": "string"
+            },
+            "points": {
+              "items": {
+                "$ref": "#/$defs/Point"
+              },
+              "title": "Points",
+              "type": "array"
+            },
+            "from_detection_id": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "From Detection Id"
+            },
+            "to_detection_id": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "To Detection Id"
+            },
+            "cable_type": {
+              "enum": [
+                "nm_14_2",
+                "nm_14_3"
+              ],
+              "title": "Cable Type",
+              "type": "string"
+            },
+            "plan_length_ft": {
+              "title": "Plan Length Ft",
+              "type": "number"
+            },
+            "vertical_allowance_ft": {
+              "title": "Vertical Allowance Ft",
+              "type": "number"
+            },
+            "total_length_ft": {
+              "title": "Total Length Ft",
+              "type": "number"
+            },
+            "confidence": {
+              "title": "Confidence",
+              "type": "number"
+            },
+            "source": {
+              "enum": [
+                "geometry",
+                "user"
+              ],
+              "title": "Source",
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "sheet_id",
+            "points",
+            "from_detection_id",
+            "to_detection_id",
+            "cable_type",
+            "plan_length_ft",
+            "vertical_allowance_ft",
+            "total_length_ft",
+            "confidence",
+            "source"
+          ],
+          "title": "WireRun",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "schema_version": {
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "pipeline_version": {
+          "title": "Pipeline Version",
+          "type": "string"
+        },
+        "sheet": {
+          "$ref": "#/$defs/Sheet"
+        },
+        "legend": {
+          "items": {
+            "$ref": "#/$defs/LegendEntry"
+          },
+          "title": "Legend",
+          "type": "array"
+        },
+        "rooms": {
+          "items": {
+            "$ref": "#/$defs/Room"
+          },
+          "title": "Rooms",
+          "type": "array"
+        },
+        "detections": {
+          "items": {
+            "$ref": "#/$defs/Detection"
+          },
+          "title": "Detections",
+          "type": "array"
+        },
+        "wire_runs": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/WireRun"
+          },
+          "title": "Wire Runs",
+          "type": "array"
+        },
+        "boxes": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Box"
+          },
+          "title": "Boxes",
+          "type": "array"
+        },
+        "warnings": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Warnings",
+          "type": "array"
+        },
+        "timings_ms": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "default": {},
+          "title": "Timings Ms",
+          "type": "object"
+        },
+        "llm_usage": {
+          "$ref": "#/$defs/LlmUsage"
+        }
+      },
+      "required": [
+        "pipeline_version",
+        "sheet",
+        "legend",
+        "rooms",
+        "detections"
+      ],
+      "title": "SheetResult",
+      "type": "object"
+    },
+    "TakeoffRow": {
+      "properties": {
+        "room_id": {
+          "title": "Room Id",
+          "type": "string"
+        },
+        "room_name": {
+          "title": "Room Name",
+          "type": "string"
+        },
+        "counts": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "title": "Counts",
+          "type": "object"
+        }
+      },
+      "required": [
+        "room_id",
+        "room_name",
+        "counts"
+      ],
+      "title": "TakeoffRow",
+      "type": "object"
+    },
+    "Takeoff": {
+      "$defs": {
+        "TakeoffRow": {
+          "properties": {
+            "room_id": {
+              "title": "Room Id",
+              "type": "string"
+            },
+            "room_name": {
+              "title": "Room Name",
+              "type": "string"
+            },
+            "counts": {
+              "additionalProperties": {
+                "type": "integer"
+              },
+              "title": "Counts",
+              "type": "object"
+            }
+          },
+          "required": [
+            "room_id",
+            "room_name",
+            "counts"
+          ],
+          "title": "TakeoffRow",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "sheet_id": {
+          "title": "Sheet Id",
+          "type": "string"
+        },
+        "rows": {
+          "items": {
+            "$ref": "#/$defs/TakeoffRow"
+          },
+          "title": "Rows",
+          "type": "array"
+        },
+        "totals": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "title": "Totals",
+          "type": "object"
+        },
+        "unassigned": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "title": "Unassigned",
+          "type": "object"
+        }
+      },
+      "required": [
+        "sheet_id",
+        "rows",
+        "totals",
+        "unassigned"
+      ],
+      "title": "Takeoff",
+      "type": "object"
+    },
+    "BomLine": {
+      "properties": {
+        "item_key": {
+          "title": "Item Key",
+          "type": "string"
+        },
+        "description": {
+          "title": "Description",
+          "type": "string"
+        },
+        "quantity": {
+          "title": "Quantity",
+          "type": "number"
+        },
+        "unit": {
+          "title": "Unit",
+          "type": "string"
+        },
+        "unit_price": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Unit Price"
+        },
+        "extended_price": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Extended Price"
+        },
+        "price_source": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Price Source"
+        },
+        "source_ids": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Source Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "item_key",
+        "description",
+        "quantity",
+        "unit",
+        "unit_price",
+        "extended_price",
+        "price_source"
+      ],
+      "title": "BomLine",
+      "type": "object"
+    },
+    "Bom": {
+      "$defs": {
+        "BomLine": {
+          "properties": {
+            "item_key": {
+              "title": "Item Key",
+              "type": "string"
+            },
+            "description": {
+              "title": "Description",
+              "type": "string"
+            },
+            "quantity": {
+              "title": "Quantity",
+              "type": "number"
+            },
+            "unit": {
+              "title": "Unit",
+              "type": "string"
+            },
+            "unit_price": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Unit Price"
+            },
+            "extended_price": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Extended Price"
+            },
+            "price_source": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Price Source"
+            },
+            "source_ids": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "title": "Source Ids",
+              "type": "array"
+            }
+          },
+          "required": [
+            "item_key",
+            "description",
+            "quantity",
+            "unit",
+            "unit_price",
+            "extended_price",
+            "price_source"
+          ],
+          "title": "BomLine",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "sheet_id": {
+          "title": "Sheet Id",
+          "type": "string"
+        },
+        "lines": {
+          "items": {
+            "$ref": "#/$defs/BomLine"
+          },
+          "title": "Lines",
+          "type": "array"
+        },
+        "total_usd": {
+          "title": "Total Usd",
+          "type": "number"
+        },
+        "assumptions": {
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "title": "Assumptions",
+          "type": "object"
+        }
+      },
+      "required": [
+        "sheet_id",
+        "lines",
+        "total_usd",
+        "assumptions"
+      ],
+      "title": "Bom",
+      "type": "object"
+    },
+    "Category": {
+      "type": "string",
+      "enum": [
+        "ceiling_fan",
+        "light",
+        "switch",
+        "receptacle",
+        "exhaust_fan",
+        "detector",
+        "junction_box"
+      ]
+    }
+  },
+  "oneOf": [
+    {
+      "$ref": "#/$defs/SheetResult"
+    },
+    {
+      "$ref": "#/$defs/Takeoff"
+    },
+    {
+      "$ref": "#/$defs/Bom"
+    }
+  ]
+}
