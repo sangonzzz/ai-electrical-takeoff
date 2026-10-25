@@ -54,6 +54,16 @@ _LIGHT_MIN_SEGS = 10
 
 # Mount height like +42" or +84
 _MOUNT_RE = re.compile(r"^\+?\s*(\d+)\s*\"?$")
+_KEYNOTE_RE = re.compile(r"^[A-Z]\d{2}$")
+
+# Ceiling fan: J near hub + four blade loops (not door swings / cabinets).
+_FAN_J_RADIUS_PT = 3.0
+_FAN_MIN_SIDE_PT = 70.0
+_FAN_MIN_SEGS = 80
+
+# Porch post "square with X" markers — not in the legend.
+_X_MARKER_SIDE_MIN = 6.0
+_X_MARKER_SIDE_MAX = 16.0
 
 # Receptacle subtype priority (SPEC §2): first match in this order wins.
 _RECEPTACLE_PRIORITY: list[tuple[str, set[str], str]] = [
@@ -356,6 +366,127 @@ def _has_wall_tick(cand: Candidate) -> bool:
     return aspect >= 1.12
 
 
+def _touches_keynote(ctx: PageContext, cand: Candidate) -> bool:
+    """True if the candidate bbox contains/touches a keynote like A01 / B38."""
+    bx0, by0, bx1, by1 = cand.bbox
+    pad = 2.0
+    for w in ctx.words:
+        if not _KEYNOTE_RE.match(w.text.strip()):
+            continue
+        if w.size > 9.0:
+            continue
+        wx0, wy0, wx1, wy1 = w.bbox
+        # Expand word box slightly to cover the drawn tag rectangle.
+        if bx1 < wx0 - pad or bx0 > wx1 + pad or by1 < wy0 - pad or by0 > wy1 + pad:
+            continue
+        return True
+    return False
+
+
+def _is_square_x_marker(ctx: PageContext, cand: Candidate) -> bool:
+    """Porch/post square with diagonal X — not an electrical legend symbol."""
+    w = float(cand.features.get("width", 0.0))
+    h = float(cand.features.get("height", 0.0))
+    n = int(cand.features.get("n_segments", 0))
+    if not (_X_MARKER_SIDE_MIN <= w <= _X_MARKER_SIDE_MAX):
+        return False
+    if not (_X_MARKER_SIDE_MIN <= h <= _X_MARKER_SIDE_MAX):
+        return False
+    if abs(w - h) > 3.0:
+        return False
+    # Typical: 4 square edges + 2 diagonals ≈ 4–8 segments, no fill.
+    if n > 12 or int(cand.features.get("n_fills", 0)) > 0:
+        return False
+    # Look for two roughly diagonal strokes crossing the bbox.
+    segs = [ctx.black_segments[i] for i in cand.segment_ids]
+    diagonals = 0
+    for s in segs:
+        dx, dy = abs(s.x1 - s.x0), abs(s.y1 - s.y0)
+        if dx < 1.0 or dy < 1.0:
+            continue
+        slope = dy / dx
+        if 0.5 <= slope <= 2.0 and math.hypot(dx, dy) >= 0.55 * min(w, h):
+            diagonals += 1
+    return diagonals >= 2 and n <= 10
+
+
+def _has_j_near_center(ctx: PageContext, cand: Candidate) -> bool:
+    cx, cy = cand.center
+    for w in ctx.words:
+        if w.text.strip().upper() != "J":
+            continue
+        if w.size > 9.0:
+            continue
+        wx = 0.5 * (w.bbox[0] + w.bbox[2])
+        wy = 0.5 * (w.bbox[1] + w.bbox[3])
+        if math.hypot(wx - cx, wy - cy) <= _FAN_J_RADIUS_PT:
+            return True
+    return False
+
+
+def _is_ceiling_fan_candidate(ctx: PageContext, cand: Candidate) -> bool:
+    """Large near-square glyph with hub ``J`` and enough ink for four blades."""
+    w = float(cand.features.get("width", 0.0))
+    h = float(cand.features.get("height", 0.0))
+    n = int(cand.features.get("n_segments", 0))
+    if min(w, h) < _FAN_MIN_SIDE_PT:
+        return False
+    if max(w, h) / max(min(w, h), 1.0) > 1.35:
+        return False
+    if n < _FAN_MIN_SEGS:
+        return False
+    return _has_j_near_center(ctx, cand)
+
+
+def _smoke_detection(
+    ctx: PageContext,
+    cand: Candidate,
+    sheet_id: str,
+    usable: list[LegendEntry],
+) -> Detection | None:
+    """Circle with center-dot fill + SD / SD/MA token (Fix 7)."""
+    w = float(cand.features.get("width", 0.0))
+    h = float(cand.features.get("height", 0.0))
+    if not (8.0 <= w <= 20.0 and 8.0 <= h <= 20.0):
+        return None
+    if max(w, h) / max(min(w, h), 0.1) > 1.4:
+        return None
+    if int(cand.features.get("n_fills", 0)) < 1:
+        return None
+    codes = _codes_near_candidate(ctx, cand)
+    upper = {c.upper() for c in codes}
+    if "SD/MA" in upper or ("SD" in upper and "MA" in upper):
+        subtype = "smoke_co"
+    elif "SD" in upper:
+        subtype = "smoke"
+    else:
+        return None
+    entry = next(
+        (e for e in usable if e.category == Category.DETECTOR and e.subtype == subtype),
+        next((e for e in usable if e.category == Category.DETECTOR), None),
+    )
+    return Detection(
+        id=str(uuid.uuid4()),
+        sheet_id=sheet_id,
+        category=Category.DETECTOR,
+        subtype=subtype,
+        codes=codes,
+        mount_height_in=_parse_mount_height(codes),
+        center=Point(x=cand.center[0], y=cand.center[1]),
+        bbox=BBox(x0=cand.bbox[0], y0=cand.bbox[1], x1=cand.bbox[2], y1=cand.bbox[3]),
+        rotation_deg=0,
+        confidence=0.88,
+        source="geometry",
+        needs_review=False,
+        evidence=Evidence(
+            legend_entry_id=entry.id if entry else None,
+            match_score=0.88,
+            text_tokens=codes,
+            notes=["smoke_sd_token_and_dot"],
+        ),
+    )
+
+
 def _is_circle_light_shape(cand: Candidate) -> bool:
     """Near-square compact glyph made of many short arcs (recessed / circle-in-square).
 
@@ -489,14 +620,23 @@ def classify_candidates(
     for cand in candidates:
         cw = float(cand.features.get("width", 0.0))
         ch = float(cand.features.get("height", 0.0))
-        # Hard rule: a large near-square cluster is the ceiling fan (SPEC §2 #5).
-        # Escondido fan glyph is ~116 pt; require both sides ≥70 to avoid callouts.
-        if (
-            fan_entries
-            and min(cw, ch) >= 70.0
-            and max(cw, ch) / max(min(cw, ch), 1.0) < 1.35
-            and int(cand.features.get("n_segments", 0)) >= 40
-        ):
+        # Keynote tags (A01, B38, …) are never components (Fix 4).
+        if _touches_keynote(ctx, cand):
+            continue
+
+        # Porch/post square-with-X markers are not in the legend (Fix 5).
+        if _is_square_x_marker(ctx, cand):
+            continue
+
+        # Smoke / smoke_co before fan: SD glyphs can sit inside a fan's visual
+        # bbox as their own small cluster (Fix 7).
+        smoke_hit = _smoke_detection(ctx, cand, sheet_id, usable)
+        if smoke_hit is not None:
+            detections.append(smoke_hit)
+            continue
+
+        # Ceiling fan: large near-square + "J" within 3 pt of center + blade mass.
+        if fan_entries and _is_ceiling_fan_candidate(ctx, cand):
             best_entry = fan_entries[0]
             codes = _codes_near_candidate(ctx, cand)
             mount = _parse_mount_height(codes)
@@ -513,14 +653,14 @@ def classify_candidates(
                         x0=cand.bbox[0], y0=cand.bbox[1], x1=cand.bbox[2], y1=cand.bbox[3]
                     ),
                     rotation_deg=0,
-                    confidence=0.9,
+                    confidence=0.92,
                     source="geometry",
                     needs_review=False,
                     evidence=Evidence(
                         legend_entry_id=best_entry.id,
-                        match_score=0.9,
+                        match_score=0.92,
                         text_tokens=codes,
-                        notes=["size_prior_ceiling_fan"],
+                        notes=["fan_j_and_blades"],
                     ),
                 )
             )
@@ -597,6 +737,14 @@ def classify_candidates(
         codes = _codes_near_candidate(ctx, cand)
         mount = _parse_mount_height(codes)
         subtype = _refine_subtype(cat, best_entry.subtype, codes, cand, best_entry)
+
+        # Exhaust fan requires a black fill (half-disc) — Fix 5.
+        if cat == Category.EXHAUST_FAN and int(cand.features.get("n_fills", 0)) < 1:
+            continue
+
+        # Never emit ceiling_fan without J+blades (template alone is not enough).
+        if cat == Category.CEILING_FAN and not _is_ceiling_fan_candidate(ctx, cand):
+            continue
 
         needs_review = best_score < _MIN_MATCH_SCORE or (
             best_score - second < _CLOSE_SECOND_DELTA and second > _REJECT_SCORE
