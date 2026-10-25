@@ -30,6 +30,13 @@ DIR_COS_SOFT = -0.5
 STROKE_WIDTH_NOMINAL = 0.24
 STROKE_WIDTH_TOL = 0.08
 
+# Reject runs that are mostly empty space (phantom straight chords). A sample
+# along the polyline is "covered" if within COVER_RADIUS_PT of a dash segment;
+# gaps between dashes of the same run still count as covered.
+MAX_UNCOVERED_FRACTION = 0.30
+COVER_RADIUS_PT = 4.0
+COVER_SAMPLE_SPACING_PT = 2.0
+
 _THREE_WAY = frozenset({"three_way", "three_way_dimmer"})
 
 
@@ -351,11 +358,106 @@ def _snap_points_to_devices(
 ) -> list[Point]:
     """Replace polyline ends with device centers so the run is device-to-device."""
     if not points:
-        return [from_det.center, to_det.center]
+        # Never invent a bare device-to-device chord — caller must supply dash geometry.
+        return []
     out = list(points)
     out[0] = Point(x=from_det.center.x, y=from_det.center.y)
     out[-1] = Point(x=to_det.center.x, y=to_det.center.y)
     return out
+
+
+def _point_to_segment_dist(
+    px: float, py: float, x0: float, y0: float, x1: float, y1: float
+) -> float:
+    seg_len2 = (x1 - x0) ** 2 + (y1 - y0) ** 2
+    if seg_len2 < 1e-12:
+        return math.hypot(px - x0, py - y0)
+    t = ((px - x0) * (x1 - x0) + (py - y0) * (y1 - y0)) / seg_len2
+    t = max(0.0, min(1.0, t))
+    qx, qy = x0 + t * (x1 - x0), y0 + t * (y1 - y0)
+    return math.hypot(px - qx, py - qy)
+
+
+def _uncovered_fraction(
+    points: list[Point],
+    dashes: list[Segment],
+    *,
+    sample_spacing_pt: float = COVER_SAMPLE_SPACING_PT,
+    cover_radius_pt: float = COVER_RADIUS_PT,
+) -> float:
+    """Fraction of polyline length with no dash within ``cover_radius_pt``.
+
+    Samples along the polyline; a sample is covered if it lies near any dash
+    segment (including the intentional gaps between dashes of a dashed stroke).
+    """
+    total = _polyline_length_pt(points)
+    if total <= 0 or len(points) < 2:
+        return 1.0
+
+    samples: list[tuple[float, float]] = [(points[0].x, points[0].y)]
+    # Walk arc length and emit samples every sample_spacing_pt.
+    traveled = 0.0
+    next_sample_at = sample_spacing_pt
+    for i in range(1, len(points)):
+        ax, ay = points[i - 1].x, points[i - 1].y
+        bx, by = points[i].x, points[i].y
+        seg_len = math.hypot(bx - ax, by - ay)
+        if seg_len < 1e-9:
+            continue
+        while next_sample_at <= traveled + seg_len + 1e-9:
+            local = next_sample_at - traveled
+            t = local / seg_len
+            samples.append((ax + t * (bx - ax), ay + t * (by - ay)))
+            next_sample_at += sample_spacing_pt
+        traveled += seg_len
+        samples.append((bx, by))
+
+    if not samples:
+        return 1.0
+
+    uncovered = 0
+    for sx, sy in samples:
+        covered = False
+        for d in dashes:
+            if _point_to_segment_dist(sx, sy, d.x0, d.y0, d.x1, d.y1) <= cover_radius_pt:
+                covered = True
+                break
+        if not covered:
+            uncovered += 1
+    return uncovered / len(samples)
+
+
+def _subpolyline_between_devices(
+    points: list[Point], from_det: Detection, to_det: Detection
+) -> list[Point]:
+    """Extract the dash-backed sub-polyline between two devices along ``points``.
+
+    Uses path parameters so we never fall back to a bare straight chord when the
+    devices are not axis-aligned with the chain bbox (that caused phantom runs
+    like left-wall → attic).
+    """
+    t0 = _path_parameter(points, from_det)
+    t1 = _path_parameter(points, to_det)
+    if t0 is None or t1 is None:
+        return []
+    if t1 < t0:
+        t0, t1 = t1, t0
+        from_det, to_det = to_det, from_det
+
+    mid: list[Point] = []
+    traveled = 0.0
+    for i, p in enumerate(points):
+        t_at = traveled if i > 0 else 0.0
+        if i > 0:
+            traveled += math.hypot(p.x - points[i - 1].x, p.y - points[i - 1].y)
+            t_at = traveled
+        if t0 - 1e-6 <= t_at <= t1 + 1e-6:
+            mid.append(Point(x=p.x, y=p.y))
+
+    if len(mid) < 2:
+        # Not enough dash geometry between the devices — refuse the hop.
+        return []
+    return _snap_points_to_devices(mid, from_det, to_det)
 
 
 def find_wire_runs(
@@ -371,6 +473,9 @@ def find_wire_runs(
     both ends are 3-way switches; otherwise ``nm_14_2``. Vertical allowance uses
     assumptions (ceiling height, switch AFF, slack); waste is applied later in
     ``compute_bom``.
+
+    Runs where more than ``MAX_UNCOVERED_FRACTION`` of the polyline has no dash
+    nearby are rejected (prevents phantom straight chords across empty plan).
     """
     if scale_pt_per_ft <= 0:
         raise ValueError("scale_pt_per_ft must be positive")
@@ -398,23 +503,21 @@ def find_wire_runs(
             pair = tuple(sorted((from_det.id, to_det.id)))
             if pair in seen_pairs:
                 continue
-            seen_pairs.add(pair)
 
-            poly = _snap_points_to_devices(points, from_det, to_det)
             if len(along) > 2:
-                x_lo = min(from_det.center.x, to_det.center.x) - WIRE_SNAP_PT
-                x_hi = max(from_det.center.x, to_det.center.x) + WIRE_SNAP_PT
-                y_lo = min(from_det.center.y, to_det.center.y) - WIRE_SNAP_PT
-                y_hi = max(from_det.center.y, to_det.center.y) + WIRE_SNAP_PT
-                mid = [p for p in points if x_lo <= p.x <= x_hi and y_lo <= p.y <= y_hi]
-                if len(mid) >= 2:
-                    poly = _snap_points_to_devices(mid, from_det, to_det)
-                else:
-                    poly = [
-                        Point(x=from_det.center.x, y=from_det.center.y),
-                        Point(x=to_det.center.x, y=to_det.center.y),
-                    ]
+                poly = _subpolyline_between_devices(points, from_det, to_det)
+            else:
+                poly = _snap_points_to_devices(points, from_det, to_det)
 
+            if len(poly) < 2:
+                continue
+
+            uncovered = _uncovered_fraction(poly, dashes)
+            if uncovered > MAX_UNCOVERED_FRACTION:
+                # Phantom chord or bad snap: most of the path has no dashed ink.
+                continue
+
+            seen_pairs.add(pair)
             plan_pt = _polyline_length_pt(poly)
             plan_ft = plan_pt / scale_pt_per_ft
             vert = _vertical_allowance_ft(from_det, assumptions) + _vertical_allowance_ft(
@@ -422,6 +525,8 @@ def find_wire_runs(
             )
             cable = _cable_type(from_det, to_det)
             conf = min(0.95, 0.55 + 0.05 * len(chain))
+            # Lower confidence when some samples miss dashes (still under threshold).
+            conf = round(max(0.4, conf - 0.5 * uncovered), 3)
 
             runs.append(
                 WireRun(
@@ -434,7 +539,7 @@ def find_wire_runs(
                     plan_length_ft=round(plan_ft, 3),
                     vertical_allowance_ft=round(vert, 3),
                     total_length_ft=round(plan_ft + vert, 3),
-                    confidence=round(conf, 3),
+                    confidence=conf,
                     source="geometry",
                 )
             )

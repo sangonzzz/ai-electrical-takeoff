@@ -16,6 +16,8 @@ from takeoff_engine.types import PageContext, Segment
 from takeoff_engine.wires import (
     DASH_LEN_MAX_PT,
     DASH_LEN_MIN_PT,
+    MAX_UNCOVERED_FRACTION,
+    _uncovered_fraction,
     find_wire_runs,
     render_wire_debug_png,
 )
@@ -146,6 +148,91 @@ def test_dash_length_constants_match_measurement() -> None:
     # Window covers measured dash lengths (~4–10 pt median 7.1) with margin.
     assert DASH_LEN_MIN_PT <= 4.0
     assert DASH_LEN_MAX_PT >= 10.0
+    assert MAX_UNCOVERED_FRACTION == 0.30
+
+
+def test_rejects_straight_chord_without_dash_backing() -> None:
+    """Phantom wall→attic style run: two devices + no dashes under the chord."""
+    # Dashes exist elsewhere in the viewport but NOT under the device chord.
+    segs = [
+        _dash(100, 100, 108, 100),
+        _dash(112, 100, 120, 100),
+        _dash(124, 100, 132, 100),
+    ]
+    # Devices far from the dashed chain — would only connect via a bare chord
+    # if we invented one. Snap must fail OR coverage reject.
+    dets = [
+        _det("wall", Category.RECEPTACLE, "duplex", 50, 50),
+        _det("attic", Category.JUNCTION_BOX, "junction_box", 400, 400),
+    ]
+    ctx = _ctx_with_segments(segs)
+    vp = BBox(x0=0, y0=0, x1=500, y1=500)
+    runs = find_wire_runs(
+        ctx,
+        vp,
+        dets,
+        scale_pt_per_ft=18.0,
+        assumptions={"ceiling_height_ft": 8, "switch_height_in": 48, "slack_ft_per_end": 1},
+    )
+    assert runs == []
+
+
+def test_uncovered_fraction_high_on_empty_chord() -> None:
+    dashes = [_dash(0, 0, 8, 0), _dash(12, 0, 20, 0)]
+    # Long diagonal with no dashes underneath.
+    poly = [Point(x=0, y=0), Point(x=200, y=200)]
+    frac = _uncovered_fraction(poly, dashes)
+    assert frac > MAX_UNCOVERED_FRACTION
+
+
+def test_uncovered_fraction_low_along_dashed_run() -> None:
+    dashes = [
+        _dash(100, 100, 108, 100),
+        _dash(112, 100, 120, 100),
+        _dash(124, 100, 132, 100),
+        _dash(136, 100, 144, 100),
+    ]
+    poly = [Point(x=100, y=100), Point(x=144, y=100)]
+    frac = _uncovered_fraction(poly, dashes)
+    assert frac <= MAX_UNCOVERED_FRACTION
+
+
+def test_multi_device_hop_does_not_emit_bare_chord() -> None:
+    """Three devices on one chain: hops must keep dash geometry, not center chords."""
+    segs = [
+        _dash(100, 100, 108, 100),
+        _dash(112, 100, 120, 100),
+        _dash(124, 100, 132, 100),
+        _dash(136, 100, 144, 100),
+        _dash(148, 100, 156, 100),
+        _dash(160, 100, 168, 100),
+        _dash(172, 100, 180, 100),
+    ]
+    dets = [
+        _det("a", Category.SWITCH, "single_pole", 100, 100),
+        _det("mid", Category.LIGHT, "recessed", 140, 100),
+        _det("b", Category.LIGHT, "pendant", 180, 100),
+    ]
+    ctx = _ctx_with_segments(segs)
+    vp = BBox(x0=50, y0=50, x1=220, y1=150)
+    runs = find_wire_runs(
+        ctx,
+        vp,
+        dets,
+        scale_pt_per_ft=18.0,
+        assumptions={"ceiling_height_ft": 8, "switch_height_in": 48, "slack_ft_per_end": 1},
+    )
+    assert len(runs) >= 1
+    for run in runs:
+        # Every accepted run must have more than a 2-point empty chord OR sit on dashes.
+        assert _uncovered_fraction(run.points, segs) <= MAX_UNCOVERED_FRACTION
+        # No enormous jumps between consecutive polyline vertices (phantom spans).
+        for i in range(1, len(run.points)):
+            step = (
+                (run.points[i].x - run.points[i - 1].x) ** 2
+                + (run.points[i].y - run.points[i - 1].y) ** 2
+            ) ** 0.5
+            assert step < 40.0, f"unexpected long straight step {step:.1f}pt"
 
 
 @pytest.mark.skipif(not PLANS.is_file(), reason="plans PDF missing")

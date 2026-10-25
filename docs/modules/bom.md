@@ -28,10 +28,11 @@ Detector window used in code: dash length **3–12 pt**, gap **1–6 pt** (margi
 2. Build a proximity graph: edge if any endpoints are within the gap window.
 3. Connected components → candidate chains; drop tiny components (symbol fragments: need ≥3 dashes or ≥20 pt total ink).
 4. Order each component into a polyline (walk from a degree-1 end; soft direction preference when several neighbors exist).
-5. Snap chain ends to nearest active detections within `WIRE_SNAP_PT` (10 pt). Clear interior devices can split a chain into multiple hops.
-6. **Length:** polyline length / `scale_pt_per_ft` → `plan_length_ft`.
-7. **Cable type:** `nm_14_3` if both ends are `three_way` or `three_way_dimmer`; else `nm_14_2`.
-8. **Vertical allowance** (from assumptions): switch end → `(ceiling_height_ft − switch_height_in/12) + slack`; ceiling-ish end → `slack` only; wall receptacles/lights use mount height when known. Waste is **not** applied here — it is applied in `compute_bom`.
+5. Snap chain ends to nearest active detections within `WIRE_SNAP_PT` (10 pt). Clear interior devices can split a chain into multiple hops; each hop keeps the **sub-polyline of dashes** between those devices (never a bare center-to-center chord).
+6. **Dash coverage gate:** sample the polyline every 2 pt; a sample is covered if within 4 pt of a dash. Reject the run if more than **30%** of samples are uncovered (stops phantom straight lines across empty plan, e.g. left wall → attic).
+7. **Length:** polyline length / `scale_pt_per_ft` → `plan_length_ft`.
+8. **Cable type:** `nm_14_3` if both ends are `three_way` or `three_way_dimmer`; else `nm_14_2`.
+9. **Vertical allowance** (from assumptions): switch end → `(ceiling_height_ft − switch_height_in/12) + slack`; ceiling-ish end → `slack` only; wall receptacles/lights use mount height when known. Waste is **not** applied here — it is applied in `compute_bom`.
 
 ### Routing assumption (honest limit)
 
@@ -95,6 +96,7 @@ load_assumptions(path=None) -> dict
 - Fixture detection centers are hand-placed — box overlays on the real PDF may not align; use `out/debug/boxes_fixture_schematic.png` for grouping evidence.
 - Some specialty device/plate SKUs are `verified: false` pending Santiago.
 - Chains can still pick up dense symbol clusters; component size filter reduces but does not eliminate false runs.
+- Coverage gate can drop a true run if dash candidates were over-filtered (too few strokes collected).
 - 4+ gang boxes map to the 3-gang price key as the closest listed SKU.
 
 ## Debug artifacts
