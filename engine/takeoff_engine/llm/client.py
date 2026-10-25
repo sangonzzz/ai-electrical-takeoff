@@ -11,6 +11,7 @@ import json
 import logging
 import random
 import time
+from pathlib import Path
 from typing import Any, Callable, Protocol, TypeVar
 
 from pydantic import BaseModel, ValidationError
@@ -104,12 +105,56 @@ def _image_block(png_bytes: bytes, media_type: str = "image/png") -> dict[str, A
     }
 
 
+def _strictify_schema(node: Any) -> None:
+    """In-place: additionalProperties=false + required=all props (Sonnet 5.5 strict)."""
+    if not isinstance(node, dict):
+        return
+    if "properties" in node and isinstance(node["properties"], dict):
+        node["type"] = "object"
+        node["additionalProperties"] = False
+        node["required"] = list(node["properties"].keys())
+        for child in node["properties"].values():
+            _strictify_schema(child)
+    if "$defs" in node and isinstance(node["$defs"], dict):
+        for child in node["$defs"].values():
+            _strictify_schema(child)
+    if "definitions" in node and isinstance(node["definitions"], dict):
+        for child in node["definitions"].values():
+            _strictify_schema(child)
+    if "items" in node:
+        _strictify_schema(node["items"])
+    for key in ("anyOf", "oneOf", "allOf"):
+        if key in node and isinstance(node[key], list):
+            for child in node[key]:
+                _strictify_schema(child)
+
+
 def _tool_schema(response_model: type[BaseModel]) -> dict[str, Any]:
-    """JSON Schema for Anthropic tool input (draft-07 style object)."""
+    """JSON Schema for Anthropic strict tool input."""
     schema = response_model.model_json_schema()
-    # Anthropic wants a top-level object schema; strip Pydantic title noise.
     schema.pop("title", None)
+    _strictify_schema(schema)
     return schema
+
+
+def _ensure_repo_dotenv() -> None:
+    """Load repo ``.env`` into os.environ if ANTHROPIC_API_KEY is unset."""
+    import os
+
+    if os.environ.get("ANTHROPIC_API_KEY"):
+        return
+    root = Path(__file__).resolve().parents[3]
+    env_path = root / ".env"
+    if not env_path.is_file():
+        return
+    for line in env_path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, val = line.partition("=")
+        key, val = key.strip(), val.strip().strip('"').strip("'")
+        if key and key not in os.environ:
+            os.environ[key] = val
 
 
 def _extract_tool_input(message: Any) -> dict[str, Any]:
@@ -150,6 +195,8 @@ class ClaudeClient:
         usage: LlmUsage | None = None,
         sleep: Callable[[float], None] = time.sleep,
     ) -> None:
+        if settings is None:
+            _ensure_repo_dotenv()
         self.settings = settings or get_settings()
         self.usage = usage if usage is not None else LlmUsage()
         self.cache = cache if cache is not None else DiskCache()
@@ -185,7 +232,11 @@ class ClaudeClient:
         use_cache: bool = True,
         cache_extra: dict[str, Any] | None = None,
     ) -> T:
-        """Call Claude with forced tool use; validate; cache the parsed JSON."""
+        """Call Claude with structured tool use; validate; cache the parsed JSON.
+
+        Claude Sonnet 5.5 rejects forced ``tool_choice`` (``tool`` / ``any``).
+        We use ``auto`` + ``strict: true`` and instruct the model to call the tool.
+        """
         if not self.available:
             raise RuntimeError("ClaudeClient has no transport (missing API key)")
 
@@ -215,14 +266,23 @@ class ClaudeClient:
                 "name": TOOL_NAME,
                 "description": "Submit the structured result. Never include coordinates.",
                 "input_schema": _tool_schema(response_model),
+                "strict": True,
             }
         ]
-        tool_choice = {"type": "tool", "name": TOOL_NAME}
+        # Sonnet 5.5: only auto/none — never type "tool" or "any"
+        tool_choice = {"type": "auto"}
+
+        must_tool = (
+            f"You MUST call the {TOOL_NAME} tool exactly once with your full answer. "
+            "Do not reply with plain text only. Never include coordinates."
+        )
+        system_full = f"{system.rstrip()}\n\n{must_tool}"
+        user_full = f"{user_text.rstrip()}\n\n{must_tool}"
 
         user_content: list[dict[str, Any]] = []
         for img in images:
             user_content.append(_image_block(img))
-        user_content.append({"type": "text", "text": user_text})
+        user_content.append({"type": "text", "text": user_full})
 
         messages: list[dict[str, Any]] = [{"role": "user", "content": user_content}]
 
@@ -244,7 +304,7 @@ class ClaudeClient:
             message = self._create_with_retries(
                 model=model,
                 max_tokens=max_tokens,
-                system=system,
+                system=system_full,
                 messages=messages,
                 tools=tools,
                 tool_choice=tool_choice,
@@ -364,6 +424,7 @@ def make_client(
     settings: Settings | None = None,
 ) -> ClaudeClient:
     """Factory that respects ENABLE_LLM and missing keys."""
+    _ensure_repo_dotenv()
     cfg = settings or get_settings()
     if not cfg.enable_llm:
         # Force unavailable even if a key is present

@@ -44,10 +44,14 @@ invent category strings.
 
 ## Structured output and validation
 
-- Forced **tool use** (`submit_result`) with JSON Schema from Pydantic
+- **Tool use** (`submit_result`) with JSON Schema from Pydantic
   (`LegendInterpretResponse`, `AdjudicateResponse`, `BaselineVisionResponse`).
+- **Claude Sonnet 5.5:** forced `tool_choice` (`tool` / `any`) returns HTTP 400.
+  We use `tool_choice: auto` + `strict: true` on the tool, and the prompt
+  requires calling `submit_result`. Free-form maps are lists of pairs so the
+  schema can set `additionalProperties: false`.
 - Response validated with Pydantic; enums must match SPEC §2.
-- On validation failure: **one** retry that includes the error text.
+- On validation failure (or missing tool call): **one** retry that includes the error text.
 - Transport retries (max 3 attempts) only for 429, 5xx, timeouts, network /
   overloaded errors — exponential backoff with full jitter.
 - Merge for legend: LLM refines rules; category/subtype disagreements append
@@ -100,8 +104,10 @@ fill `SheetResult.llm_usage` and `warnings`.
 
 ## Known limits
 
-- Fixtures under `engine/tests/llm/fixtures/` are schema-faithful stand-ins until
-  a real Anthropic response is recorded with Santiago’s API key.
+- `legend_response.recorded.json` is a real Anthropic capture (Plan 1, 26 rows,
+  ~6.6k in / 3.7k out / ~$0.05). Synthetic `legend_response.json` stays for
+  offline merge-disagreement unit tests.
 - Adjudication batch size default is 6 crops (+ legend thumbs) per call.
 - Legend thumbnails need valid `symbol_bbox` from Agente 2; degenerate boxes are skipped.
-- Cost figures are estimates from published list prices, not invoices.
+- Cost figures use published list prices; recorded call cost is logged in fixture `_meta`.
+- Repo `.env` is loaded automatically if `ANTHROPIC_API_KEY` is unset in the process.

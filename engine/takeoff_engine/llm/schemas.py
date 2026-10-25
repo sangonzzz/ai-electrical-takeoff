@@ -2,6 +2,9 @@
 
 These are internal to the LLM layer — not part of the frozen SheetResult
 contract. Labels must still validate against SPEC section 2 enums.
+
+Maps are encoded as lists of pairs so Anthropic strict tool schemas can set
+``additionalProperties: false`` (required by Claude Sonnet 5.5).
 """
 
 from __future__ import annotations
@@ -31,13 +34,20 @@ def _subtype_ok(category: str | None, subtype: str | None) -> bool:
     return subtype in allowed
 
 
+class CodeMeaning(BaseModel):
+    """One legend code token and its meaning (list form for strict JSON Schema)."""
+
+    code: str
+    meaning: str
+
+
 class LegendEntryInterpretation(BaseModel):
     """One legend row after Claude reads the symbol + description."""
 
     entry_id: str
     category: str | None = None
     subtype: str | None = None
-    code_meanings: dict[str, str] = Field(default_factory=dict)
+    code_meanings: list[CodeMeaning] = Field(default_factory=list)
     combined: bool = False
     reason: str = Field(min_length=1, max_length=500)
 
@@ -61,6 +71,9 @@ class LegendEntryInterpretation(BaseModel):
                 f"allowed: {allowed}"
             )
         return self
+
+    def meanings_dict(self) -> dict[str, str]:
+        return {m.code: m.meaning for m in self.code_meanings}
 
 
 class LegendInterpretResponse(BaseModel):
@@ -94,19 +107,21 @@ class AdjudicateResponse(BaseModel):
     items: list[AdjudicationItem]
 
 
+class CountItem(BaseModel):
+    """One count key (category or category.subtype) for baseline vision."""
+
+    key: str
+    count: int = Field(ge=0)
+
+
 class RoomCounts(BaseModel):
     """Counts for one room in the LLM-only baseline (no geometry)."""
 
     room_name: str
-    counts: dict[str, int] = Field(default_factory=dict)
+    counts: list[CountItem] = Field(default_factory=list)
 
-    @field_validator("counts")
-    @classmethod
-    def _non_negative(cls, v: dict[str, int]) -> dict[str, int]:
-        for k, n in v.items():
-            if n < 0:
-                raise ValueError(f"count for {k!r} must be >= 0, got {n}")
-        return v
+    def counts_dict(self) -> dict[str, int]:
+        return {c.key: int(c.count) for c in self.counts if int(c.count) > 0}
 
 
 class BaselineVisionResponse(BaseModel):

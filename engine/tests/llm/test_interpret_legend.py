@@ -76,6 +76,23 @@ def test_fixture_validates_against_schema() -> None:
     assert len(parsed.entries) == 4
 
 
+def test_recorded_anthropic_fixture_validates() -> None:
+    """Real Claude response from Escondido Plan 1 (no network in CI)."""
+    path = FIXTURES / "legend_response.recorded.json"
+    assert path.is_file(), "missing recorded fixture — re-run with ANTHROPIC_API_KEY"
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    meta = raw.pop("_meta", {})
+    parsed = LegendInterpretResponse.model_validate(raw)
+    assert len(parsed.entries) >= 20
+    assert meta.get("model") == "claude-sonnet-5-5"
+    assert meta.get("prompt_version") == "legend_v1"
+    for item in parsed.entries:
+        low = item.reason.lower()
+        assert "bbox" not in low
+        assert "coordinate" not in low
+        assert "pixel" not in low
+
+
 def test_interpret_legend_merges_and_warns_on_disagreement(tmp_path: Path) -> None:
     raw = json.loads((FIXTURES / "legend_response.json").read_text(encoding="utf-8"))
     raw.pop("_meta", None)

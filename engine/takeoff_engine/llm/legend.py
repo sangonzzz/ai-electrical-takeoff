@@ -98,7 +98,18 @@ def _merge_entry(
     llm_cat = getattr(llm, "category", None)
     llm_sub = getattr(llm, "subtype", None)
     llm_combined = bool(getattr(llm, "combined", False))
-    code_meanings = getattr(llm, "code_meanings", {}) or {}
+    raw_meanings = getattr(llm, "code_meanings", None) or []
+    if hasattr(llm, "meanings_dict"):
+        code_meanings = llm.meanings_dict()  # type: ignore[union-attr]
+    elif isinstance(raw_meanings, dict):
+        code_meanings = raw_meanings
+    else:
+        code_meanings = {
+            getattr(m, "code", m.get("code") if isinstance(m, dict) else ""): (
+                getattr(m, "meaning", m.get("meaning") if isinstance(m, dict) else "")
+            )
+            for m in raw_meanings
+        }
     reason = getattr(llm, "reason", "")
 
     rules_cat = rules.category.value if rules.category else None

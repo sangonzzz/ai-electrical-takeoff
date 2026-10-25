@@ -1,0 +1,349 @@
+{
+  "entries": [
+    {
+      "entry_id": "ddce2e2b-10ce-4721-8083-2a73e0aaebf3",
+      "category": "switch",
+      "subtype": "single_pole",
+      "code_meanings": [],
+      "combined": false,
+      "reason": "Legend says 'ELECTRICAL SWITCH' with a plain $ symbol."
+    },
+    {
+      "entry_id": "6e255b98-98f5-4eed-8a14-e0e63f002621",
+      "category": "receptacle",
+      "subtype": "afci",
+      "code_meanings": [
+        {
+          "code": "AFI",
+          "meaning": "arc-fault circuit interrupter"
+        }
+      ],
+      "combined": false,
+      "reason": "Legend says 'DUPLEX OUTLET ARC-FAULT CIRCUIT INTERRUPTER' with AFI."
+    },
+    {
+      "entry_id": "43ffd164-5e1a-41da-b109-fa83bdab6eef",
+      "category": "switch",
+      "subtype": "three_way_dimmer",
+      "code_meanings": [
+        {
+          "code": "3D",
+          "meaning": "three-way dimmer"
+        }
+      ],
+      "combined": false,
+      "reason": "Legend says 'ELECTRICAL SWITCH-THREE WAY-DIMMER' with 3D."
+    },
+    {
+      "entry_id": "0d70709b-a8d7-4a10-a7ae-baac1719f7e0",
+      "category": "receptacle",
+      "subtype": "gfci_240v",
+      "code_meanings": [
+        {
+          "code": "GFI",
+          "meaning": "ground fault interrupter"
+        },
+        {
+          "code": "240V",
+          "meaning": "240 volts"
+        }
+      ],
+      "combined": false,
+      "reason": "Legend says 'DUPLEX OUTLET 240 VOLTS' labeled GFI 240V."
+    },
+    {
+      "entry_id": "39f7bbab-048c-44ac-ad87-a630f4eaf8c0",
+      "category": "switch",
+      "subtype": "vacancy_sensor",
+      "code_meanings": [
+        {
+          "code": "VS",
+          "meaning": "vacancy sensor"
+        }
+      ],
+      "combined": false,
+      "reason": "Legend says 'ELECTRICAL SWITCH-VACANCY SENSOR' with VS."
+    },
+    {
+      "entry_id": "d8231e01-0c37-45ae-a022-0ed229fdef62",
+      "category": "detector",
+      "subtype": "smoke",
+      "code_meanings": [
+        {
+          "code": "SD",
+          "meaning": "smoke detector"
+        }
+      ],
+      "combined": false,
+      "reason": "Legend says 'SMOKE DETECTOR/ALARM' with SD."
+    },
+    {
+      "entry_id": "0c753b15-d48e-45f7-8da1-a6f372a73f95",
+      "category": "receptacle",
+      "subtype": "gfci",
+      "code_meanings": [
+        {
+          "code": "GFI",
+          "meaning": "ground fault interrupter"
+        }
+      ],
+      "combined": false,
+      "reason": "Legend says 'DUPLEX OUTLET GROUND FAULT INTERRUPTER' with GFI."
+    },
+    {
+      "entry_id": "ebca8c20-2386-4e0b-ab6f-50554f3c6028",
+      "category": "detector",
+      "subtype": "smoke_co",
+      "code_meanings": [
+        {
+          "code": "SD/MA",
+          "meaning": "combination smoke/carbon monoxide alarm"
+        }
+      ],
+      "combined": true,
+      "reason": "Legend says 'COMBINATION SMOKE/CARBON MONOXIDE' with SD/MA."
+    },
+    {
+      "entry_id": "fdf4d804-8859-4d8c-a1d6-918b45c6a054",
+      "category": "switch",
+      "subtype": "dimmer",
+      "code_meanings": [
+        {
+          "code": "D",
+          "meaning": "dimmer"
+        }
+      ],
+      "combined": false,
+      "reason": "Legend says 'ELECTRICAL SWITCH-DIMMER' with D."
+    },
+    {
+      "entry_id": "1f4aa6d9-b9cc-4e6c-b2f8-70d7557e975f",
+      "category": "receptacle",
+      "subtype": "gfci_weatherproof",
+      "code_meanings": [
+        {
+          "code": "GFI",
+          "meaning": "ground fault interrupter"
+        },
+        {
+          "code": "WP",
+          "meaning": "waterproof"
+        }
+      ],
+      "combined": false,
+      "reason": "Legend says 'DUPLEX OUTLET WATERPROOF GROUND FAULT INTERRUPTER' with GFI WP."
+    },
+    {
+      "entry_id": "b095a951-c3c0-4507-a68e-7a658054027e",
+      "category": "junction_box",
+      "subtype": "junction_box",
+      "code_meanings": [
+        {
+          "code": "J",
+          "meaning": "junction box"
+        }
+      ],
+      "combined": false,
+      "reason": "Legend says 'ELECTRICAL JUNCTION BOX' with J."
+    },
+    {
+      "entry_id": "a7ba64f8-e152-4938-9a34-260606cad986",
+      "category": "switch",
+      "subtype": "fan",
+      "code_meanings": [
+        {
+          "code": "F",
+          "meaning": "fan switch"
+        }
+      ],
+      "combined": false,
+      "reason": "Legend says 'ELECTRICAL SWITCH-FAN' with F."
+    },
+    {
+      "entry_id": "ba91e5d4-c853-4140-81e8-987fb084c48a",
+      "category": "receptacle",
+      "subtype": "afci_half_hot",
+      "code_meanings": [],
+      "combined": false,
+      "reason": "Legend says 'DUPLEX OUTLET AFCI-HALF HOT'."
+    },
+    {
+      "entry_id": "ab1f3f9c-ad07-4679-bed2-c600682565da",
+      "category": "switch",
+      "subtype": "astronomical_timer",
+      "code_meanings": [
+        {
+          "code": "A",
+          "meaning": "astronomical time or motion sensor switch"
+        }
+      ],
+      "combined": false,
+      "reason": "Legend says 'ASTRONOMICAL TIME OR MOTION SENSOR SWITCH' with A."
+    },
+    {
+      "entry_id": "2a3c5e10-7803-48fc-ae2c-66d2b89b5c7c",
+      "category": "ceiling_fan",
+      "subtype": "ceiling_fan",
+      "code_meanings": [
+        {
+          "code": "J",
+          "meaning": "junction box at fan location"
+        }
+      ],
+      "combined": false,
+      "reason": "Note says 'CEILING FAN OPTIONAL (PRE WIRE FOR CEILING FAN ONLY)' with fan blades symbol on a J box."
+    },
+    {
+      "entry_id": "9046f8b1-c618-4e05-96aa-44ac1eed0862",
+      "category": "receptacle",
+      "subtype": "gfci_microwave",
+      "code_meanings": [
+        {
+          "code": "GFI",
+          "meaning": "ground fault interrupter"
+        },
+        {
+          "code": "MW",
+          "meaning": "microwave"
+        }
+      ],
+      "combined": false,
+      "reason": "Legend says 'DUPLEX OUTLET MICROWAVE GROUND FAULT INTERRUPTER' with GFI MW."
+    },
+    {
+      "entry_id": "00fbbe22-a589-40ba-8ea2-28adc0c8f1a1",
+      "category": "exhaust_fan",
+      "subtype": "bath_exhaust",
+      "code_meanings": [],
+      "combined": false,
+      "reason": "Legend says 'EXHAUST FAN'."
+    },
+    {
+      "entry_id": "062d2138-072d-4279-8685-92a27f94fab8",
+      "category": "exhaust_fan",
+      "subtype": "indoor_air_quality",
+      "code_meanings": [
+        {
+          "code": "IAQ",
+          "meaning": "indoor air quality"
+        }
+      ],
+      "combined": false,
+      "reason": "Legend says 'INDOOR AIR QUALITY FAN' with IAQ."
+    },
+    {
+      "entry_id": "bd7f849d-59d2-46ef-bd4a-532f7a352d09",
+      "category": "receptacle",
+      "subtype": "gfci_dishwasher",
+      "code_meanings": [
+        {
+          "code": "GFI",
+          "meaning": "ground fault interrupter"
+        },
+        {
+          "code": "DW",
+          "meaning": "dish washer"
+        }
+      ],
+      "combined": false,
+      "reason": "Legend says 'DUPLEX OUTLET DISH WASHER GROUND FAULT INTERRUPTER' with GFI DW."
+    },
+    {
+      "entry_id": "808412b5-ddb7-4fbe-ad5f-20adf84140c5",
+      "category": "light",
+      "subtype": "pendant",
+      "code_meanings": [
+        {
+          "code": "P",
+          "meaning": "pendant"
+        }
+      ],
+      "combined": false,
+      "reason": "Legend says 'PENDANT LIGHT HIGH-EFFICACY' with P."
+    },
+    {
+      "entry_id": "85c3b9af-edd0-4359-bb46-eef6aae180ae",
+      "category": "receptacle",
+      "subtype": "range_hood",
+      "code_meanings": [
+        {
+          "code": "H",
+          "meaning": "range hood"
+        }
+      ],
+      "combined": false,
+      "reason": "Legend says 'DUPLEX OUTLET RANGE HOOD' with H."
+    },
+    {
+      "entry_id": "7a7b0b02-8cf2-415b-b90e-4768d610082a",
+      "category": "light",
+      "subtype": "wall",
+      "code_meanings": [],
+      "combined": false,
+      "reason": "Legend says 'WALL MOUNTED HIGH-EFFICACY LIGHT'."
+    },
+    {
+      "entry_id": "c2edfca5-74cd-460d-ab57-686148f0c6d8",
+      "category": "light",
+      "subtype": "exterior_wall",
+      "code_meanings": [
+        {
+          "code": "EXT",
+          "meaning": "exterior"
+        },
+        {
+          "code": "+84",
+          "meaning": "mounting height 84 inches"
+        }
+      ],
+      "combined": false,
+      "reason": "Legend says 'EXTERIOR WALL MOUNTED HIGH-EFFICACY LIGHT W/ PHOTO SENSOR' with EXT +84."
+    },
+    {
+      "entry_id": "68f448fd-7d5d-42e6-9f7a-e9c38c8fdc9e",
+      "category": "light",
+      "subtype": "recessed",
+      "code_meanings": [],
+      "combined": false,
+      "reason": "Legend says 'RECESSED HIGH-EFFICACY DOWNLIGHT'."
+    },
+    {
+      "entry_id": "53290e43-f565-431c-86b3-9fbdf6a0d9f7",
+      "category": "receptacle",
+      "subtype": "fan_coil_dedicated",
+      "code_meanings": [
+        {
+          "code": "FC",
+          "meaning": "fan coil unit"
+        }
+      ],
+      "combined": false,
+      "reason": "Legend says 'FAN COIL UNIT +80\" ... PROVIDE DEDICATED OUTLET' with FC."
+    },
+    {
+      "entry_id": "c1d8f281-1b26-4432-9945-3539ed5710f0",
+      "category": "light",
+      "subtype": "recessed_vapor_proof",
+      "code_meanings": [
+        {
+          "code": "VP",
+          "meaning": "vapor proof"
+        }
+      ],
+      "combined": false,
+      "reason": "Legend says 'RECESSED HIGH-EFFICACY DOWNLIGHT-VAPOR PROOF' with VP."
+    }
+  ],
+  "_meta": {
+    "note": "Real Anthropic recording: interpret_legend on Escondido Plan 1 electrical legend.",
+    "prompt_version": "legend_v1",
+    "model": "claude-sonnet-5-5",
+    "page_index": 0,
+    "entry_count_in": 26,
+    "entry_count_out": 26,
+    "input_tokens": 6619,
+    "output_tokens": 3690,
+    "cost_usd": 0.050138,
+    "recorded_at": "2026-10-25"
+  }
+}

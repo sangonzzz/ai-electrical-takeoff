@@ -72,7 +72,7 @@ def baseline_vision_takeoff(
             logger.warning(msg)
             warn_sink.append(msg)
             continue
-        result[name] = {k: int(v) for k, v in room.counts.items() if int(v) > 0}
+        result[name] = room.counts_dict()
 
     for name in room_names:
         if name not in {r.room_name for r in response.rooms}:

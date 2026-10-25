@@ -2,32 +2,32 @@
   "rooms": [
     {
       "room_name": "LIVING",
-      "counts": {
-        "light": 4,
-        "light.recessed": 4,
-        "ceiling_fan": 1,
-        "ceiling_fan.ceiling_fan": 1,
-        "receptacle": 3,
-        "receptacle.duplex": 2,
-        "receptacle.afci": 1
-      }
+      "counts": [
+        {"key": "light", "count": 4},
+        {"key": "light.recessed", "count": 4},
+        {"key": "ceiling_fan", "count": 1},
+        {"key": "ceiling_fan.ceiling_fan", "count": 1},
+        {"key": "receptacle", "count": 3},
+        {"key": "receptacle.duplex", "count": 2},
+        {"key": "receptacle.afci", "count": 1}
+      ]
     },
     {
       "room_name": "BATH",
-      "counts": {
-        "exhaust_fan": 1,
-        "exhaust_fan.bath_exhaust": 1,
-        "light": 2,
-        "switch": 2,
-        "switch.single_pole": 2,
-        "receptacle": 1,
-        "receptacle.gfci": 1
-      }
+      "counts": [
+        {"key": "exhaust_fan", "count": 1},
+        {"key": "exhaust_fan.bath_exhaust", "count": 1},
+        {"key": "light", "count": 2},
+        {"key": "switch", "count": 2},
+        {"key": "switch.single_pole", "count": 2},
+        {"key": "receptacle", "count": 1},
+        {"key": "receptacle.gfci", "count": 1}
+      ]
     }
   ],
   "notes": "BASELINE ONLY — approximate visual counts for hybrid vs LLM-alone comparison.",
   "_meta": {
-    "note": "Fixture shaped like baseline_v1 tool output.",
+    "note": "Fixture shaped like baseline_v1 tool output (list counts for strict schema).",
     "prompt_version": "baseline_v1",
     "model": "claude-sonnet-5-5"
   }
