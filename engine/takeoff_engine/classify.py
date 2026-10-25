@@ -1,11 +1,353 @@
-"""Legend template matching and code-token subtype refinement (owned by Agente 2)."""
+"""Legend template matching and code-token subtype refinement (owned by Agente 2).
+
+Rasterize each candidate and each legend template at 1:1 scale on a small
+canvas, try rotations 0/90/180/270, score with dilated-mask IoU, then refine
+subtype from nearby plan text (SPEC §2).
+"""
 
 from __future__ import annotations
 
+import math
+import re
+import uuid
 from typing import Any
 
-from takeoff_engine.models import Detection, LegendEntry
-from takeoff_engine.types import Candidate, PageContext
+import cv2
+import numpy as np
+
+from takeoff_engine.config import CODE_TEXT_RADIUS_PT
+from takeoff_engine.legend import LegendTemplate
+from takeoff_engine.models import (
+    BBox,
+    Category,
+    Detection,
+    Evidence,
+    LegendEntry,
+    Point,
+    SUBTYPES,
+)
+from takeoff_engine.types import Candidate, FillPath, PageContext, Segment, Word
+
+# Raster matching
+_PX_PER_PT = 2.0  # 2 px per PDF point — enough for ~8 pt circles
+_PAD_PT = 3.0
+_DILATE_K = 2  # morphological dilate radius in px before IoU
+_MIN_MATCH_SCORE = 0.22  # below → needs_review
+_CLOSE_SECOND_DELTA = 0.05  # top-two within this → needs_review
+_REJECT_SCORE = 0.16  # below → drop as not-a-symbol (noise)
+_MIN_TEMPLATE_SIDE_PT = 2.5  # skip broken legend glyphs (e.g. FC sliver)
+
+# Mount height like +42" or +84
+_MOUNT_RE = re.compile(r"^\+?\s*(\d+)\s*\"?$")
+
+# Receptacle subtype priority (SPEC §2): first match in this order wins.
+_RECEPTACLE_PRIORITY: list[tuple[str, set[str], str]] = [
+    # (subtype, required code tokens (any), )
+    ("gfci_240v", {"240V"}, "codes"),
+    ("240v", {"240V"}, "codes"),
+    ("gfci_microwave", {"MW"}, "codes"),
+    ("gfci_dishwasher", {"DW"}, "codes"),
+    ("range_hood", {"H"}, "codes"),
+    ("fan_coil_dedicated", {"FC"}, "codes"),
+    ("gfci_weatherproof", {"WP"}, "codes"),
+    ("gfci", {"GFI", "GFCI"}, "codes"),
+    ("afci", {"AFI", "AFCI"}, "codes"),
+]
+
+_SWITCH_CODE_MAP = {
+    "3D": "three_way_dimmer",
+    "3": "three_way",
+    "VS": "vacancy_sensor",
+    "D": "dimmer",
+    "F": "fan",
+    "A": "astronomical_timer",
+}
+
+
+def _seg_points(seg: Segment) -> tuple[tuple[float, float], tuple[float, float]]:
+    return (seg.x0, seg.y0), (seg.x1, seg.y1)
+
+
+def _rasterize_primitives(
+    segments: list[Segment],
+    fills: list[FillPath],
+    origin: tuple[float, float],
+    size_pt: tuple[float, float],
+    rotation_deg: int = 0,
+) -> np.ndarray:
+    """Draw strokes/fills into a binary mask. ``origin`` is top-left of the canvas in page space."""
+    w_pt, h_pt = size_pt
+    w = max(1, int(math.ceil(w_pt * _PX_PER_PT)))
+    h = max(1, int(math.ceil(h_pt * _PX_PER_PT)))
+    canvas = np.zeros((h, w), dtype=np.uint8)
+    ox, oy = origin
+
+    def tx(x: float, y: float) -> tuple[int, int]:
+        # Translate to local, then rotate about canvas center.
+        lx = x - ox
+        ly = y - oy
+        cx, cy = w_pt / 2.0, h_pt / 2.0
+        lx -= cx
+        ly -= cy
+        if rotation_deg == 90:
+            lx, ly = -ly, lx
+        elif rotation_deg == 180:
+            lx, ly = -lx, -ly
+        elif rotation_deg == 270:
+            lx, ly = ly, -lx
+        lx += cx
+        ly += cy
+        return int(round(lx * _PX_PER_PT)), int(round(ly * _PX_PER_PT))
+
+    for seg in segments:
+        p0, p1 = _seg_points(seg)
+        a = tx(*p0)
+        b = tx(*p1)
+        cv2.line(canvas, a, b, 255, thickness=max(1, int(round(max(seg.width, 0.24) * _PX_PER_PT))))
+
+    for fill in fills:
+        if fill.points and len(fill.points) >= 3:
+            pts = np.array([tx(x, y) for x, y in fill.points], dtype=np.int32)
+            cv2.fillPoly(canvas, [pts], 255)
+        else:
+            a = tx(fill.x0, fill.y0)
+            b = tx(fill.x1, fill.y1)
+            cv2.rectangle(canvas, a, b, 255, thickness=-1)
+
+    return canvas
+
+
+def _dilate(mask: np.ndarray) -> np.ndarray:
+    if _DILATE_K <= 0:
+        return mask
+    k = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * _DILATE_K + 1, 2 * _DILATE_K + 1))
+    return cv2.dilate(mask, k)
+
+
+def _iou(a: np.ndarray, b: np.ndarray) -> float:
+    # Align to common shape (pad smaller).
+    h = max(a.shape[0], b.shape[0])
+    w = max(a.shape[1], b.shape[1])
+    aa = np.zeros((h, w), dtype=np.uint8)
+    bb = np.zeros((h, w), dtype=np.uint8)
+    aa[: a.shape[0], : a.shape[1]] = a
+    bb[: b.shape[0], : b.shape[1]] = b
+    # Center-align
+    if a.shape != (h, w):
+        aa = np.zeros((h, w), dtype=np.uint8)
+        y0 = (h - a.shape[0]) // 2
+        x0 = (w - a.shape[1]) // 2
+        aa[y0 : y0 + a.shape[0], x0 : x0 + a.shape[1]] = a
+    if b.shape != (h, w):
+        bb = np.zeros((h, w), dtype=np.uint8)
+        y0 = (h - b.shape[0]) // 2
+        x0 = (w - b.shape[1]) // 2
+        bb[y0 : y0 + b.shape[0], x0 : x0 + b.shape[1]] = b
+    inter = np.logical_and(aa > 0, bb > 0).sum()
+    union = np.logical_or(aa > 0, bb > 0).sum()
+    if union == 0:
+        return 0.0
+    return float(inter) / float(union)
+
+
+def _candidate_primitives(
+    ctx: PageContext, cand: Candidate
+) -> tuple[list[Segment], list[FillPath]]:
+    segs = [ctx.black_segments[i] for i in cand.segment_ids]
+    fills = [ctx.black_fills[i] for i in cand.fill_ids]
+    return segs, fills
+
+
+def _match_score(
+    ctx: PageContext,
+    cand: Candidate,
+    tmpl: LegendTemplate,
+) -> tuple[float, int]:
+    """Return (best_iou, rotation_deg) of candidate vs template."""
+    c_segs, c_fills = _candidate_primitives(ctx, cand)
+    if not c_segs and not c_fills and not tmpl.segments and not tmpl.fills:
+        return 0.0, 0
+
+    # Common canvas: max of the two bboxes + pad (same scale, no rescaling).
+    cw = (cand.bbox[2] - cand.bbox[0]) + 2 * _PAD_PT
+    ch = (cand.bbox[3] - cand.bbox[1]) + 2 * _PAD_PT
+    tw = (tmpl.bbox[2] - tmpl.bbox[0]) + 2 * _PAD_PT
+    th = (tmpl.bbox[3] - tmpl.bbox[1]) + 2 * _PAD_PT
+    # Use candidate size as base; template is drawn into same size (symbols are
+    # same physical size on plan and legend).
+    size = (max(cw, tw), max(ch, th))
+
+    c_origin = (cand.bbox[0] - _PAD_PT, cand.bbox[1] - _PAD_PT)
+    t_origin = (tmpl.bbox[0] - _PAD_PT, tmpl.bbox[1] - _PAD_PT)
+
+    cand_mask = _dilate(_rasterize_primitives(c_segs, c_fills, c_origin, size, 0))
+
+    cw = cand.bbox[2] - cand.bbox[0]
+    ch = cand.bbox[3] - cand.bbox[1]
+    tw = tmpl.bbox[2] - tmpl.bbox[0]
+    th = tmpl.bbox[3] - tmpl.bbox[1]
+    if min(tw, th) < _MIN_TEMPLATE_SIDE_PT:
+        return 0.0, 0
+
+    # Size gate on both area and max-side (fan must not match a switch glyph).
+    c_area = max(1.0, cw * ch)
+    t_area = max(1.0, tw * th)
+    area_ratio = max(c_area / t_area, t_area / c_area)
+    side_ratio = max(max(cw, ch) / max(tw, th), max(tw, th) / max(cw, ch))
+    if area_ratio > 4.0 or side_ratio > 3.0:
+        return 0.0, 0
+
+    best = 0.0
+    best_rot = 0
+    for rot in (0, 90, 180, 270):
+        t_mask = _dilate(
+            _rasterize_primitives(tmpl.segments, tmpl.fills, t_origin, size, rot)
+        )
+        score = _iou(cand_mask, t_mask)
+        score *= 1.0 / (1.0 + 0.25 * max(0.0, area_ratio - 1.3))
+        if score > best:
+            best = score
+            best_rot = rot
+    return best, best_rot
+
+
+def _codes_near_candidate(ctx: PageContext, cand: Candidate) -> list[str]:
+    """Device codes within CODE_TEXT_RADIUS_PT (handles rotated text via word bbox)."""
+    cx, cy = cand.center
+    tokens: list[tuple[float, str]] = []
+    for w in ctx.words:
+        if w.size > 9.0:
+            continue
+        # Skip room labels (bold ~9.5) and watermark.
+        if w.is_bold and w.size >= 9.0:
+            continue
+        wx = 0.5 * (w.bbox[0] + w.bbox[2])
+        wy = 0.5 * (w.bbox[1] + w.bbox[3])
+        dist = math.hypot(wx - cx, wy - cy)
+        # Also allow distance to bbox edge for wall devices with codes beside them.
+        bx0, by0, bx1, by1 = cand.bbox
+        dx = max(0.0, max(bx0 - wx, wx - bx1))
+        dy = max(0.0, max(by0 - wy, wy - by1))
+        edge = math.hypot(dx, dy)
+        d = min(dist, edge)
+        if d > CODE_TEXT_RADIUS_PT:
+            continue
+        raw = w.text.strip()
+        if not raw or len(raw) > 8:
+            continue
+        if re.fullmatch(r"[A-Z]{1,2}\d{2}", raw):  # keynotes
+            continue
+        tokens.append((d, raw))
+    tokens.sort()
+    out: list[str] = []
+    seen: set[str] = set()
+    for _, t in tokens:
+        if t not in seen:
+            seen.add(t)
+            out.append(t)
+    return out
+
+
+def _parse_mount_height(codes: list[str]) -> float | None:
+    for c in codes:
+        m = _MOUNT_RE.match(c.replace(" ", ""))
+        if m:
+            return float(m.group(1))
+        # +42" sometimes split
+        m2 = re.match(r"^\+(\d+)", c)
+        if m2:
+            return float(m2.group(1))
+    return None
+
+
+def _refine_subtype(
+    category: Category,
+    base_subtype: str | None,
+    codes: list[str],
+    cand: Candidate,
+    entry: LegendEntry,
+) -> str:
+    """Apply SPEC §2 code priority on top of the legend row's subtype."""
+    upper = {c.upper() for c in codes}
+    # Mount-like tokens are not type codes.
+    type_codes = {c for c in upper if not re.match(r"^\+?\d", c)}
+
+    if category == Category.SWITCH:
+        for code, subtype in _SWITCH_CODE_MAP.items():
+            if code in type_codes:
+                return subtype
+        return base_subtype or "single_pole"
+
+    if category == Category.RECEPTACLE:
+        # Half-hot: legend says so, or candidate has significant black fill.
+        if entry.subtype == "afci_half_hot" or (
+            cand.features.get("n_fills", 0) > 0 and "HALF" in entry.description.upper()
+        ):
+            if cand.features.get("n_fills", 0) > 0 or entry.subtype == "afci_half_hot":
+                # Still allow 240V etc. to win over half-hot per priority list —
+                # but half-hot is after WP in SPEC. Check priority list first.
+                pass
+        for subtype, need, _ in _RECEPTACLE_PRIORITY:
+            if need & type_codes:
+                return subtype
+        if entry.subtype == "afci_half_hot" or (
+            cand.features.get("n_fills", 0) > 0
+            and "HALF" in (entry.description or "").upper()
+        ):
+            return "afci_half_hot"
+        if entry.subtype and entry.subtype in SUBTYPES["receptacle"]:
+            return entry.subtype
+        return "duplex"
+
+    if category == Category.LIGHT:
+        if "VP" in type_codes:
+            return "recessed_vapor_proof"
+        if "EXT" in type_codes or any(c.startswith("+") for c in codes):
+            # Exterior often has +84 EXT
+            if "EXT" in type_codes:
+                return "exterior_wall"
+        return base_subtype or "recessed"
+
+    if category == Category.DETECTOR:
+        if "SD/MA" in type_codes or "MA" in type_codes:
+            return "smoke_co"
+        return base_subtype or "smoke"
+
+    if category == Category.EXHAUST_FAN:
+        if "IAQ" in type_codes:
+            return "indoor_air_quality"
+        return base_subtype or "bath_exhaust"
+
+    if category == Category.CEILING_FAN:
+        return "ceiling_fan"
+
+    if category == Category.JUNCTION_BOX:
+        return "junction_box"
+
+    return base_subtype or SUBTYPES[category.value][0]
+
+
+def _shape_boost(cand: Candidate, entry: LegendEntry) -> float:
+    """Small additive prior from coarse shape vs legend category."""
+    w = cand.features.get("width", 0.0)
+    h = cand.features.get("height", 0.0)
+    fills = cand.features.get("n_fills", 0)
+    n = cand.features.get("n_segments", 0)
+    boost = 0.0
+    if entry.category == Category.CEILING_FAN:
+        if max(w, h) > 60 and abs(w - h) < 30:
+            boost += 0.12
+    if entry.category == Category.SWITCH:
+        if w < 20 and h < 25 and n >= 8:
+            boost += 0.05
+    if entry.category == Category.RECEPTACLE:
+        if 6 < w < 20 and 8 < h < 22:
+            boost += 0.04
+    if entry.category == Category.EXHAUST_FAN and fills > 0:
+        boost += 0.06
+    if entry.category == Category.DETECTOR and fills > 0:
+        boost += 0.05
+    return boost
 
 
 def classify_candidates(
@@ -19,4 +361,148 @@ def classify_candidates(
 
     Low-confidence or close top-two scores set ``needs_review=True``.
     """
-    raise NotImplementedError("Agente 2: implement classify_candidates")
+    usable = [e for e in legend if e.category is not None and e.id in templates]
+    if not usable:
+        return []
+
+    fan_entries = [e for e in usable if e.category == Category.CEILING_FAN]
+    detections: list[Detection] = []
+
+    for cand in candidates:
+        cw = float(cand.features.get("width", 0.0))
+        ch = float(cand.features.get("height", 0.0))
+        # Hard rule: a large near-square cluster is the ceiling fan (SPEC §2 #5).
+        # Escondido fan glyph is ~116 pt; require both sides ≥70 to avoid callouts.
+        if (
+            fan_entries
+            and min(cw, ch) >= 70.0
+            and max(cw, ch) / max(min(cw, ch), 1.0) < 1.35
+            and int(cand.features.get("n_segments", 0)) >= 40
+        ):
+            best_entry = fan_entries[0]
+            best_score, best_rot = 0.85, 0
+            second = 0.0
+            codes = _codes_near_candidate(ctx, cand)
+            mount = _parse_mount_height(codes)
+            detections.append(
+                Detection(
+                    id=str(uuid.uuid4()),
+                    sheet_id=sheet_id,
+                    category=Category.CEILING_FAN,
+                    subtype="ceiling_fan",
+                    codes=[c for c in codes if c.upper() != "J"],
+                    mount_height_in=mount,
+                    center=Point(x=cand.center[0], y=cand.center[1]),
+                    bbox=BBox(
+                        x0=cand.bbox[0], y0=cand.bbox[1], x1=cand.bbox[2], y1=cand.bbox[3]
+                    ),
+                    rotation_deg=0,
+                    confidence=0.9,
+                    source="geometry",
+                    needs_review=False,
+                    evidence=Evidence(
+                        legend_entry_id=best_entry.id,
+                        match_score=0.9,
+                        text_tokens=codes,
+                        notes=["size_prior_ceiling_fan"],
+                    ),
+                )
+            )
+            continue
+
+        scores: list[tuple[float, int, LegendEntry]] = []
+        for entry in usable:
+            tmpl = templates[entry.id]
+            if not isinstance(tmpl, LegendTemplate):
+                continue
+            score, rot = _match_score(ctx, cand, tmpl)
+            score += _shape_boost(cand, entry)
+            scores.append((score, rot, entry))
+
+        if not scores:
+            continue
+        scores.sort(key=lambda t: t[0], reverse=True)
+        best_score, best_rot, best_entry = scores[0]
+        second = scores[1][0] if len(scores) > 1 else 0.0
+
+        if best_score < _REJECT_SCORE:
+            continue
+
+        codes = _codes_near_candidate(ctx, cand)
+        mount = _parse_mount_height(codes)
+        assert best_entry.category is not None
+        subtype = _refine_subtype(
+            best_entry.category, best_entry.subtype, codes, cand, best_entry
+        )
+
+        needs_review = best_score < _MIN_MATCH_SCORE or (
+            best_score - second < _CLOSE_SECOND_DELTA and second > _REJECT_SCORE
+        )
+        confidence = float(max(0.0, min(1.0, best_score)))
+
+        detections.append(
+            Detection(
+                id=str(uuid.uuid4()),
+                sheet_id=sheet_id,
+                category=best_entry.category,
+                subtype=subtype,
+                codes=codes,
+                mount_height_in=mount,
+                center=Point(x=cand.center[0], y=cand.center[1]),
+                bbox=BBox(x0=cand.bbox[0], y0=cand.bbox[1], x1=cand.bbox[2], y1=cand.bbox[3]),
+                rotation_deg=best_rot if best_rot in (0, 90, 180, 270) else 0,  # type: ignore[arg-type]
+                confidence=confidence,
+                source="geometry",
+                needs_review=needs_review,
+                evidence=Evidence(
+                    legend_entry_id=best_entry.id,
+                    match_score=best_score,
+                    text_tokens=codes,
+                    notes=[
+                        f"second_best={second:.3f}",
+                        f"cand_segs={cand.features.get('n_segments')}",
+                    ],
+                ),
+            )
+        )
+
+    # Spec assumption: fan with central J is one ceiling_fan — drop junction_box
+    # detections whose center falls inside a ceiling_fan bbox.
+    fan_boxes = [d.bbox for d in detections if d.category == Category.CEILING_FAN]
+    if fan_boxes:
+        filtered: list[Detection] = []
+        for d in detections:
+            if d.category == Category.JUNCTION_BOX:
+                inside_fan = any(
+                    fb.x0 <= d.center.x <= fb.x1 and fb.y0 <= d.center.y <= fb.y1
+                    for fb in fan_boxes
+                )
+                if inside_fan:
+                    continue
+            filtered.append(d)
+        detections = filtered
+
+    detections = _nms_detections(detections, dist_pt=8.0)
+    return detections
+
+
+def _nms_detections(dets: list[Detection], dist_pt: float) -> list[Detection]:
+    """Keep highest-confidence detection when same-category centers are close.
+
+    Fragmented ``$`` bars and double-stroked receptacles otherwise produce
+    duplicate counts that reviewers would reject.
+    """
+    dets = sorted(dets, key=lambda d: d.confidence, reverse=True)
+    kept: list[Detection] = []
+    for d in dets:
+        suppressed = False
+        for k in kept:
+            if k.category != d.category:
+                continue
+            if math.hypot(k.center.x - d.center.x, k.center.y - d.center.y) < dist_pt:
+                suppressed = True
+                break
+        if not suppressed:
+            kept.append(d)
+    kept.sort(key=lambda d: (d.bbox.y0, d.bbox.x0))
+    return kept
