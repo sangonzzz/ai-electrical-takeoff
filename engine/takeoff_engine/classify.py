@@ -412,6 +412,20 @@ def _is_square_x_marker(ctx: PageContext, cand: Candidate) -> bool:
     return diagonals >= 2 and n <= 10
 
 
+def _j_words(ctx: PageContext) -> list[tuple[float, float, Word]]:
+    """Small plan ``J`` tokens (junction / fan hub), not legend-sized text."""
+    out: list[tuple[float, float, Word]] = []
+    for w in ctx.words:
+        if w.text.strip().upper() != "J":
+            continue
+        if w.size > 9.0:
+            continue
+        wx = 0.5 * (w.bbox[0] + w.bbox[2])
+        wy = 0.5 * (w.bbox[1] + w.bbox[3])
+        out.append((wx, wy, w))
+    return out
+
+
 def _j_hub_ok(ctx: PageContext, cand: Candidate) -> bool:
     """True if a small ``J`` sits on the fan hub (near center or in the middle third)."""
     cx, cy = cand.center
@@ -420,16 +434,49 @@ def _j_hub_ok(ctx: PageContext, cand: Candidate) -> bool:
     mid_x1 = x0 + 0.7 * (x1 - x0)
     mid_y0 = y0 + 0.3 * (y1 - y0)
     mid_y1 = y0 + 0.7 * (y1 - y0)
-    for w in ctx.words:
-        if w.text.strip().upper() != "J":
-            continue
-        if w.size > 9.0:
-            continue
-        wx = 0.5 * (w.bbox[0] + w.bbox[2])
-        wy = 0.5 * (w.bbox[1] + w.bbox[3])
+    for wx, wy, _ in _j_words(ctx):
         if math.hypot(wx - cx, wy - cy) <= _FAN_J_RADIUS_PT:
             return True
         if mid_x0 <= wx <= mid_x1 and mid_y0 <= wy <= mid_y1:
+            return True
+    return False
+
+
+def _is_junction_circle(cand: Candidate) -> bool:
+    """Standalone junction glyph: small near-round circle (not a fan hub blob)."""
+    w = float(cand.features.get("width", 0.0))
+    h = float(cand.features.get("height", 0.0))
+    n = int(cand.features.get("n_segments", 0))
+    if not (6.0 <= w <= 18.0 and 6.0 <= h <= 18.0):
+        return False
+    if max(w, h) / max(min(w, h), 0.1) > 1.35:
+        return False
+    # Circle polyline ≈ 8–24 short arcs; fan hubs are huge.
+    if n < 6 or n > 40:
+        return False
+    if int(cand.features.get("n_fills", 0)) > 0:
+        return False
+    return True
+
+
+def _is_standalone_junction(
+    ctx: PageContext, cand: Candidate, fan_boxes: list[BBox]
+) -> bool:
+    """Junction box = small circle with ``J`` inside, not a ceiling-fan hub (R2 Fix 1)."""
+    if not _is_junction_circle(cand):
+        return False
+    cx, cy = cand.center
+    # Reject anything sitting in a fan bbox (hub J belongs to the fan).
+    for fb in fan_boxes:
+        if fb.x0 <= cx <= fb.x1 and fb.y0 <= cy <= fb.y1:
+            return False
+    for wx, wy, _ in _j_words(ctx):
+        if math.hypot(wx - cx, wy - cy) > 6.0:
+            continue
+        # J must sit inside the circle, not merely nearby wall text.
+        if cand.bbox[0] - 1.0 <= wx <= cand.bbox[2] + 1.0 and cand.bbox[
+            1
+        ] - 1.0 <= wy <= cand.bbox[3] + 1.0:
             return True
     return False
 
@@ -757,6 +804,11 @@ def classify_candidates(
         if cat == Category.CEILING_FAN and not _is_ceiling_fan_candidate(ctx, cand):
             continue
 
+        # Junction boxes are never template-only (R2 Fix 1) — see
+        # ``_junctions_from_j_circles`` after fans are known.
+        if cat == Category.JUNCTION_BOX:
+            continue
+
         # Template-only "detector" without SD / SD/MA is almost always a keynote
         # or a mis-hit — require the token (Fix 4 / Fix 7).
         if cat == Category.DETECTOR:
@@ -799,21 +851,10 @@ def classify_candidates(
             )
         )
 
-    # Spec assumption: fan with central J is one ceiling_fan — drop junction_box
-    # detections whose center falls inside a ceiling_fan bbox.
     fan_boxes = [d.bbox for d in detections if d.category == Category.CEILING_FAN]
-    if fan_boxes:
-        filtered: list[Detection] = []
-        for d in detections:
-            if d.category == Category.JUNCTION_BOX:
-                inside_fan = any(
-                    fb.x0 <= d.center.x <= fb.x1 and fb.y0 <= d.center.y <= fb.y1
-                    for fb in fan_boxes
-                )
-                if inside_fan:
-                    continue
-            filtered.append(d)
-        detections = filtered
+    detections.extend(
+        _junctions_from_j_circles(ctx, candidates, fan_boxes, sheet_id, usable)
+    )
 
     # SD / SD/MA tokens that were absorbed into a fan cluster still need a
     # detector mark (Fix 7 — bedroom SD next to the fan hub).
@@ -821,6 +862,49 @@ def classify_candidates(
 
     detections = _nms_detections(detections, dist_pt=8.0)
     return detections
+
+
+def _junctions_from_j_circles(
+    ctx: PageContext,
+    candidates: list[Candidate],
+    fan_boxes: list[BBox],
+    sheet_id: str,
+    usable: list[LegendEntry],
+) -> list[Detection]:
+    """Emit junction_box only for small circles that contain a ``J`` (not fan hubs)."""
+    entry = next(
+        (e for e in usable if e.category == Category.JUNCTION_BOX),
+        None,
+    )
+    out: list[Detection] = []
+    for cand in candidates:
+        if not _is_standalone_junction(ctx, cand, fan_boxes):
+            continue
+        codes = _codes_near_candidate(ctx, cand)
+        out.append(
+            Detection(
+                id=str(uuid.uuid4()),
+                sheet_id=sheet_id,
+                category=Category.JUNCTION_BOX,
+                subtype="junction_box",
+                codes=[c for c in codes if c.upper() != "J"],
+                center=Point(x=cand.center[0], y=cand.center[1]),
+                bbox=BBox(
+                    x0=cand.bbox[0], y0=cand.bbox[1], x1=cand.bbox[2], y1=cand.bbox[3]
+                ),
+                rotation_deg=0,
+                confidence=0.9,
+                source="geometry",
+                needs_review=False,
+                evidence=Evidence(
+                    legend_entry_id=entry.id if entry else None,
+                    match_score=0.9,
+                    text_tokens=codes,
+                    notes=["j_circle_not_fan_hub"],
+                ),
+            )
+        )
+    return out
 
 
 def _smoke_from_orphan_tokens(
