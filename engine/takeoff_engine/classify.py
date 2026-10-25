@@ -862,6 +862,11 @@ def classify_candidates(
         _detectors_from_sd_tokens(ctx, candidates, detections, sheet_id, usable)
     )
 
+    # Text-anchored exterior lights: EXT → exterior_wall glyph beside it (R2 Fix 3).
+    detections.extend(
+        _exterior_from_ext_tokens(ctx, candidates, detections, sheet_id, usable)
+    )
+
     detections = _nms_detections(detections, dist_pt=8.0)
     return detections
 
@@ -1009,6 +1014,107 @@ def _detectors_from_sd_tokens(
                     match_score=0.88,
                     text_tokens=[w.text.strip()],
                     notes=notes,
+                ),
+            )
+        )
+    return out
+
+
+def _is_exterior_light_shape(cand: Candidate) -> bool:
+    """Compact exterior wall fixture (~10–20 pt, not a receptacle duplex)."""
+    w = float(cand.features.get("width", 0.0))
+    h = float(cand.features.get("height", 0.0))
+    n = int(cand.features.get("n_segments", 0))
+    if int(cand.features.get("n_fills", 0)) > 0:
+        return False
+    if not (8.0 <= max(w, h) <= 28.0 and 6.0 <= min(w, h) <= 20.0):
+        return False
+    if n < 8 or n > 50:
+        return False
+    return True
+
+
+def _exterior_from_ext_tokens(
+    ctx: PageContext,
+    candidates: list[Candidate],
+    detections: list[Detection],
+    sheet_id: str,
+    usable: list[LegendEntry],
+) -> list[Detection]:
+    """For every plan EXT token, attach/emit an exterior_wall light (R2 Fix 3)."""
+    bounds = _plan_bounds_from_candidates(candidates)
+    if bounds is None:
+        return []
+    bx0, by0, bx1, by1 = bounds
+    entry = next(
+        (e for e in usable if e.category == Category.LIGHT and e.subtype == "exterior_wall"),
+        next((e for e in usable if e.category == Category.LIGHT), None),
+    )
+    out: list[Detection] = []
+    for w in ctx.words:
+        if w.text.strip().upper() != "EXT" or w.size > 9.0:
+            continue
+        wx = 0.5 * (w.bbox[0] + w.bbox[2])
+        wy = 0.5 * (w.bbox[1] + w.bbox[3])
+        if not (bx0 <= wx <= bx1 and by0 <= wy <= by1):
+            continue
+        # Prefer upgrading an existing light near the token.
+        upgraded = False
+        for d in detections:
+            if d.category != Category.LIGHT:
+                continue
+            if math.hypot(d.center.x - wx, d.center.y - wy) > 18.0:
+                continue
+            d.subtype = "exterior_wall"
+            if "EXT" not in {c.upper() for c in d.codes}:
+                d.codes = list(d.codes) + [w.text.strip()]
+            d.evidence.notes = list(d.evidence.notes) + ["ext_token"]
+            upgraded = True
+            break
+        if upgraded:
+            continue
+        # Else take the nearest exterior-shaped candidate.
+        best: tuple[float, Candidate] | None = None
+        for cand in candidates:
+            if not _is_exterior_light_shape(cand):
+                continue
+            dist = math.hypot(cand.center[0] - wx, cand.center[1] - wy)
+            if dist > 16.0:
+                continue
+            if best is None or dist < best[0]:
+                best = (dist, cand)
+        if best is None:
+            continue
+        _, cand = best
+        if any(
+            d.category == Category.LIGHT
+            and math.hypot(d.center.x - cand.center[0], d.center.y - cand.center[1]) < 10.0
+            for d in detections + out
+        ):
+            continue
+        out.append(
+            Detection(
+                id=str(uuid.uuid4()),
+                sheet_id=sheet_id,
+                category=Category.LIGHT,
+                subtype="exterior_wall",
+                codes=[w.text.strip()],
+                mount_height_in=_parse_mount_height(
+                    _codes_near_candidate(ctx, cand) + [w.text.strip()]
+                ),
+                center=Point(x=cand.center[0], y=cand.center[1]),
+                bbox=BBox(
+                    x0=cand.bbox[0], y0=cand.bbox[1], x1=cand.bbox[2], y1=cand.bbox[3]
+                ),
+                rotation_deg=0,
+                confidence=0.85,
+                source="geometry",
+                needs_review=False,
+                evidence=Evidence(
+                    legend_entry_id=entry.id if entry else None,
+                    match_score=0.85,
+                    text_tokens=[w.text.strip()],
+                    notes=["ext_token_glyph"],
                 ),
             )
         )
