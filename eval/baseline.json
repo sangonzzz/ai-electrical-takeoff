@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "description": "CI regression gates for takeoff eval. Tighten after Santiago fills eval/ground_truth/*.counts.yaml and a real latest.json is produced. Until then plans are optional (required: false) so missing reports do not fail CI.",
+  "plans": {
+    "plan1": {
+      "required": false,
+      "min_room_exact_match_rate": 0.0,
+      "max_abs_error": {
+        "ceiling_fan.ceiling_fan": 50,
+        "ceiling_fan.fan_light": 50,
+        "light.recessed": 50,
+        "light.pendant": 50,
+        "light.wall": 50,
+        "light.exterior_wall": 50,
+        "light.recessed_vapor_proof": 50
+      },
+      "min_precision": {
+        "ceiling_fan": 0.0,
+        "light": 0.0
+      },
+      "min_recall": {
+        "ceiling_fan": 0.0,
+        "light": 0.0
+      }
+    },
+    "plan2": { "required": false },
+    "plan3": { "required": false },
+    "plan4": { "required": false }
+  }
+}
