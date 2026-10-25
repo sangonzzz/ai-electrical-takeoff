@@ -37,6 +37,12 @@ _CLOSE_SECOND_DELTA = 0.05  # top-two within this → needs_review
 _REJECT_SCORE = 0.16  # below → drop as not-a-symbol (noise)
 _MIN_TEMPLATE_SIDE_PT = 2.5  # skip broken legend glyphs (e.g. FC sliver)
 
+# Switches/receptacles sit on walls (gray poche or wall outlines).
+_WALL_DEVICE_MAX_DIST_PT = 8.0
+# A real "$" (S crossing a bar) must beat this IoU against a switch template.
+_SWITCH_MIN_IOU = 0.45
+_WALL_SEG_MIN_LEN_PT = 18.0
+
 # Mount height like +42" or +84
 _MOUNT_RE = re.compile(r"^\+?\s*(\d+)\s*\"?$")
 
@@ -327,6 +333,64 @@ def _refine_subtype(
     return base_subtype or SUBTYPES[category.value][0]
 
 
+def _build_wall_mask(
+    ctx: PageContext, viewport: BBox | None = None
+) -> np.ndarray:
+    """Binary mask of walls at 1 px/pt for proximity tests (origin = page 0,0)."""
+    # Page-sized mask is large (2592x1728) but cheap vs false switch flood.
+    w = int(math.ceil(ctx.page_width)) + 1
+    h = int(math.ceil(ctx.page_height)) + 1
+    mask = np.zeros((h, w), dtype=np.uint8)
+
+    for f in ctx.gray_fills:
+        x0 = max(0, int(f.x0) - 1)
+        y0 = max(0, int(f.y0) - 1)
+        x1 = min(w - 1, int(math.ceil(f.x1)) + 1)
+        y1 = min(h - 1, int(math.ceil(f.y1)) + 1)
+        if x1 > x0 and y1 > y0:
+            mask[y0 : y1 + 1, x0 : x1 + 1] = 255
+
+    for s in ctx.black_segments:
+        length = math.hypot(s.x1 - s.x0, s.y1 - s.y0)
+        if length < _WALL_SEG_MIN_LEN_PT:
+            continue
+        ax = abs(s.x1 - s.x0) <= 1.2
+        ay = abs(s.y1 - s.y0) <= 1.2
+        if not (ax or ay):
+            continue
+        cv2.line(
+            mask,
+            (int(round(s.x0)), int(round(s.y0))),
+            (int(round(s.x1)), int(round(s.y1))),
+            255,
+            thickness=3,
+        )
+    # Dilate so "within 8 pt" is a cheap lookup on the dilated mask.
+    k = cv2.getStructuringElement(
+        cv2.MORPH_ELLIPSE,
+        (2 * int(_WALL_DEVICE_MAX_DIST_PT) + 1, 2 * int(_WALL_DEVICE_MAX_DIST_PT) + 1),
+    )
+    return cv2.dilate(mask, k)
+
+
+def _near_wall(wall_dilated: np.ndarray, x: float, y: float) -> bool:
+    ix, iy = int(round(x)), int(round(y))
+    if iy < 0 or ix < 0 or iy >= wall_dilated.shape[0] or ix >= wall_dilated.shape[1]:
+        return False
+    return bool(wall_dilated[iy, ix])
+
+
+def _best_switch_iou(
+    ctx: PageContext, cand: Candidate, switch_templates: list[LegendTemplate]
+) -> float:
+    best = 0.0
+    for tmpl in switch_templates:
+        score, _ = _match_score(ctx, cand, tmpl)
+        if score > best:
+            best = score
+    return best
+
+
 def _shape_boost(cand: Candidate, entry: LegendEntry) -> float:
     """Small additive prior from coarse shape vs legend category."""
     w = cand.features.get("width", 0.0)
@@ -366,6 +430,12 @@ def classify_candidates(
         return []
 
     fan_entries = [e for e in usable if e.category == Category.CEILING_FAN]
+    switch_tmpls = [
+        templates[e.id]
+        for e in usable
+        if e.category == Category.SWITCH and isinstance(templates.get(e.id), LegendTemplate)
+    ]
+    wall_mask = _build_wall_mask(ctx)
     detections: list[Detection] = []
 
     for cand in candidates:
@@ -380,8 +450,6 @@ def classify_candidates(
             and int(cand.features.get("n_segments", 0)) >= 40
         ):
             best_entry = fan_entries[0]
-            best_score, best_rot = 0.85, 0
-            second = 0.0
             codes = _codes_near_candidate(ctx, cand)
             mount = _parse_mount_height(codes)
             detections.append(
@@ -428,12 +496,25 @@ def classify_candidates(
         if best_score < _REJECT_SCORE:
             continue
 
+        assert best_entry.category is not None
+        cat = best_entry.category
+
+        # Wall devices: center must sit within ~8 pt of wall poche / wall lines.
+        if cat in (Category.SWITCH, Category.RECEPTACLE):
+            if not _near_wall(wall_mask, cand.center[0], cand.center[1]):
+                continue
+
+        # Switches must look like "$" (S crossing a bar), not a stray dash.
+        if cat == Category.SWITCH:
+            switch_iou = _best_switch_iou(ctx, cand, switch_tmpls)
+            if switch_iou < _SWITCH_MIN_IOU:
+                continue
+            # Prefer the pure template IoU as confidence for switches.
+            best_score = max(best_score, switch_iou)
+
         codes = _codes_near_candidate(ctx, cand)
         mount = _parse_mount_height(codes)
-        assert best_entry.category is not None
-        subtype = _refine_subtype(
-            best_entry.category, best_entry.subtype, codes, cand, best_entry
-        )
+        subtype = _refine_subtype(cat, best_entry.subtype, codes, cand, best_entry)
 
         needs_review = best_score < _MIN_MATCH_SCORE or (
             best_score - second < _CLOSE_SECOND_DELTA and second > _REJECT_SCORE
@@ -444,7 +525,7 @@ def classify_candidates(
             Detection(
                 id=str(uuid.uuid4()),
                 sheet_id=sheet_id,
-                category=best_entry.category,
+                category=cat,
                 subtype=subtype,
                 codes=codes,
                 mount_height_in=mount,
