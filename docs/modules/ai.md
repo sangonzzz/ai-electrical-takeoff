@@ -97,6 +97,20 @@ Claude only resolves meaning (legend semantics, ambiguous labels). Crops for
 adjudication are rendered by us (~300 dpi, candidate outlined in red, context
 pad ~18 pt); the model returns `label` + `confidence` + `reason` only.
 
+## Applying adjudications (`llm/apply.py`)
+
+Pipeline calls `apply_adjudications(detections, adjs, mode="flag_only")`:
+
+| Rule | Behavior |
+|------|----------|
+| Create | **Never** — only mutates existing detections |
+| Delete | **Never** in `flag_only`; in `safe_relabel` only weak evidence (`match < 0.8` and no codes/tokens) on `not_a_component` |
+| Strong evidence | `match_score >= 0.8` OR any `codes` / `text_tokens` — protected |
+| Relabel | `flag_only`: no; `safe_relabel`: subtype within same category if strong |
+| Exterior | Footprint EXT/WP filter remains `drop_outside_footprint` (Agente 2) |
+
+Default is **`flag_only`** after LLM delete/relabel proved net-negative vs no-LLM.
+
 ## Public API notes for Agente 2 / 7
 
 ```python

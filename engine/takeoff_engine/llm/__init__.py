@@ -12,6 +12,7 @@ required call shape Agente 2 already stubs.
 from __future__ import annotations
 
 from takeoff_engine.llm.adjudicate_task import adjudicate
+from takeoff_engine.llm.apply import apply_adjudications, has_strong_evidence
 from takeoff_engine.llm.baseline import baseline_vision_takeoff
 from takeoff_engine.llm.client import ClaudeClient, make_client
 from takeoff_engine.llm.legend import interpret_legend
@@ -23,7 +24,9 @@ __all__ = [
     "PROMPT_BASELINE",
     "PROMPT_LEGEND",
     "adjudicate",
+    "apply_adjudications",
     "baseline_vision_takeoff",
+    "has_strong_evidence",
     "interpret_legend",
     "make_client",
 ]

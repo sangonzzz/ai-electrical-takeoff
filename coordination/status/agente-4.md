@@ -2,68 +2,74 @@
 
 ## Estado
 
-LLM latency profiled + optimized (Haiku legend, 1 adjudicate call/sheet, disk cache actually hits).
+Adjudication safety: **flag_only** (legend + flagging). Never delete strong evidence; never create detections. Diff vs no-LLM is count-neutral on all 4 plans.
 
 ## Hecho
 
-### Measurement (local, Escondido, `with_bom=False`)
+### Diff: ENABLE_LLM on vs off (local Escondido, match by center ±0.1 pt)
 
-**Before (Sonnet legend, batch=6, cache broken by uuid4 in prompts):**
+#### Before fix (delete/`not_a_component` allowed)
 
-| Sheet | wall | llm_legend | llm_adjudicate | calls | USD |
-|-------|------|------------|----------------|-------|-----|
-| p0 | ~34–64 s | ~19–54 s | — (0 needs_review) | 1 | ~0.05 |
-| p1 | ~33 s | ~21 s | — | 1 | ~0.05 |
-| p2 | ~58 s | ~23 s | ~1.4 s (API **failing**) | 1 | ~0.05 |
-| p3 | ~61 s | ~19 s | — | 1 | ~0.05 |
+| Plan | page | n no-LLM | n LLM | added | removed | relabeled |
+|------|------|----------|-------|-------|---------|-----------|
+| 1 | 0 | 53 | 53 | 0 | 0 | 0 |
+| 2 | 1 | 64 | 64 | 0 | 0 | 0 |
+| 3 | 2 | 68 | **67** | 0 | **1** | 0 |
+| 4 | 3 | 82 | 82 | 0 | 0 | 0 |
 
-Bottleneck: **`llm_legend` ≈ 20–25 s/sheet** (Sonnet). Adjudicate rarely needed (0–2 classify `needs_review`); when it ran it **400’d** on strict schema (`minimum`/`maximum` on `confidence`). Docker 200–280 s/sheet was mostly API RTT × N + Sonnet legend (geometry also heavy on p2/p3).
+Removed (Plan 3): `receptacle.gfci_weatherproof` @ (926.3, 375.8), match≈0.39, no codes — dropped as `not_a_component`.
 
-**After (Haiku legend, one adjudicate batch, stable cache ids, schema transform):**
+Local Plan 1 was already count-identical; Docker Plan 1 loss (240V GFI) / false exterior exhaust matches the old pipeline path that **deleted** on `not_a_component` and **relabeled** freely (and exterior exhaust should then hit `drop_outside_footprint` unless EXT/WP — false exhaust implies a bad relabel that survived or ran before footprint drop).
 
-| | cold avg/sheet | warm avg/sheet | cold calls (4 sheets) | warm calls | cold USD | warm USD |
-|--|----------------|----------------|----------------------|------------|----------|----------|
-| **Measured** | **40.6 s** | **23.9 s** | 5 | **0** | **$0.024** | **$0** |
+**Verdict: net negative** → keep LLM for **legend interpretation + flagging only**.
 
-Per-sheet warm: `llm_legend` **~100–130 ms** (cache hit). Warm p2 `llm_adjudicate` ~0.8 s = crop render only (API cached).
+#### After fix (`apply_adjudications(..., mode="flag_only")`)
 
-Haiku vs Sonnet legend (Plan 1): **0 category/subtype diffs** (also 0 vs rules).
+| Plan | page | n no-LLM | n LLM | added | removed | relabeled | flagged only |
+|------|------|----------|-------|-------|---------|-----------|--------------|
+| 1 | 0 | 53 | 53 | 0 | 0 | 0 | 0 |
+| 2 | 1 | 64 | 64 | 0 | 0 | 0 | 0 |
+| 3 | 2 | 68 | 68 | 0 | 0 | 0 | 2 |
+| 4 | 3 | 82 | 82 | 0 | 0 | 0 | 0 |
 
-### Code changes (llm/ only — no detection rules)
+Plan 3 flags: (926.3, 375.8) `llm=not_a_component` kept as WP receptacle + `needs_review`; (1163.3, 675.2) exterior light opinion recorded, geometry label unchanged.
 
-1. `interpret_legend` → `ANTHROPIC_MODEL_CHEAP` (Haiku).
-2. `DEFAULT_BATCH_SIZE = 10_000` → one adjudicate API call per sheet.
-3. Stable content ids in prompts (`llm/ids.py`) so `.cache/llm` hits across uuid4 remints.
-4. `anthropic.transform_schema` so Sonnet 5.5 accepts adjudicate tool schema.
-5. Batch crop render (one PDF open); latency logged per call.
+### Code
+
+- `llm/apply.py`: `apply_adjudications` + `has_strong_evidence` (match≥0.8 or codes/tokens).
+- Default mode **`flag_only`**: attach `llm_label`/`llm_reason`, set `needs_review`; no delete; no category/subtype change; no creates.
+- `safe_relabel` mode available (subtype-only on strong; weak may drop on `not_a_component`) — not used in pipeline.
+- `pipeline.py` LLM block wired to `apply_adjudications` (messaged Agente 2).
+- Prompt `adjudicate_v1.md` updated.
 
 ## Cómo probarlo
 
 ```bash
 uv run pytest engine/tests/llm -q
-# cold then warm (second run should show cache_hits, llm_legend ~100ms):
-uv run python -c "from pathlib import Path; from takeoff_engine.pipeline import analyze_sheet; r=analyze_sheet(Path('data/plans/escondido_plans.pdf'),0); print(r.timings_ms, r.llm_usage)"
+# with vs without LLM counts should match:
+uv run python -c "from pathlib import Path; from takeoff_engine.pipeline import analyze_sheet as a; p=Path('data/plans/escondido_plans.pdf');
+print([(i,len(a(p,i,use_llm=False).detections),len(a(p,i,use_llm=True).detections)) for i in range(4)])"
 ```
 
 ## Siguiente
 
-- Ask Agente 2 for stable legend/detection ids (optional; we already hash content).
-- Geometry time on p2/p3 (candidates/classify 20–40 s) is outside A4.
+- Agente 1: bump `PIPELINE_VERSION` (freeze) after this safety fix.
+- Optional later: re-enable `safe_relabel` only if eval shows net positive.
 
 ## Bloqueos
 
-- Ninguno.
+- Version bump needs Agente 1.
 
 ## Decisions
 
-- Legend = Haiku after accuracy parity check.
-- One adjudicate call/sheet.
-- Cache keys ignore pipeline uuid4 via stable content ids.
+- LLM adjudication default = **flag_only** after net-negative delete behavior.
+- Strong evidence = `match_score >= 0.8` OR any `codes` / `text_tokens`.
+- Exterior EXT/WP still enforced by Agente 2 `drop_outside_footprint` (unchanged).
 
 ## Needs from Santiago
 
-- **FYI before/with this commit:** Adjudicate was silently failing (400 schema). Fix restores labeling on sheets with `needs_review` (Plan 3 / page 2 got 1 `llm_label` in measurement). Haiku legend matched Sonnet on Plan 1 — no taxonomy change expected from the model swap. Detection rules untouched.
+- (none for keys). Please have Agente 1 bump pipeline version.
 
 ## Explicación para Santiago
 
-Medí los tiempos: casi todo el LLM era la leyenda con Sonnet (~20 s y ~0.05 USD por hoja). Pasé la leyenda a Haiku (misma precisión en el Plan 1) y arreglé la caché (antes nunca pegaba porque cada run inventaba UUIDs nuevos). La segunda corrida deja la leyenda en ~0.1 s y 0 USD. También unifiqué la adjudicación a **una sola** llamada por hoja y arreglé un bug que hacía fallar adjudicación en la API. En caliente, lo lento que queda en las hojas 3–4 es geometría (candidates/classify), no Claude.
+El LLM no debe borrar ni inventar símbolos: solo puede opinar. Antes, si decía `not_a_component`, el pipeline borraba la detección — por eso en Docker se podía perder el GFI 240V y aparecer basura. Medí las 4 plantas: con el modo viejo Plan 3 perdía 1 receptáculo; con el arreglo **ninguna planta cambia el conteo**, solo se marcan 2 cosas en Plan 3 para revisión. La leyenda con Haiku se mantiene; la adjudicación solo pone bandera `needs_review`.

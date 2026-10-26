@@ -163,6 +163,9 @@ def analyze_sheet(
     timings["classify"] = _ms(t0)
 
     # Optional LLM adjudication for needs_review.
+    # Safety (A4 / Santiago 2026-10-26): never delete strong-evidence detections,
+    # never create detections; default apply mode is flag_only (legend + flagging)
+    # after LLM proved net-negative when allowed to drop/relabel freely.
     if use_llm and settings.enable_llm:
         review = [
             Candidate(
@@ -171,6 +174,13 @@ def analyze_sheet(
                 center=(d.center.x, d.center.y),
                 segment_ids=[],
                 fill_ids=[],
+                features={
+                    "codes": list(d.codes),
+                    "match_score": d.evidence.match_score,
+                    "text_tokens": list(d.evidence.text_tokens),
+                    "category": d.category.value,
+                    "subtype": d.subtype,
+                },
             )
             for d in detections
             if d.needs_review
@@ -178,8 +188,7 @@ def analyze_sheet(
         if review:
             t0 = time.perf_counter()
             try:
-                from takeoff_engine.llm import adjudicate
-                from takeoff_engine.models import Category, SUBTYPES
+                from takeoff_engine.llm import adjudicate, apply_adjudications
 
                 adjs = adjudicate(
                     pdf_path,
@@ -189,42 +198,12 @@ def analyze_sheet(
                     usage=llm_usage,
                     warnings=warnings,
                 )
-                by_id = {a.candidate_id: a for a in (adjs or [])}
-                updated = []
-                for d in detections:
-                    adj = by_id.get(d.id)
-                    if adj is None:
-                        updated.append(d)
-                        continue
-                    if adj.label == "not_a_component":
-                        continue
-                    if "." in adj.label:
-                        cat_s, sub = adj.label.split(".", 1)
-                        try:
-                            cat = Category(cat_s)
-                        except ValueError:
-                            updated.append(d)
-                            continue
-                        if sub not in SUBTYPES.get(cat.value, []):
-                            updated.append(d)
-                            continue
-                        d = d.model_copy(
-                            update={
-                                "category": cat,
-                                "subtype": sub,
-                                "confidence": max(d.confidence, adj.confidence),
-                                "source": "llm",
-                                "needs_review": adj.confidence < 0.7,
-                                "evidence": d.evidence.model_copy(
-                                    update={
-                                        "llm_label": adj.label,
-                                        "llm_reason": adj.reason,
-                                    }
-                                ),
-                            }
-                        )
-                    updated.append(d)
-                detections = updated
+                detections = apply_adjudications(
+                    detections,
+                    adjs or [],
+                    mode="flag_only",
+                    warnings=warnings,
+                )
             except NotImplementedError as exc:
                 warnings.append(f"adjudicate not ready: {exc}")
             except Exception as exc:  # noqa: BLE001
