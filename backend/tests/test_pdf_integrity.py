@@ -5,9 +5,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from httpx import AsyncClient
-from sqlalchemy import select
-
 from app.models import Document
 from app.services.storage import (
     assert_stored_matches_hash,
@@ -17,6 +14,8 @@ from app.services.storage import (
     store_pdf,
 )
 from app.settings import REPO_ROOT, Settings, get_settings
+from httpx import AsyncClient
+from sqlalchemy import select
 
 
 @pytest.mark.asyncio
