@@ -57,6 +57,8 @@ _LIGHT_ASPECT_MAX = 1.45
 _LIGHT_DENSE_SEGS = 45
 _LIGHT_DENSE_MAX_SIDE_PT = 28.0
 _LIGHT_MIN_SEGS = 10
+# Fan hub ``J`` circle is the fan, never a recessed light (R4).
+_FAN_LIGHT_SUPPRESS_PT = 12.0
 
 # Mount height like +42" or +84
 _MOUNT_RE = re.compile(r"^\+?\s*(\d+)\s*\"?$")
@@ -1105,11 +1107,37 @@ def classify_candidates(
         _halfhots_from_fills(ctx, candidates, detections, sheet_id, usable)
     )
 
+    detections = _suppress_lights_at_fan_hubs(detections)
     detections = _nms_detections(detections, dist_pt=8.0)
     detections = _nms_cross_category(detections)
     detections = _attic_switch_cap(detections, attic_boxes)
     _nudge_attic_centers(detections, attic_boxes)
     return detections
+
+
+def _suppress_lights_at_fan_hubs(dets: list[Detection]) -> list[Detection]:
+    """Drop lights whose center sits on a ceiling-fan hub ``J`` (R4).
+
+    Peel / circle-in-square can still invent a recessed can at the fan hub;
+    the hub circle belongs to the fan.
+    """
+    hubs = [
+        (d.center.x, d.center.y)
+        for d in dets
+        if d.category == Category.CEILING_FAN
+    ]
+    if not hubs:
+        return dets
+    out: list[Detection] = []
+    for d in dets:
+        if d.category == Category.LIGHT:
+            if any(
+                math.hypot(d.center.x - hx, d.center.y - hy) < _FAN_LIGHT_SUPPRESS_PT
+                for hx, hy in hubs
+            ):
+                continue
+        out.append(d)
+    return out
 
 
 def _attic_switch_cap(
@@ -1687,6 +1715,8 @@ def _cross_winner(a: Detection, b: Detection) -> Detection | None:
     pair = frozenset({a.category, b.category})
     if pair == frozenset({Category.DETECTOR, Category.LIGHT}):
         return a if a.category == Category.DETECTOR else b
+    if pair == frozenset({Category.CEILING_FAN, Category.LIGHT}):
+        return a if a.category == Category.CEILING_FAN else b
     if pair == frozenset({Category.EXHAUST_FAN, Category.RECEPTACLE}):
         if a.subtype == "afci_half_hot":
             return a

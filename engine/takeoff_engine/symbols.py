@@ -443,10 +443,45 @@ def find_candidates(ctx: PageContext, viewport: BBox) -> list[Candidate]:
     return candidates
 
 
+def _peel_parent_is_fan(ctx: PageContext, cand: Candidate) -> bool:
+    """Large blade cluster with a hub ``J`` — peeling its hub circle makes a false light."""
+    w = float(cand.features.get("width", 0.0))
+    h = float(cand.features.get("height", 0.0))
+    if max(w, h) < 70.0:
+        return False
+    x0, y0, x1, y1 = cand.bbox
+    mid_x0, mid_x1 = x0 + 0.25 * (x1 - x0), x0 + 0.75 * (x1 - x0)
+    mid_y0, mid_y1 = y0 + 0.25 * (y1 - y0), y0 + 0.75 * (y1 - y0)
+    for word in ctx.words:
+        if word.text.strip().upper() != "J":
+            continue
+        wx = 0.5 * (word.bbox[0] + word.bbox[2])
+        wy = 0.5 * (word.bbox[1] + word.bbox[3])
+        if mid_x0 <= wx <= mid_x1 and mid_y0 <= wy <= mid_y1:
+            return True
+    return False
+
+
+def _j_near_point(ctx: PageContext, x: float, y: float, radius: float = 6.0) -> bool:
+    """True when a lone ``J`` sits at (x, y) — fan hub circle, not a recessed can."""
+    for word in ctx.words:
+        if word.text.strip().upper() != "J":
+            continue
+        wx = 0.5 * (word.bbox[0] + word.bbox[2])
+        wy = 0.5 * (word.bbox[1] + word.bbox[3])
+        if math.hypot(wx - x, wy - y) <= radius:
+            return True
+    return False
+
+
 def _peel_recessed_circles(
     ctx: PageContext, candidates: list[Candidate]
 ) -> list[Candidate]:
-    """Recover ~12 pt circle-in-square lights trapped inside oversized clusters."""
+    """Recover ~12 pt circle-in-square lights trapped inside oversized clusters.
+
+    Never peel the hub ``J`` circle out of a ceiling fan (R4) — that ring belongs
+    to the fan, not a recessed light.
+    """
     existing_centers = [c.center for c in candidates if _is_compact_light_bbox(c.bbox)]
     extra: list[Candidate] = []
     for c in candidates:
@@ -455,7 +490,11 @@ def _peel_recessed_circles(
         n = int(c.features.get("n_segments", 0))
         if max(w, h) < 50.0 or n < 80:
             continue
+        if _peel_parent_is_fan(ctx, c):
+            continue
         for cx, cy, rw, rh, ring_ids in _circle_rings_in_seg_ids(ctx, c.segment_ids):
+            if _j_near_point(ctx, cx, cy):
+                continue
             if any(math.hypot(cx - ex, cy - ey) < 10.0 for ex, ey in existing_centers):
                 continue
             if any(math.hypot(cx - e.center[0], cy - e.center[1]) < 10.0 for e in extra):
@@ -473,6 +512,7 @@ def _peel_recessed_circles(
                         "n_fills": 0,
                         "width": rw,
                         "height": rh,
+                        "peeled_recessed": True,
                     },
                 )
             )
