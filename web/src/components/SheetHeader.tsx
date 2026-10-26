@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { AlertTriangle, ArrowLeft, HelpCircle } from "lucide-react";
+import { AlertTriangle, ArrowLeft, HelpCircle, Redo2, Undo2 } from "lucide-react";
 import type { SheetSummary } from "@/api/types";
 import { StatusBadge } from "./ui/StatusBadge";
 import { ReviewActions } from "./ReviewActions";
@@ -11,6 +11,10 @@ interface Props {
   pipelineVersion: string;
   needsReviewCount: number;
   humanReviewed: boolean;
+  canUndo: boolean;
+  canRedo: boolean;
+  onUndo: () => void;
+  onRedo: () => void;
   onReviewed: () => void;
   onOpenShortcuts: () => void;
 }
@@ -22,6 +26,10 @@ export function SheetHeader({
   pipelineVersion,
   needsReviewCount,
   humanReviewed,
+  canUndo,
+  canRedo,
+  onUndo,
+  onRedo,
   onReviewed,
   onOpenShortcuts,
 }: Props) {
@@ -88,6 +96,30 @@ export function SheetHeader({
         )}
 
         <div className="ml-auto flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              className="btn btn-secondary !py-1.5 text-[12px]"
+              disabled={!canUndo}
+              onClick={onUndo}
+              title="Undo (Ctrl+Z)"
+              aria-keyshortcuts="Control+Z"
+            >
+              <Undo2 size={14} />
+              Undo
+            </button>
+            <button
+              type="button"
+              className="btn btn-secondary !py-1.5 text-[12px]"
+              disabled={!canRedo}
+              onClick={onRedo}
+              title="Redo (Ctrl+Shift+Z)"
+              aria-keyshortcuts="Control+Shift+Z"
+            >
+              <Redo2 size={14} />
+              Redo
+            </button>
+          </div>
           <ReviewActions
             sheetId={sheetId}
             humanReviewed={humanReviewed}

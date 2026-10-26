@@ -7,10 +7,12 @@ import {
   getSheetCorrections,
   patchDetection,
   sheetImageUrl,
+  redoLastAction,
   undoLastAction,
 } from "@/api/client";
+import type { SheetBundle } from "@/api/types";
 import type { Detection, SheetResult } from "@/types/contracts";
-import { useCanUndo } from "./fixtureFlags";
+import { useCanRedo, useCanUndo } from "./fixtureFlags";
 
 export function sheetQueryKey(sheetId: string) {
   return ["sheet", sheetId] as const;
@@ -19,6 +21,7 @@ export function sheetQueryKey(sheetId: string) {
 export function useSheetBundle(sheetId: string) {
   const queryClient = useQueryClient();
   const canUndo = useCanUndo();
+  const canRedo = useCanRedo();
 
   const sheetQuery = useQuery({
     queryKey: sheetQueryKey(sheetId),
@@ -151,15 +154,21 @@ export function useSheetBundle(sheetId: string) {
     },
   });
 
+  function applyHistoryBundle(bundle: SheetBundle | null) {
+    if (!bundle) return;
+    queryClient.setQueryData(sheetQueryKey(sheetId), bundle);
+    void queryClient.invalidateQueries({ queryKey: ["corrections", sheetId] });
+    void queryClient.invalidateQueries({ queryKey: ["bom", sheetId] });
+  }
+
   const undoMut = useMutation({
     mutationFn: () => undoLastAction(sheetId),
-    onSuccess: (bundle) => {
-      if (bundle) {
-        queryClient.setQueryData(sheetQueryKey(sheetId), bundle);
-        void queryClient.invalidateQueries({ queryKey: ["corrections", sheetId] });
-        void queryClient.invalidateQueries({ queryKey: ["bom", sheetId] });
-      }
-    },
+    onSuccess: applyHistoryBundle,
+  });
+
+  const redoMut = useMutation({
+    mutationFn: () => redoLastAction(sheetId),
+    onSuccess: applyHistoryBundle,
   });
 
   return {
@@ -172,7 +181,9 @@ export function useSheetBundle(sheetId: string) {
       patchMut.mutate({ id, patch }),
     deleteDetection: deleteMut.mutate,
     undo: () => undoMut.mutate(),
+    redo: () => redoMut.mutate(),
     canUndo,
+    canRedo,
     /** Local-only move for drag frames (no network). */
     applyLocalMove: (id: string, x: number, y: number) => {
       setResult((r) => ({

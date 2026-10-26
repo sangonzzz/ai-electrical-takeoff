@@ -25,8 +25,6 @@ export interface PlanViewerHandle {
 interface Props {
   result: SheetResult;
   imageUrl: string | null;
-  canUndo: boolean;
-  onUndo: () => void;
   onAddAt: (x: number, y: number) => void;
   onDragMove: (id: string, x: number, y: number) => void;
   onDragEnd: (id: string, x: number, y: number) => void;
@@ -57,7 +55,7 @@ function fitPlanToCanvas(
 }
 
 export const PlanViewer = forwardRef<PlanViewerHandle, Props>(function PlanViewer(
-  { result, imageUrl, canUndo, onUndo, onAddAt, onDragMove, onDragEnd },
+  { result, imageUrl, onAddAt, onDragMove, onDragEnd },
   ref,
 ) {
   const mode = useUiStore((s) => s.mode);
@@ -206,7 +204,7 @@ export const PlanViewer = forwardRef<PlanViewerHandle, Props>(function PlanViewe
         </TransformWrapper>
 
         <div className="pointer-events-none absolute left-3 top-3 z-10">
-          <FloatingToolbar canUndo={canUndo} onUndo={onUndo} onFit={fitToScreen} />
+          <FloatingToolbar onFit={fitToScreen} />
         </div>
         <div className="pointer-events-none absolute bottom-3 left-3 z-10">
           <MiniLegend />

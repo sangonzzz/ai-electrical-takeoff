@@ -14,6 +14,7 @@ import {
   fixtureLoadDemo,
   fixtureMarkReviewed,
   fixturePatchDetection,
+  fixtureRedo,
   fixtureUndo,
 } from "./fixture";
 import type {
@@ -211,6 +212,12 @@ export async function deleteDetection(id: string): Promise<DetectionMutationResu
 export async function undoLastAction(sheetId: string): Promise<SheetBundle | null> {
   if (useFixture) return fixtureUndo();
   // Backend may expose undo later; until then this is a no-op outside fixture.
+  void sheetId;
+  return null;
+}
+
+export async function redoLastAction(sheetId: string): Promise<SheetBundle | null> {
+  if (useFixture) return fixtureRedo();
   void sheetId;
   return null;
 }

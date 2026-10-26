@@ -18,6 +18,7 @@ const DEMO_DOC_ID = "doc-escondido";
 let fixtureResult: SheetResult = structuredClone(sampleResult) as SheetResult;
 let corrections: CorrectionEvent[] = [];
 let undoStack: SheetResult[] = [];
+let redoStack: SheetResult[] = [];
 let humanReviewed = false;
 let undoEpoch = 0;
 const undoListeners = new Set<() => void>();
@@ -27,7 +28,7 @@ function notifyUndo(): void {
   for (const listener of undoListeners) listener();
 }
 
-/** Subscribe to undo-stack changes (for reactive canUndo in the UI). */
+/** Subscribe to undo/redo stack changes (for reactive canUndo / canRedo). */
 export function subscribeUndo(listener: () => void): () => void {
   undoListeners.add(listener);
   return () => undoListeners.delete(listener);
@@ -40,6 +41,7 @@ export function getUndoEpoch(): number {
 function pushUndo(): void {
   undoStack.push(structuredClone(fixtureResult));
   if (undoStack.length > 40) undoStack.shift();
+  redoStack = [];
   notifyUndo();
 }
 
@@ -149,6 +151,7 @@ export function resetFixtureState(): void {
   fixtureResult = structuredClone(sampleResult) as SheetResult;
   corrections = [];
   undoStack = [];
+  redoStack = [];
   humanReviewed = false;
   notifyUndo();
 }
@@ -280,14 +283,29 @@ export async function fixtureDeleteDetection(
 export async function fixtureUndo(): Promise<SheetBundle | null> {
   const prev = undoStack.pop();
   if (!prev) return null;
+  redoStack.push(structuredClone(fixtureResult));
   fixtureResult = prev;
   notifyUndo();
   logCorrection("sheet", fixtureResult.sheet.id, "undo", null, { restored: true });
   return fixtureGetSheet(fixtureResult.sheet.id);
 }
 
+export async function fixtureRedo(): Promise<SheetBundle | null> {
+  const next = redoStack.pop();
+  if (!next) return null;
+  undoStack.push(structuredClone(fixtureResult));
+  fixtureResult = next;
+  notifyUndo();
+  logCorrection("sheet", fixtureResult.sheet.id, "redo", null, { restored: true });
+  return fixtureGetSheet(fixtureResult.sheet.id);
+}
+
 export function fixtureCanUndo(): boolean {
   return undoStack.length > 0;
+}
+
+export function fixtureCanRedo(): boolean {
+  return redoStack.length > 0;
 }
 
 export async function fixtureMarkReviewed(

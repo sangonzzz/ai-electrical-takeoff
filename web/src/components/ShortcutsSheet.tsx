@@ -6,6 +6,7 @@ const ROWS: { keys: string; action: string }[] = [
   { keys: "F", action: "Fit plan to canvas" },
   { keys: "Del", action: "Delete selected mark" },
   { keys: "Ctrl+Z", action: "Undo last change" },
+  { keys: "Ctrl+Shift+Z", action: "Redo last change" },
   { keys: "Esc", action: "Clear selection / exit add" },
   { keys: "?", action: "Toggle this cheat sheet" },
 ];

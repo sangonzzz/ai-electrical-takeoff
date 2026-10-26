@@ -27,7 +27,9 @@ export function SheetPage() {
     patchDetection,
     deleteDetection,
     undo,
+    redo,
     canUndo,
+    canRedo,
     applyLocalMove,
   } = useSheetBundle(sheetId);
 
@@ -85,9 +87,14 @@ export function SheetPage() {
           selectDetection(null);
         }
       }
-      if ((e.metaKey || e.ctrlKey) && e.key === "z") {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z") {
         e.preventDefault();
-        undo();
+        if (e.shiftKey) redo();
+        else undo();
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "y") {
+        e.preventDefault();
+        redo();
       }
       if (e.key === "Escape") {
         setMode("select");
@@ -102,6 +109,7 @@ export function SheetPage() {
     deleteDetection,
     selectDetection,
     undo,
+    redo,
     setMode,
     toggleShortcuts,
     setShortcutsOpen,
@@ -152,6 +160,10 @@ export function SheetPage() {
         pipelineVersion={result.pipeline_version}
         needsReviewCount={needsReviewCount}
         humanReviewed={sheetQuery.data?.humanReviewed ?? false}
+        canUndo={canUndo}
+        canRedo={canRedo}
+        onUndo={undo}
+        onRedo={redo}
         onReviewed={() => {
           queryClient.setQueryData(
             sheetQueryKey(sheetId),
@@ -170,8 +182,6 @@ export function SheetPage() {
             ref={planRef}
             result={result}
             imageUrl={imageUrl ?? result.sheet.image?.url ?? null}
-            canUndo={canUndo}
-            onUndo={undo}
             onAddAt={(x, y) => {
               createDetection({
                 category: addCategory,
