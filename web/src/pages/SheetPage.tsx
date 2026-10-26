@@ -161,6 +161,7 @@ export function SheetPage() {
         pipelineVersion={result.pipeline_version}
         needsReviewCount={needsReviewCount}
         humanReviewed={sheetQuery.data?.humanReviewed ?? false}
+        fileHash={sheetQuery.data?.fileHash}
         canUndo={canUndo}
         canRedo={canRedo}
         onUndo={undo}

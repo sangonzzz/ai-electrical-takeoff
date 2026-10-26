@@ -205,6 +205,7 @@ export async function fixtureGetSheet(sheetId: string): Promise<SheetBundle> {
     bom: bomOf(result),
     corrections: [...corrections],
     humanReviewed,
+    fileHash: "fixture00deadbeefcafef00d",
   };
 }
 

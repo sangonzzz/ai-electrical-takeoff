@@ -93,6 +93,7 @@ function detailToBundle(detail: SheetDetailApi): SheetBundle {
     result,
     takeoff: detail.takeoff ?? undefined,
     humanReviewed: detail.job?.human_reviewed ?? false,
+    fileHash: detail.file_hash ?? null,
   };
 }
 
@@ -103,6 +104,18 @@ function triggerDownload(blob: Blob, filename: string): void {
   a.download = filename;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+async function downloadFromApi(path: string, fallbackName: string): Promise<void> {
+  const res = await fetch(`${apiBase}${path}`);
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`${res.status} ${res.statusText}${text ? `: ${text}` : ""}`);
+  }
+  const blob = await res.blob();
+  const cd = res.headers.get("Content-Disposition");
+  const match = cd?.match(/filename="?([^"]+)"?/i);
+  triggerDownload(blob, match?.[1] ?? fallbackName);
 }
 
 export function isFixtureMode(): boolean {
@@ -255,13 +268,35 @@ export async function downloadGroundTruth(sheetId: string): Promise<void> {
     );
     return;
   }
-  const res = await fetch(`${apiBase}/api/sheets/${sheetId}/ground-truth.json`);
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new Error(`${res.status} ${res.statusText}${text ? `: ${text}` : ""}`);
+  await downloadFromApi(
+    `/api/sheets/${sheetId}/ground-truth.json`,
+    `${sheetId}-ground-truth.json`,
+  );
+}
+
+/** GET /api/sheets/{id}/export.xlsx — takeoff workbook (Agente 5). */
+export async function downloadExcel(sheetId: string): Promise<void> {
+  if (useFixture) {
+    triggerDownload(
+      new Blob(
+        [`Electrical Takeoff fixture export for ${sheetId}\n`],
+        { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" },
+      ),
+      `${sheetId}-takeoff.xlsx`,
+    );
+    return;
   }
-  const blob = await res.blob();
-  const cd = res.headers.get("Content-Disposition");
-  const match = cd?.match(/filename="?([^"]+)"?/i);
-  triggerDownload(blob, match?.[1] ?? `${sheetId}-ground-truth.json`);
+  await downloadFromApi(`/api/sheets/${sheetId}/export.xlsx`, `${sheetId}-takeoff.xlsx`);
+}
+
+/** GET /api/sheets/{id}/quote.pdf — quote PDF (Agente 5). */
+export async function downloadQuotePdf(sheetId: string): Promise<void> {
+  if (useFixture) {
+    // Minimal valid-enough PDF bytes for offline demo download.
+    const pdf =
+      "%PDF-1.1\n1 0 obj<<>>endobj\n2 0 obj<< /Length 44 >>stream\nBT /F1 12 Tf 100 700 Td (Fixture quote) Tj ET\nendstream\nendobj\ntrailer<<>>\n%%EOF\n";
+    triggerDownload(new Blob([pdf], { type: "application/pdf" }), `${sheetId}-quote.pdf`);
+    return;
+  }
+  await downloadFromApi(`/api/sheets/${sheetId}/quote.pdf`, `${sheetId}-quote.pdf`);
 }

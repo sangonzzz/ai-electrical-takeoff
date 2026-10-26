@@ -11,6 +11,7 @@ interface Props {
   pipelineVersion: string;
   needsReviewCount: number;
   humanReviewed: boolean;
+  fileHash?: string | null;
   canUndo: boolean;
   canRedo: boolean;
   onUndo: () => void;
@@ -26,6 +27,7 @@ export function SheetHeader({
   pipelineVersion,
   needsReviewCount,
   humanReviewed,
+  fileHash,
   canUndo,
   canRedo,
   onUndo,
@@ -33,6 +35,7 @@ export function SheetHeader({
   onReviewed,
   onOpenShortcuts,
 }: Props) {
+  const hashShort = fileHash?.slice(0, 8) ?? null;
   return (
     <header className="border-b border-[var(--border)] bg-[var(--surface)] px-3 py-2 shadow-[var(--shadow-sm)]">
       <div className="flex flex-wrap items-center gap-3">
@@ -83,6 +86,15 @@ export function SheetHeader({
         <span className="chip font-mono text-[10px]" title="Pipeline version">
           {pipelineVersion}
         </span>
+
+        {hashShort && (
+          <span
+            className="chip font-mono text-[10px]"
+            title="SHA-256 of original PDF (unchanged)"
+          >
+            {hashShort}…
+          </span>
+        )}
 
         {needsReviewCount > 0 ? (
           <span className="inline-flex items-center gap-1 rounded-lg bg-[var(--warn-soft)] px-2 py-1 text-[11px] font-semibold text-[var(--warn)]">

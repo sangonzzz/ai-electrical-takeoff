@@ -24,6 +24,8 @@ export interface JobInfo {
 /** Backend GET /api/sheets/{id} shape (Agente 5). */
 export interface SheetDetailApi {
   sheet: Sheet;
+  /** SHA-256 of the original stored PDF. */
+  file_hash?: string | null;
   job?: JobInfo | null;
   legend?: LegendEntry[];
   rooms?: Room[];
@@ -80,4 +82,6 @@ export interface SheetBundle {
   bom?: Bom | null;
   corrections?: CorrectionEvent[];
   humanReviewed?: boolean;
+  /** Short display uses first 8 hex chars of this sha256. */
+  fileHash?: string | null;
 }
