@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { CATEGORY_LABEL } from "@/lib/colors";
 import { SUBTYPES } from "@/lib/subtypes";
 import type { Category, Detection, Room } from "@/types/contracts";
@@ -12,6 +12,19 @@ interface Props {
 }
 
 export function DetailsPanel({ detection, rooms, onChange, onDelete }: Props) {
+  const [xDraft, setXDraft] = useState("");
+  const [yDraft, setYDraft] = useState("");
+
+  useEffect(() => {
+    if (!detection) {
+      setXDraft("");
+      setYDraft("");
+      return;
+    }
+    setXDraft(detection.center.x.toFixed(1));
+    setYDraft(detection.center.y.toFixed(1));
+  }, [detection?.id, detection?.center.x, detection?.center.y]);
+
   if (!detection) {
     return (
       <EmptyState
@@ -25,6 +38,23 @@ export function DetailsPanel({ detection, rooms, onChange, onDelete }: Props) {
   const confPct = Math.round(detection.confidence * 100);
   const roomName =
     rooms.find((r) => r.id === detection.room_id)?.display_name ?? "Unassigned";
+
+  function commitPosition() {
+    const x = Number.parseFloat(xDraft);
+    const y = Number.parseFloat(yDraft);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) {
+      setXDraft(detection!.center.x.toFixed(1));
+      setYDraft(detection!.center.y.toFixed(1));
+      return;
+    }
+    if (
+      Math.abs(x - detection!.center.x) < 0.05 &&
+      Math.abs(y - detection!.center.y) < 0.05
+    ) {
+      return;
+    }
+    onChange({ center: { x, y } });
+  }
 
   return (
     <div className="flex h-full flex-col">
@@ -104,6 +134,49 @@ export function DetailsPanel({ detection, rooms, onChange, onDelete }: Props) {
 
         <div>
           <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+            Position (PDF points)
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <label className="flex flex-col gap-1">
+              <span className="text-[11px] font-medium text-[var(--muted)]">X</span>
+              <input
+                className="field font-mono"
+                type="number"
+                step="0.1"
+                value={xDraft}
+                onChange={(e) => setXDraft(e.target.value)}
+                onBlur={commitPosition}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.currentTarget.blur();
+                  }
+                }}
+              />
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="text-[11px] font-medium text-[var(--muted)]">Y</span>
+              <input
+                className="field font-mono"
+                type="number"
+                step="0.1"
+                value={yDraft}
+                onChange={(e) => setYDraft(e.target.value)}
+                onBlur={commitPosition}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.currentTarget.blur();
+                  }
+                }}
+              />
+            </label>
+          </div>
+          <p className="mt-1 text-[11px] text-[var(--muted)]">
+            Edit here or drag the mark on the plan.
+          </p>
+        </div>
+
+        <div>
+          <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
             Codes
           </div>
           <div className="flex flex-wrap gap-1">
@@ -124,10 +197,6 @@ export function DetailsPanel({ detection, rooms, onChange, onDelete }: Props) {
           <dd>{detection.source}</dd>
           <dt className="text-[var(--muted)]">Needs review</dt>
           <dd>{detection.needs_review === true ? "yes" : "no"}</dd>
-          <dt className="text-[var(--muted)]">Center</dt>
-          <dd className="font-mono">
-            {detection.center.x.toFixed(1)}, {detection.center.y.toFixed(1)}
-          </dd>
         </dl>
 
         {detection.evidence && (
