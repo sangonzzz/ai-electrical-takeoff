@@ -372,20 +372,19 @@ def _has_wall_tick(cand: Candidate) -> bool:
 
 
 def _is_wall_light_shape(ctx: PageContext, cand: Candidate) -> bool:
-    """Circle + cross + wall tick, no enclosing square (R2 Fix 7).
+    """Circle + cross + wall tick (R2 Fix 7 / R3 Bath wall lights).
 
-    Recessed lights are near-square circle-in-square (~64 segs). Wall lights are
-    elongated by the tick toward the wall and have a + through the circle.
-    Receptacles are AA-heavy; the circle outline is mostly short diagonals.
+    Elongated by the tick toward the wall. May include a circle-in-square body
+    when the tick merges into the same cluster (dense seg count).
     """
     w = float(cand.features.get("width", 0.0))
     h = float(cand.features.get("height", 0.0))
     n = int(cand.features.get("n_segments", 0))
     if int(cand.features.get("n_fills", 0)) > 0:
         return False
-    if n < 16 or n > 35:
+    if n < 16 or n > 90:
         return False
-    if not (8.0 <= min(w, h) <= 16.0 and 16.0 <= max(w, h) <= 32.0):
+    if not (8.0 <= min(w, h) <= 16.0 and 16.0 <= max(w, h) <= 36.0):
         return False
     aspect = max(w, h) / max(min(w, h), 0.1)
     if aspect < 1.5:
@@ -403,7 +402,7 @@ def _is_wall_light_shape(ctx: PageContext, cand: Candidate) -> bool:
         if dx > 0.8 and dy > 0.8:
             diag += 1
             continue
-        if not (1.5 <= length <= 6.0):
+        if not (1.5 <= length <= 8.0):
             continue
         mx, my = 0.5 * (s.x0 + s.x1), 0.5 * (s.y0 + s.y1)
         if math.hypot(mx - cx, my - cy) > max(w, h) * 0.55:
