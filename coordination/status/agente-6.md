@@ -2,48 +2,41 @@
 
 ## Estado
 
-Demo polish shipped: takeoff headers/subtypes, category filter, fit-to-screen, review/export wired to A5.
+pnpm pinned to 10.28.0 via `packageManager`; frozen-lockfile verified; compose change asked of A1.
 
 ## Hecho
 
-- Takeoff table: named columns + icons (Fans, Lights, …); room row expands subtype breakdown
-- `needs_review` ring only when `needs_review === true`
-- Boxes layer **off** by default; multi-gang (2G+) emphasized when on
-- Room name overlays hidden by default; show on polygon hover + in Details
-- Fit-to-screen on load/resize + Fit button; category filter to solo one type
-- Review workflow: Mark sheet reviewed (`POST …/review-complete`), Export ground truth (`GET …/ground-truth.json`)
-- `getSheet` normalizes Agente 5 `SheetDetailResponse` (incl. `human_reviewed`)
+- Demo polish (takeoff subtypes, filters, fit, review/export) — previous milestone
+- Pin `"packageManager": "pnpm@10.28.0"` in `web/package.json` (fixes Docker
+  `ERR_PNPM_MINIMUM_RELEASE_AGE_VIOLATION` when corepack grabs newest pnpm)
+- Confirmed `corepack pnpm install --frozen-lockfile` works with 10.28.0
+- Message to Agente 1: compose should use `pnpm install --frozen-lockfile`
 
 ## Cómo probarlo
 
 ```bash
 cd web
-pnpm install
-# Against real backend (reviewer path):
-# VITE_USE_FIXTURE=false in web/.env
-pnpm dev
-# http://localhost:5173 → Load demo → open a sheet
-# Click room name in takeoff → expand subtypes; toggle category filter; Fit;
-# Mark sheet reviewed; Export ground truth
+corepack enable
+corepack prepare pnpm@10.28.0 --activate   # or: corepack pnpm …
+pnpm install --frozen-lockfile
 pnpm exec tsc --noEmit
 pnpm exec vitest run
+pnpm dev
 ```
 
 ## Siguiente
 
-- Optional: wire undo to a backend endpoint if A5 adds one
-- Keep palette in sync with A7 overlay
+- Wait for Agente 1 to update `docker-compose.yml` web command
+- Optional: undo endpoint when A5 adds one
 
 ## Bloqueos
 
-- Ninguno para la demo actual
+- Compose still runs unpinned `pnpm install` until Agente 1 lands the change
 
 ## Decisions
 
-- Boxes default off; 1-gang faint when boxes layer on
-- Room labels hover-only (plan raster already has text)
-- Category filter is independent of layer toggles
-- Ground-truth download uses browser blob + Content-Disposition filename
+- Pin exactly the lockfile-era pnpm (10.28.0), not latest
+- Recommend `--frozen-lockfile` in Docker/CI for reproducible installs
 
 ## Needs from Santiago
 
@@ -51,4 +44,8 @@ pnpm exec vitest run
 
 ## Explicación para Santiago
 
-Pulí la pantalla de demo con lo que pediste en la review: la tabla ahora dice Fans/Lights/… con íconos, y al hacer click en un cuarto se abren los subtipos (por ejemplo Switches 3: dimmer, fan…). El anillo naranja de “needs review” solo aparece si el flag es true. Las cajas arrancan apagadas; si las prendés, los 2G/3G se ven fuertes. Los nombres de cuarto no tapan el plano (hover o panel Details). El plano hace fit al cargar, hay filtro por categoría para revisar de a un tipo, y los botones “Mark sheet reviewed” / “Export ground truth” hablan con los endpoints nuevos de Agente 5.
+El contenedor web fallaba porque corepack bajaba un pnpm muy nuevo que rechaza
+paquetes recién publicados (minimum release age). Fijé `packageManager` a
+`pnpm@10.28.0` (la versión con la que se generó el lockfile) y comprobé que
+`pnpm install --frozen-lockfile` funciona. Pedí a Agente 1 que cambie el comando
+de docker-compose para usar ese install congelado.
