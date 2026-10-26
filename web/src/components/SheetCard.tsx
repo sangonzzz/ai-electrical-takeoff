@@ -1,44 +1,58 @@
 import { Link } from "react-router-dom";
-import type { JobStatus, SheetSummary } from "@/api/types";
-
-const STATUS_STYLE: Record<JobStatus, string> = {
-  queued: "bg-slate-100 text-slate-700",
-  running: "bg-amber-100 text-amber-800",
-  succeeded: "bg-emerald-100 text-emerald-800",
-  failed: "bg-red-100 text-red-800",
-};
+import { FileText } from "lucide-react";
+import type { SheetSummary } from "@/api/types";
+import { StatusBadge } from "./ui/StatusBadge";
 
 interface Props {
   sheet: SheetSummary;
   documentId: string;
 }
 
+/** Thumbnail stub — real PNG arrives from API when not in fixture mode. */
+function PlanThumb({ label }: { label: string }) {
+  return (
+    <div
+      className="relative flex aspect-[4/3] w-full items-center justify-center overflow-hidden rounded-lg bg-[var(--canvas)]"
+      aria-hidden
+    >
+      <div
+        className="absolute inset-3 rounded-sm bg-[var(--sheet)] shadow-[var(--shadow-md)]"
+        style={{
+          backgroundImage:
+            "linear-gradient(rgba(148,163,184,0.25) 1px, transparent 1px), linear-gradient(90deg, rgba(148,163,184,0.25) 1px, transparent 1px)",
+          backgroundSize: "12px 12px",
+        }}
+      />
+      <FileText className="relative z-10 text-slate-400" size={28} strokeWidth={1.5} />
+      <span className="absolute bottom-2 right-2 z-10 rounded bg-slate-900/70 px-1.5 py-0.5 font-mono text-[10px] text-white">
+        {label}
+      </span>
+    </div>
+  );
+}
+
 export function SheetCard({ sheet, documentId }: Props) {
   const status = sheet.status ?? "queued";
   const ready = status === "succeeded";
+  const label = sheet.sheet_number ?? `P${sheet.page_index + 1}`;
 
   const inner = (
-    <article className="flex h-full flex-col justify-between rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4 transition hover:border-slate-400">
-      <div>
+    <article className="card flex h-full flex-col overflow-hidden p-2 transition hover:border-slate-300">
+      <PlanThumb label={label} />
+      <div className="flex flex-1 flex-col gap-1 p-2 pt-3">
         <div className="text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
-          Sheet {sheet.page_index + 1}
+          Plan {sheet.page_index + 1}
         </div>
-        <h3 className="mt-1 text-base font-semibold text-[var(--ink)]">
-          {sheet.sheet_number ?? `Page ${sheet.page_index + 1}`}
-        </h3>
-        <p className="mt-1 text-[13px] text-[var(--muted)]">
+        <h3 className="text-[15px] font-semibold text-[var(--ink)]">{label}</h3>
+        <p className="line-clamp-2 text-[12px] leading-snug text-[var(--muted)]">
           {sheet.title ?? "Electrical plan"}
         </p>
-      </div>
-      <div className="mt-4 flex items-center justify-between gap-2">
-        <span
-          className={`rounded px-2 py-0.5 text-[11px] font-semibold capitalize ${STATUS_STYLE[status]}`}
-        >
-          {status}
-        </span>
-        {ready && (
-          <span className="text-[12px] font-medium text-sky-700">Open →</span>
-        )}
+        <div className="mt-auto flex items-center justify-between pt-2">
+          <StatusBadge status={status} />
+          {ready && (
+            <span className="text-[12px] font-semibold text-[var(--accent-ink)]">Open →</span>
+          )}
+        </div>
       </div>
     </article>
   );
@@ -46,7 +60,10 @@ export function SheetCard({ sheet, documentId }: Props) {
   if (!ready) return inner;
 
   return (
-    <Link to={`/documents/${documentId}/sheets/${sheet.sheet_id}`} className="block h-full">
+    <Link
+      to={`/documents/${documentId}/sheets/${sheet.sheet_id}`}
+      className="block h-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
+    >
       {inner}
     </Link>
   );
