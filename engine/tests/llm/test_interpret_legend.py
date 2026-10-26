@@ -8,11 +8,44 @@ from pathlib import Path
 from takeoff_engine.config import Settings
 from takeoff_engine.llm.cache import DiskCache
 from takeoff_engine.llm.client import ClaudeClient
+from takeoff_engine.llm.ids import stable_legend_id
 from takeoff_engine.llm.legend import interpret_legend
 from takeoff_engine.llm.schemas import LegendInterpretResponse
 from takeoff_engine.models import BBox, Category, LegendEntry, LlmUsage
 
 from .fakes import FakeTransport, tiny_png
+
+
+def _fixture_with_stable_ids(entries: list[LegendEntry], raw: dict) -> dict:
+    """Rewrite fixture entry_ids to match stable prompt ids."""
+    by_desc = {e.description: e for e in entries}
+    out_entries = []
+    for item in raw["entries"]:
+        # Match synthetic fixture ids via description keywords in our rules fixtures
+        entry = None
+        for e in entries:
+            if item["entry_id"].replace("leg-", "") in e.id or item["entry_id"] == e.id:
+                entry = e
+                break
+        if entry is None:
+            # Fall back: map by order for our 4-row synthetic fixture
+            idx = len(out_entries)
+            entry = entries[idx] if idx < len(entries) else entries[0]
+        sid = stable_legend_id(
+            entry.description,
+            entry.codes,
+            (
+                entry.symbol_bbox.x0,
+                entry.symbol_bbox.y0,
+                entry.symbol_bbox.x1,
+                entry.symbol_bbox.y1,
+            ),
+        )
+        cloned = dict(item)
+        cloned["entry_id"] = sid
+        out_entries.append(cloned)
+        _ = by_desc  # silence lint
+    return {"entries": out_entries}
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -93,10 +126,26 @@ def test_recorded_anthropic_fixture_validates() -> None:
         assert "pixel" not in low
 
 
-def test_interpret_legend_merges_and_warns_on_disagreement(tmp_path: Path) -> None:
+def test_interpret_legend_uses_cheap_model(tmp_path: Path) -> None:
+    entries = _rules_entries()
     raw = json.loads((FIXTURES / "legend_response.json").read_text(encoding="utf-8"))
     raw.pop("_meta", None)
-    transport = FakeTransport([raw])
+    transport = FakeTransport([_fixture_with_stable_ids(entries, raw)])
+    client = ClaudeClient(
+        settings=_settings(),
+        transport=transport,
+        cache=DiskCache(tmp_path),
+        usage=LlmUsage(),
+    )
+    interpret_legend(entries, tiny_png(), client=client)
+    assert transport.calls[0]["model"] == "claude-haiku-5-5"
+
+
+def test_interpret_legend_merges_and_warns_on_disagreement(tmp_path: Path) -> None:
+    entries = _rules_entries()
+    raw = json.loads((FIXTURES / "legend_response.json").read_text(encoding="utf-8"))
+    raw.pop("_meta", None)
+    transport = FakeTransport([_fixture_with_stable_ids(entries, raw)])
     usage = LlmUsage()
     warnings: list[str] = []
     client = ClaudeClient(
@@ -106,7 +155,7 @@ def test_interpret_legend_merges_and_warns_on_disagreement(tmp_path: Path) -> No
         usage=usage,
     )
     merged = interpret_legend(
-        _rules_entries(),
+        entries,
         tiny_png(),
         usage=usage,
         warnings=warnings,

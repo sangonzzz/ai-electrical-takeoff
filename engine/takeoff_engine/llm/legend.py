@@ -6,6 +6,7 @@ import json
 import logging
 
 from takeoff_engine.llm.client import ClaudeClient, make_client
+from takeoff_engine.llm.ids import stable_legend_id
 from takeoff_engine.llm.prompts import PROMPT_LEGEND, load_prompt, taxonomy_block
 from takeoff_engine.llm.schemas import LegendInterpretResponse
 from takeoff_engine.models import Category, LegendEntry, LlmUsage, SUBTYPES
@@ -38,39 +39,63 @@ def interpret_legend(
         warn_sink.extend(cl.warnings)
         return list(entries)
 
+    # Stable ids in the prompt so disk cache hits across analyze_sheet runs
+    # (pipeline minting uuid4 per extract_legend call).
+    stable_to_real: dict[str, str] = {}
+    payload = []
+    for e in entries:
+        sid = stable_legend_id(
+            e.description,
+            e.codes,
+            (e.symbol_bbox.x0, e.symbol_bbox.y0, e.symbol_bbox.x1, e.symbol_bbox.y1),
+        )
+        stable_to_real[sid] = e.id
+        payload.append(
+            {
+                "entry_id": sid,
+                "description": e.description,
+                "codes": e.codes,
+                "rules_category": e.category.value if e.category else None,
+                "rules_subtype": e.subtype,
+                "rules_combined": e.combined,
+            }
+        )
+
     system = load_prompt(PROMPT_LEGEND)
-    payload = [
-        {
-            "entry_id": e.id,
-            "description": e.description,
-            "codes": e.codes,
-            "rules_category": e.category.value if e.category else None,
-            "rules_subtype": e.subtype,
-            "rules_combined": e.combined,
-        }
-        for e in entries
-    ]
     user_text = (
         f"{taxonomy_block()}\n\n"
         "Interpret each legend entry. The attached image is the legend crop.\n\n"
         f"Entries JSON:\n{json.dumps(payload, indent=2)}"
     )
 
+    # Haiku: measured identical category/subtype to Sonnet on Escondido Plan 1
+    # (0 disagreements vs rules and vs Sonnet) at ~15x lower USD and lower latency.
+    model = cl.settings.anthropic_model_cheap
     response = cl.call_structured(
-        model=cl.settings.anthropic_model,
+        model=model,
         prompt_version=PROMPT_LEGEND,
         system=system,
         user_text=user_text,
         response_model=LegendInterpretResponse,
         images=[legend_png],
-        cache_extra={"entry_ids": [e.id for e in entries]},
+        cache_extra={"stable_ids": sorted(stable_to_real.keys())},
+        max_tokens=8192,
     )
     warn_sink.extend(cl.warnings)
 
-    by_id = {item.entry_id: item for item in response.entries}
+    by_real: dict[str, object] = {}
+    for item in response.entries:
+        real_id = stable_to_real.get(item.entry_id)
+        if real_id is None:
+            msg = f"LLM legend returned unknown entry_id={item.entry_id!r}; ignored"
+            logger.warning(msg)
+            warn_sink.append(msg)
+            continue
+        by_real[real_id] = item
+
     merged: list[LegendEntry] = []
     for entry in entries:
-        item = by_id.get(entry.id)
+        item = by_real.get(entry.id)
         if item is None:
             msg = f"LLM legend response missing entry_id={entry.id!r}; keeping rules"
             logger.warning(msg)
@@ -78,12 +103,6 @@ def interpret_legend(
             merged.append(entry)
             continue
         merged.append(_merge_entry(entry, item, warn_sink))
-
-    missing_llm = set(by_id) - {e.id for e in entries}
-    for mid in sorted(missing_llm):
-        msg = f"LLM legend returned unknown entry_id={mid!r}; ignored"
-        logger.warning(msg)
-        warn_sink.append(msg)
 
     return merged
 

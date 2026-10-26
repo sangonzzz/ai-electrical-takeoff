@@ -130,11 +130,24 @@ def _strictify_schema(node: Any) -> None:
 
 
 def _tool_schema(response_model: type[BaseModel]) -> dict[str, Any]:
-    """JSON Schema for Anthropic strict tool input."""
-    schema = response_model.model_json_schema()
-    schema.pop("title", None)
-    _strictify_schema(schema)
-    return schema
+    """JSON Schema for Anthropic strict tool input.
+
+    Uses ``anthropic.transform_schema`` so unsupported constraints
+    (``minimum``/``maximum``/``minLength``/…) are moved into descriptions —
+    Sonnet 5.5 strict tool use rejects them on the wire.
+    """
+    from anthropic import transform_schema
+
+    schema = transform_schema(response_model)
+    if isinstance(schema, dict):
+        schema.pop("title", None)
+        _strictify_schema(schema)
+        return schema
+    # Defensive fallback
+    raw = response_model.model_json_schema()
+    raw.pop("title", None)
+    _strictify_schema(raw)
+    return raw
 
 
 def _ensure_repo_dotenv() -> None:
@@ -288,6 +301,7 @@ class ClaudeClient:
 
         last_validation_error: str | None = None
         parsed: T | None = None
+        call_t0 = time.perf_counter()
 
         for validation_round in range(VALIDATION_RETRIES + 1):
             if last_validation_error is not None:
@@ -310,7 +324,8 @@ class ClaudeClient:
                 tool_choice=tool_choice,
             )
             inp_tok, out_tok = _usage_from_message(message)
-            self._record_usage(model, inp_tok, out_tok)
+            latency_ms = (time.perf_counter() - call_t0) * 1000.0
+            self._record_usage(model, inp_tok, out_tok, latency_ms=latency_ms)
 
             # Keep assistant turn for a possible validation retry
             messages.append({"role": "assistant", "content": _serialize_content(message)})
@@ -372,21 +387,41 @@ class ClaudeClient:
         assert last_exc is not None
         raise last_exc
 
-    def _record_usage(self, model: str, input_tokens: int, output_tokens: int) -> None:
+    def _record_usage(
+        self,
+        model: str,
+        input_tokens: int,
+        output_tokens: int,
+        *,
+        latency_ms: float | None = None,
+    ) -> None:
         cost = estimate_cost_usd(model, input_tokens, output_tokens)
         self.usage.calls += 1
         self.usage.input_tokens += input_tokens
         self.usage.output_tokens += output_tokens
         self.usage.cost_usd += cost
-        logger.info(
-            "LLM call model=%s in=%s out=%s cost_usd=%.6f totals calls=%s cost=%.6f",
-            model,
-            input_tokens,
-            output_tokens,
-            cost,
-            self.usage.calls,
-            self.usage.cost_usd,
-        )
+        if latency_ms is None:
+            logger.info(
+                "LLM call model=%s in=%s out=%s cost_usd=%.6f totals calls=%s cost=%.6f",
+                model,
+                input_tokens,
+                output_tokens,
+                cost,
+                self.usage.calls,
+                self.usage.cost_usd,
+            )
+        else:
+            logger.info(
+                "LLM call model=%s in=%s out=%s cost_usd=%.6f latency_ms=%.0f "
+                "totals calls=%s cost=%.6f",
+                model,
+                input_tokens,
+                output_tokens,
+                cost,
+                latency_ms,
+                self.usage.calls,
+                self.usage.cost_usd,
+            )
 
 
 def _serialize_content(message: Any) -> list[dict[str, Any]]:

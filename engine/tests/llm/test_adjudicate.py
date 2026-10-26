@@ -107,6 +107,46 @@ def test_adjudicate_batch_with_fixture(plans_pdf: Path, tmp_path: Path) -> None:
     )
 
 
+def test_adjudicate_one_call_for_many_candidates(plans_pdf: Path, tmp_path: Path) -> None:
+    """Default batch size covers a full sheet in one API call."""
+    from takeoff_engine.llm.adjudicate_task import DEFAULT_BATCH_SIZE
+
+    assert DEFAULT_BATCH_SIZE >= 1000
+    raw = json.loads((FIXTURES / "adjudicate_response.json").read_text(encoding="utf-8"))
+    raw.pop("_meta", None)
+    # Expand fixture items to match 8 candidates (same labels cycling)
+    base_items = list(raw["items"])
+    candidates = [
+        Candidate(f"cand-{i}", (1100 + i, 400, 1120 + i, 420), (1110 + i, 410), [], [])
+        for i in range(8)
+    ]
+    raw["items"] = [
+        {
+            "candidate_id": c.id,
+            "label": base_items[i % len(base_items)]["label"],
+            "confidence": 0.8,
+            "reason": "batch test",
+        }
+        for i, c in enumerate(candidates)
+    ]
+    transport = FakeTransport([raw])
+    client = ClaudeClient(
+        settings=_settings(),
+        transport=transport,
+        cache=DiskCache(tmp_path),
+        usage=LlmUsage(),
+    )
+    results = adjudicate(
+        plans_pdf,
+        0,
+        candidates,
+        [],
+        client=client,
+    )
+    assert len(transport.calls) == 1
+    assert len(results) == 8
+
+
 def test_adjudicate_without_key(plans_pdf: Path) -> None:
     client = ClaudeClient(
         settings=Settings(

@@ -21,10 +21,9 @@ empty baseline counts, plus a warning.
 
 | Task | Env var | Default | Why |
 |------|---------|---------|-----|
-| `interpret_legend` | `ANTHROPIC_MODEL` | `claude-sonnet-5-5` | One vision call per sheet; accuracy on legend text + symbols matters. |
-| `adjudicate` | `ANTHROPIC_MODEL` | `claude-sonnet-5-5` | Ambiguous crops need reliable subtype discrimination. |
-| `baseline_vision_takeoff` | `ANTHROPIC_MODEL` | `claude-sonnet-5-5` | Fair demo vs hybrid — same class of vision model, not a weaker Haiku. |
-| (reserved) | `ANTHROPIC_MODEL_CHEAP` | `claude-haiku-5-5` | Available on `Settings` for future high-volume text-only tasks. |
+| `interpret_legend` | `ANTHROPIC_MODEL_CHEAP` | `claude-haiku-5-5` | Measured identical category/subtype to Sonnet on Escondido Plan 1; ~15× cheaper, lower latency. |
+| `adjudicate` | `ANTHROPIC_MODEL` | `claude-sonnet-5-5` | Ambiguous crops; **one batched call per sheet** (all `needs_review`). |
+| `baseline_vision_takeoff` | `ANTHROPIC_MODEL` | `claude-sonnet-5-5` | Fair demo vs hybrid — same class of vision model. |
 
 List prices used for `LlmUsage.cost_usd` (USD / MTok): Sonnet 5.5 $2 in / $10 out;
 Haiku 5.5 $0.10 in / $0.50 out.
@@ -61,8 +60,21 @@ invent category strings.
 
 `cache.py`: `sha256(model + prompt_version + text + image bytes + extra)`.
 Disk store: `.cache/llm/{key}.json` (gitignored). Cache hits increment
-`LlmUsage.cache_hits` and skip the API. Warm cache makes the demo deterministic
-and cheap.
+`LlmUsage.cache_hits` and skip the API.
+
+Pipeline mints fresh `uuid4` ids each run. Prompts use **stable content ids**
+(`llm/ids.py`: legend description+codes+bbox; candidate page+bbox) so a second
+`analyze_sheet` hits disk cache. Measured warm `llm_legend` ≈ 100–130 ms.
+
+## Latency (measured 2026-10-26, local, 4 Escondido sheets)
+
+| Mode | avg wall/sheet | LLM calls (4 sheets) | USD (4 sheets) |
+|------|----------------|----------------------|----------------|
+| Cold (Haiku legend) | ~41 s | 5 | ~$0.024 |
+| Warm (disk cache) | ~24 s | 0 | $0 |
+
+Cold `llm_legend` ≈ 14–18 s (Haiku). Remaining warm time is mostly geometry
+(`candidates`/`classify` on pages 2–3), not Claude.
 
 ## Cost / tokens (expected per sheet, cold cache)
 
