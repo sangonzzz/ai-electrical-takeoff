@@ -352,8 +352,9 @@ def _refine_subtype(
         # not steal the subtype (R2 Fix 5); dedicated codes on the same mark
         # (240V / WP) still win via a tight check below.
         if int(cand.features.get("n_fills", 0)) > 0:
+            # SPEC §2: ``240V`` outranks WP / half-hot / plain GFI.
             if "240V" in type_codes:
-                return "gfci_240v" if ("GFI" in type_codes or "GFCI" in type_codes) else "240v"
+                return "gfci_240v"
             if "WP" in type_codes:
                 return "gfci_weatherproof"
             return "afci_half_hot"
