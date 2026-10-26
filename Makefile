@@ -1,4 +1,4 @@
-.PHONY: setup up down logs test lint schema analyze eval demo
+.PHONY: setup up down logs test lint schema analyze eval demo e2e
 
 setup:
 	uv sync --all-packages --group dev
@@ -36,3 +36,8 @@ demo:
 	@echo "Ensure stack is up: make up"
 	uv run python backend/scripts/demo_upload.py
 	@echo "Open http://localhost:5173"
+
+# Playwright quality pass against the running docker stack (Agente 7).
+# Requires: make up (api + web + worker healthy on :8000 / :5173).
+e2e:
+	cd e2e && npm install && npx playwright install chromium && npx playwright test

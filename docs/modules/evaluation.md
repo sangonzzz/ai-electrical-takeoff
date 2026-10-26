@@ -148,9 +148,19 @@ uv run takeoff eval --results-dir out/results
 uv run python -m eval.regression
 ```
 
+## Quality pass (E2E + generalization)
+
+- Playwright suite: `e2e/` — `make e2e` against `http://localhost:5173` (docker stack).
+  Per-step results: `e2e/results/steps.md`. Screenshots on failure.
+- Generalization probe (no engine tuning): `eval/scripts/generalization_probe.py` on
+  PDFs under `data/plans/generalization/` → `eval/reports/generalization/`.
+
 ## Known limits
 
 - YAML templates stay zeros until filled or until a detections export derives counts.
 - LLM baseline soft-fails if Agente 4 baseline / cache is unavailable.
 - `GET /api/sheets/{id}/ground-truth.json` is implemented by Agente 5; eval already
   accepts the documented payload when the file is present on disk.
+- Viewport discovery currently requires Escondido-style title
+  `ELECTRICAL PLAN - PLAN N`; other cities' electrical sheets fail that gate
+  (see generalization NOTES).

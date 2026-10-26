@@ -2,71 +2,88 @@
 
 ## Estado
 
-Eval soporta verdad por revisión en la app (detections.json + corrections log) y
-documenta el sesgo de esa verdad. Templates plan3/4 alineados con Agente 3.
+Quality pass: Playwright e2e suite + generalization probe done. Bugs for Santiago below.
 
 ## Hecho
 
-- M1–M4 originales (templates, overlay, métricas espaciales, baseline, CI helper).
-- **Review-based truth:** `eval/io_truth.py` carga
-  `GET /api/sheets/{id}/ground-truth.json` guardado como
-  `planN.detections.json` (también lista bare / `corrections` embebidas).
-- **Corrections accuracy:** `eval/corrections_metrics.py` —
-  delete→FP, create→FN, type change→misclass, room change→room error;
-  tablas por categoría con fans/lights destacados; tasas si hay conteos predichos.
-- Runner + reporte Markdown incluyen `corrections_accuracy` y `truth_source`.
-- Si el YAML sigue en ceros, los counts se derivan de las detecciones exportadas.
-- Docs: sesgo de revisión + mitigación (filtro por categoría) en
-  `docs/modules/evaluation.md` y `eval/COMO_CONTAR.md`.
-- Plan 3/4: `CL 1`… según mensaje de Agente 3.
-- Mensaje a Agente 5 pidiendo el endpoint `ground-truth.json`.
+- E2E Playwright suite in `e2e/` + `make e2e` (stack at http://localhost:5173).
+- Step log: `e2e/results/steps.md` (screenshots on failure under `e2e/results/artifacts/`).
+- Generalization PDFs in `data/plans/generalization/` + probe
+  `eval/scripts/generalization_probe.py` + `eval/reports/generalization/`.
+- Prior: review-based GT, corrections metrics, overlays, baseline.
+
+## E2E step results (last run, docker stack)
+
+| step | status | notes |
+|------|--------|-------|
+| home | **pass** | |
+| load_demo | **pass** | |
+| sheets_succeed | **pass** | 4× succeeded |
+| open_plan1 | **pass** | |
+| marks_visible | **pass** | |
+| takeoff_highlight | **pass** | |
+| select_details | **pass** | needs React fiber click (SVG flaky) |
+| change_subtype | **pass** | |
+| drag_room | **pass** | drag or room select fallback |
+| delete_decrements | **pass** | |
+| add_increments | **fail** | click Add + plan did not increase mark count |
+| undo | **fail** | Undo button **disabled**; API undo is no-op outside fixture |
+| reload_persists | **pass** | |
+| bom_total | **pass** | Total $ shown |
+| plans_2_4 | **pass** | |
+
+Suite exit: **1 passed** (soft-fail on known product bugs so later steps still run).
+
+## Generalization
+
+| PDF | Result |
+|-----|--------|
+| Longview TX residential template (p4 electrical example) | **FAIL** — `no bold 'ELECTRICAL PLAN - PLAN N' title found` |
+| Palm Beach Gardens electrical set (p0 legend, p1 plan) | **FAIL** — same title gate |
+
+No overlays produced (pipeline aborts before SheetResult). Details:
+`eval/reports/generalization/NOTES.md`.
 
 ## Cómo probarlo
 
 ```bash
-uv sync --all-packages --group dev
-uv run pytest engine/tests/eval -q
+make up
+make e2e
+# steps → e2e/results/steps.md
 
-# Tras exportar desde la API:
-#   eval/ground_truth/plan1.detections.json
-uv run takeoff eval --pdf data/plans/escondido_plans.pdf --out eval/reports
+uv run python eval/scripts/generalization_probe.py
 ```
 
 ## Siguiente
 
-- Agente 5: implementar `GET /api/sheets/{id}/ground-truth.json`.
-- Santiago: revisar en la app (una categoría a la vez) y guardar exports.
-- Ajustar `eval/baseline.json` tras el primer eval real con verdad revisada.
+- Agente 6: `data-testid` on detection marks (message sent).
+- Agente 5/6: wire real undo; fix Add-mode click → POST /detections.
+- Agente 2 (product decision): soften electrical title matching for other cities.
 
 ## Bloqueos
 
-- Endpoint `ground-truth.json` aún no existe en backend (pedido a Agente 5).
-  Mientras tanto se puede escribir el JSON a mano / desde `/corrections` + sheet.
+Ninguno para eval core. E2E Add/Undo blocked by product bugs above.
 
 ## Decisions
 
-- Verdad primaria = revisión en app + export; conteo ciego queda como calibración.
-- Counts embebidos o derivados de detections si el YAML está vacío (todo en 0).
-- Misclass/room se atribuyen a la categoría **antes** del update (lo que el sistema dijo).
-- Package `eval/` en la raíz; CLI ya cableado por Agente 1.
+- E2E soft-fails Add/Undo so BOM + plans 2–4 still execute.
+- Generalization uses DocumentCenter PDFs when city ADU CDNs block downloads.
+- No engine tuning for foreign plans (observation only).
 
 ## Needs from Santiago
 
-1. Revisar cada plan en la UI **por categoría** (fans → lights → resto).
-2. Guardar `ground-truth.json` como `eval/ground_truth/planN.detections.json`.
-3. Correr eval contra el resultado del pipeline **pre-corrección**.
+See chat: bugs found (undo, add-mark, title hardcoding, SVG clickability).
 
 ## Explicación para Santiago
 
-Ya no hace falta contar todo a ciegas para defender el demo: corriges el plano en
-la app y exportas esa verdad.
+Corrimos la demo en el navegador automático y dos planos de otras ciudades.
 
-1. **detections.json:** el eval compara marcas del sistema con las tuyas (mismo
-   tipo a ≤10 pt). Verde/rojo/naranja en el overlay.
-2. **Log de correcciones:** cada delete cuenta como falso positivo, cada create
-   como falso negativo, cambiar tipo = clasificación mala, cambiar cuarto = error
-   de cuarto. Fans y luces salen primero en el reporte.
-3. **Sesgo:** al corregir sobre lo dibujado, uno tiende a “dejar pasar” lo que ya
-   está. Mitigación: filtro de categoría, una a la vez (sobre todo fans y luces).
-4. El YAML a mano sigue existiendo si quieres una verdad independiente para
-   contrastar ese sesgo.
+En la demo casi todo funciona: cargar, 4 planos OK, marcas, resaltar takeoff,
+cambiar tipo, mover de cuarto, borrar, BOM con total, abrir planos 2–4.
+Fallan **añadir** una marca con el modo Add y el botón **Undo** (está apagado
+porque el API real no tiene undo todavía).
+
+En planos de Longview (TX) y Palm Beach Gardens el motor **ni empieza**: exige
+el título exacto `ELECTRICAL PLAN - PLAN N` del PDF de Escondido. Sin eso no hay
+viewport, leyenda ni overlay. Eso es el límite de generalización hoy — no lo
+parchamos a propósito.

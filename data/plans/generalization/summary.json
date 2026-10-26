@@ -1,0 +1,26 @@
+[
+  {
+    "plan": "longview",
+    "pdf": "data\\plans\\generalization\\longview_residential_template.pdf",
+    "page": 4,
+    "ok": false,
+    "error": "ValueError: page 4: no bold 'ELECTRICAL PLAN - PLAN N' title found",
+    "traceback": "Traceback (most recent call last):\n  File \"C:\\Users\\Santiago\\Documents\\Electrical-Plan-Takeoff-Atreyus\\eval\\scripts\\generalization_probe.py\", line 42, in main\n    result = analyze_sheet(pdf, page, use_llm=False, with_bom=False)\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\Santiago\\Documents\\Electrical-Plan-Takeoff-Atreyus\\engine\\takeoff_engine\\pipeline.py\", line 113, in analyze_sheet\n    viewport, title = find_electrical_viewport(ctx)\n                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\Santiago\\Documents\\Electrical-Plan-Takeoff-Atreyus\\engine\\takeoff_engine\\viewport.py\", line 190, in find_electrical_viewport\n    title_bbox, title = find_electrical_title(ctx)\n                        ^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\Santiago\\Documents\\Electrical-Plan-Takeoff-Atreyus\\engine\\takeoff_engine\\viewport.py\", line 102, in find_electrical_title\n    raise ValueError(\nValueError: page 4: no bold 'ELECTRICAL PLAN - PLAN N' title found\n"
+  },
+  {
+    "plan": "pbg",
+    "pdf": "data\\plans\\generalization\\pbg_electrical.pdf",
+    "page": 0,
+    "ok": false,
+    "error": "ValueError: page 0: no bold 'ELECTRICAL PLAN - PLAN N' title found",
+    "traceback": "Traceback (most recent call last):\n  File \"C:\\Users\\Santiago\\Documents\\Electrical-Plan-Takeoff-Atreyus\\eval\\scripts\\generalization_probe.py\", line 42, in main\n    result = analyze_sheet(pdf, page, use_llm=False, with_bom=False)\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\Santiago\\Documents\\Electrical-Plan-Takeoff-Atreyus\\engine\\takeoff_engine\\pipeline.py\", line 113, in analyze_sheet\n    viewport, title = find_electrical_viewport(ctx)\n                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\Santiago\\Documents\\Electrical-Plan-Takeoff-Atreyus\\engine\\takeoff_engine\\viewport.py\", line 190, in find_electrical_viewport\n    title_bbox, title = find_electrical_title(ctx)\n                        ^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\Santiago\\Documents\\Electrical-Plan-Takeoff-Atreyus\\engine\\takeoff_engine\\viewport.py\", line 102, in find_electrical_title\n    raise ValueError(\nValueError: page 0: no bold 'ELECTRICAL PLAN - PLAN N' title found\n"
+  },
+  {
+    "plan": "pbg",
+    "pdf": "data\\plans\\generalization\\pbg_electrical.pdf",
+    "page": 1,
+    "ok": false,
+    "error": "ValueError: page 1: no bold 'ELECTRICAL PLAN - PLAN N' title found",
+    "traceback": "Traceback (most recent call last):\n  File \"C:\\Users\\Santiago\\Documents\\Electrical-Plan-Takeoff-Atreyus\\eval\\scripts\\generalization_probe.py\", line 42, in main\n    result = analyze_sheet(pdf, page, use_llm=False, with_bom=False)\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\Santiago\\Documents\\Electrical-Plan-Takeoff-Atreyus\\engine\\takeoff_engine\\pipeline.py\", line 113, in analyze_sheet\n    viewport, title = find_electrical_viewport(ctx)\n                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\Santiago\\Documents\\Electrical-Plan-Takeoff-Atreyus\\engine\\takeoff_engine\\viewport.py\", line 190, in find_electrical_viewport\n    title_bbox, title = find_electrical_title(ctx)\n                        ^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\Santiago\\Documents\\Electrical-Plan-Takeoff-Atreyus\\engine\\takeoff_engine\\viewport.py\", line 102, in find_electrical_title\n    raise ValueError(\nValueError: page 1: no bold 'ELECTRICAL PLAN - PLAN N' title found\n"
+  }
+]

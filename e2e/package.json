@@ -1,0 +1,15 @@
+{
+  "name": "ai-electrical-takeoff-e2e",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Playwright end-to-end suite against the docker stack (Agente 7)",
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.55.0"
+  }
+}
