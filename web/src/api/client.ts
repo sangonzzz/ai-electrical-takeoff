@@ -40,6 +40,7 @@ interface DocumentDetailApi {
     current_run_id?: string | null;
     job_id?: string | null;
     status?: string | null;
+    error?: string | null;
   }>;
 }
 
@@ -135,41 +136,12 @@ export async function getJob(jobId: string): Promise<JobInfo> {
 
 /**
  * Fetch document metadata and normalize to DocumentSummary.
- * Refetch after jobs succeed so sheet_number / title from the pipeline appear.
+ * Per-sheet job_id / status come from the document itself (Agente 5).
  */
 export async function getDocument(documentId: string): Promise<DocumentSummary> {
   if (useFixture) return fixtureGetDocument(documentId);
   const raw = await request<DocumentDetailApi>(`/api/documents/${documentId}`);
   return documentFromDetail(raw);
-}
-
-/**
- * Document + live job statuses in one round (used by home polling).
- * Always re-reads the document so titles land when analysis finishes.
- */
-export async function getDocumentWithJobStatuses(
-  documentId: string,
-): Promise<DocumentSummary> {
-  const doc = await getDocument(documentId);
-  const sheets = await Promise.all(
-    doc.sheets.map(async (sheet) => {
-      const jobId = sheet.job_id;
-      if (!jobId) {
-        return { ...sheet, status: sheet.status ?? ("queued" as const) };
-      }
-      try {
-        const job = await getJob(jobId);
-        return {
-          ...sheet,
-          job_id: job.job_id || jobId,
-          status: normalizeJobStatus(job.status),
-        };
-      } catch {
-        return { ...sheet, status: sheet.status ?? ("queued" as const) };
-      }
-    }),
-  );
-  return { ...doc, sheets };
 }
 
 export async function getSheet(sheetId: string): Promise<SheetBundle> {

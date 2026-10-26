@@ -154,14 +154,19 @@ export function resetFixtureState(): void {
 }
 
 function fixtureDocumentSummary(): DocumentSummary {
-  const sheets: SheetSummary[] = [0, 1, 2, 3].map((page_index) => ({
-    sheet_id: page_index === 0 ? "sheet-plan1" : `sheet-plan${page_index + 1}`,
-    page_index,
-    job_id: `job-fixture-${page_index}`,
-    sheet_number: `A${page_index + 1}-111`,
-    title: `ELECTRICAL PLAN - PLAN ${page_index + 1}`,
-    status: "succeeded" as const,
-  }));
+  const sheets: SheetSummary[] = [0, 1, 2, 3].map((page_index) => {
+    const job_id = `job-fixture-${page_index}`;
+    return {
+      sheet_id: page_index === 0 ? "sheet-plan1" : `sheet-plan${page_index + 1}`,
+      page_index,
+      job_id,
+      current_run_id: job_id,
+      sheet_number: `A${page_index + 1}-111`,
+      title: `ELECTRICAL PLAN - PLAN ${page_index + 1}`,
+      status: "succeeded" as const,
+      error: null,
+    };
+  });
   return { document_id: DEMO_DOC_ID, sheets };
 }
 

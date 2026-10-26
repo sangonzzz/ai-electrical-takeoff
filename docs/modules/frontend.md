@@ -21,16 +21,19 @@ radius 10 px, transitions ~150 ms. Light theme default.
 
 1. **Home** — hero, primary “Load demo plans”, upload, 4 sheet cards (thumbnail + status).
    Cards show pipeline `sheet_number` / `title` (e.g. A1-111, ELECTRICAL PLAN - PLAN 1),
-   not bare “P1”. Job polling uses `getDocumentWithJobStatuses`: refetch document +
-   normalize each job status; stop only when every sheet is `succeeded` or `failed`.
+   not bare “P1”. Polls `GET /api/documents/{id}` every 2 s while any sheet is
+   `queued`/`running`; card status comes from `sheets[].status` (no separate jobs merge).
+   A card is openable when `status === succeeded` or when `current_run_id` is set
+   (and not still queued/running/failed).
 2. **Sheet** — header (plan tabs, pipeline badge, needs-review count, review/export),
    KPI strip, dark-canvas plan with floating toolbar + mini legend, right panel tabs.
 
 ## Job status mapping
 
-`web/src/lib/jobs.ts` maps API/legacy strings (`completed`, `success`, `in_progress`, …)
-onto `queued | running | succeeded | failed`. Upload responses use `document_id` /
-`job_id`; GET document uses `id` / `current_run_id` — both normalized to `DocumentSummary`.
+`web/src/lib/jobs.ts` maps API/legacy strings onto `queued | running | succeeded | failed`.
+Upload (`document_id`/`job_id`) and GET document (`id`, per-sheet `job_id`/`status`/
+`current_run_id`) both normalize to `DocumentSummary`. Document sheet fields are the
+source of truth for home polling (Agente 5).
 
 ## Plan canvas
 

@@ -43,10 +43,15 @@ export interface ReviewCompleteResponse {
 export interface SheetSummary {
   sheet_id: string;
   page_index: number;
+  /** Latest analysis run id (same as current_run_id when present). */
   job_id?: string | null;
+  /** Backend sheet.current_run_id — also used as openability fallback. */
+  current_run_id?: string | null;
   sheet_number?: string | null;
   title?: string | null;
-  status?: JobStatus;
+  /** From GET /api/documents/{id} sheets[].status — source of truth for home cards. */
+  status?: JobStatus | null;
+  error?: string | null;
 }
 
 export interface DocumentSummary {

@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FileUp, FlaskConical, LayoutGrid } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import {
-  getDocumentWithJobStatuses,
+  getDocument,
   isFixtureMode,
   loadDemoPlans,
   uploadDocument,
@@ -13,7 +13,7 @@ import { SheetCard } from "@/components/SheetCard";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { Skeleton } from "@/components/ui/Skeleton";
-import { documentHasPendingJobs } from "@/lib/jobs";
+import { documentHasPendingJobs, sheetIsOpenable } from "@/lib/jobs";
 
 const POLL_MS = 2000;
 
@@ -46,14 +46,12 @@ export function HomePage() {
   });
 
   /**
-   * Single poll loop: refetch document (sheet_number/title) + job statuses.
-   * Stops only when every sheet is succeeded or failed.
-   * (Previously a raw GET /documents overwrote the cache and wiped statuses
-   * back to "queued" because the detail payload has no status field.)
+   * Poll GET /documents every 2s while any sheet is queued/running.
+   * Document sheets[].status / job_id are the source of truth (no separate jobs merge).
    */
   const docQuery = useQuery({
     queryKey: ["document", documentId],
-    queryFn: () => getDocumentWithJobStatuses(documentId!),
+    queryFn: () => getDocument(documentId!),
     enabled: !!documentId,
     refetchInterval: (q) => {
       const data = q.state.data;
@@ -178,7 +176,7 @@ export function HomePage() {
                 <SheetCard key={sheet.sheet_id} sheet={sheet} documentId={doc.document_id} />
               ))}
             </div>
-            {doc.sheets[0]?.status === "succeeded" && (
+            {doc.sheets[0] && sheetIsOpenable(doc.sheets[0]) && (
               <button
                 type="button"
                 className="btn btn-ghost mt-4 !px-0 text-[var(--accent-ink)]"

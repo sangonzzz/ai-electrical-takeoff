@@ -25,8 +25,26 @@ export function isTerminalStatus(status: JobStatus | undefined | null): boolean 
   return status != null && TERMINAL.has(status);
 }
 
+/** True while any sheet is still queued or running (keep polling). */
 export function documentHasPendingJobs(doc: DocumentSummary): boolean {
-  return doc.sheets.some((s) => !isTerminalStatus(s.status));
+  return doc.sheets.some((s) => {
+    if (s.status === "queued" || s.status === "running") return true;
+    if (s.status === "succeeded" || s.status === "failed") return false;
+    // null/undefined status: keep polling only until a run id appears
+    return !(s.current_run_id ?? s.job_id);
+  });
+}
+
+/**
+ * Card is openable when analysis succeeded, or when current_run_id is set
+ * and the sheet is not explicitly still in flight / failed.
+ */
+export function sheetIsOpenable(sheet: SheetSummary): boolean {
+  if (sheet.status === "succeeded") return true;
+  if (sheet.status === "queued" || sheet.status === "running" || sheet.status === "failed") {
+    return false;
+  }
+  return Boolean(sheet.current_run_id ?? sheet.job_id);
 }
 
 /** POST /api/documents (202) → UI document summary. */
@@ -41,9 +59,11 @@ export function documentFromUpload(api: {
         sheet_id: s.sheet_id,
         page_index: s.page_index,
         job_id: s.job_id,
+        current_run_id: s.job_id,
         status: "queued",
         sheet_number: null,
         title: null,
+        error: null,
       }),
     ),
   };
@@ -51,7 +71,7 @@ export function documentFromUpload(api: {
 
 /**
  * GET /api/documents/{id} → UI document summary.
- * Backend uses `id` and `current_run_id` (not document_id / job_id / status).
+ * Per-sheet job_id / status / current_run_id from the document are the source of truth.
  */
 export function documentFromDetail(api: {
   id: string;
@@ -63,37 +83,22 @@ export function documentFromDetail(api: {
     current_run_id?: string | null;
     job_id?: string | null;
     status?: string | null;
+    error?: string | null;
   }>;
 }): DocumentSummary {
   return {
     document_id: api.id,
-    sheets: api.sheets.map(
-      (s): SheetSummary => ({
+    sheets: api.sheets.map((s): SheetSummary => {
+      const runId = s.job_id ?? s.current_run_id ?? null;
+      return {
         sheet_id: s.sheet_id,
         page_index: s.page_index,
-        job_id: s.job_id ?? s.current_run_id ?? null,
+        job_id: runId,
+        current_run_id: s.current_run_id ?? runId,
         sheet_number: s.sheet_number ?? null,
         title: s.title ?? null,
-        status: s.status != null ? normalizeJobStatus(s.status) : undefined,
-      }),
-    ),
-  };
-}
-
-/** Merge live job statuses onto sheets without dropping sheet_number / title. */
-export function mergeJobStatuses(
-  doc: DocumentSummary,
-  updates: Array<{ sheet_id: string; status: JobStatus; job_id?: string }>,
-): DocumentSummary {
-  return {
-    ...doc,
-    sheets: doc.sheets.map((s) => {
-      const u = updates.find((x) => x.sheet_id === s.sheet_id);
-      if (!u) return s;
-      return {
-        ...s,
-        status: u.status,
-        job_id: u.job_id ?? s.job_id,
+        status: s.status != null ? normalizeJobStatus(s.status) : null,
+        error: s.error ?? null,
       };
     }),
   };

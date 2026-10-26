@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { FileText } from "lucide-react";
 import type { SheetSummary } from "@/api/types";
+import { sheetIsOpenable } from "@/lib/jobs";
 import { StatusBadge } from "./ui/StatusBadge";
 
 interface Props {
@@ -33,7 +34,7 @@ function PlanThumb({ label }: { label: string }) {
 
 export function SheetCard({ sheet, documentId }: Props) {
   const status = sheet.status ?? "queued";
-  const ready = status === "succeeded";
+  const ready = sheetIsOpenable(sheet);
   // Prefer pipeline sheet_number (A1-111); never show bare "P1".
   const sheetNumber = sheet.sheet_number?.trim() || `Plan ${sheet.page_index + 1}`;
   const title =
