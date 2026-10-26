@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi.responses import Response
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
@@ -144,4 +145,54 @@ async def get_document(
         page_count=doc.page_count,
         created_at=doc.created_at,
         sheets=summaries,
+    )
+
+
+@router.get("/api/documents/{document_id}/export.xlsx")
+async def export_document_xlsx(
+    document_id: str, session: DbSession, settings: AppSettings
+) -> Response:
+    from app.services.export_data import load_document_export_bundles
+    from app.services.exports import build_document_workbook
+
+    doc = await session.get(Document, document_id)
+    if doc is None:
+        raise HTTPException(status_code=404, detail="document not found")
+    bundles = await load_document_export_bundles(
+        session, settings, doc, with_overlay=False
+    )
+    if not bundles:
+        raise HTTPException(status_code=409, detail="document has no analyzed sheets")
+    data = build_document_workbook(bundles)
+    return Response(
+        content=data,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={
+            "Content-Disposition": f'attachment; filename="{document_id}-takeoff.xlsx"'
+        },
+    )
+
+
+@router.get("/api/documents/{document_id}/quote.pdf")
+async def quote_document_pdf(
+    document_id: str, session: DbSession, settings: AppSettings
+) -> Response:
+    from app.services.export_data import load_document_export_bundles
+    from app.services.exports import build_document_quote_pdf
+
+    doc = await session.get(Document, document_id)
+    if doc is None:
+        raise HTTPException(status_code=404, detail="document not found")
+    bundles = await load_document_export_bundles(
+        session, settings, doc, with_overlay=True
+    )
+    if not bundles:
+        raise HTTPException(status_code=409, detail="document has no analyzed sheets")
+    data = build_document_quote_pdf(bundles, settings)
+    return Response(
+        content=data,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="{document_id}-quote.pdf"'
+        },
     )

@@ -71,6 +71,17 @@ Human review: `POST /api/sheets/{id}/review-complete` sets `human_reviewed` on t
 current run; `GET /api/sheets/{id}/ground-truth.json` exports active detections for
 Agente 7 (`planN.detections.json`).
 
+## Exports (Excel + PDF quote)
+
+Requires `openpyxl` and `reportlab` (ask Agente 1 if missing from `backend/pyproject.toml`).
+
+| Endpoint | Output |
+|----------|--------|
+| `GET /api/sheets/{id}/export.xlsx` | Workbook: Takeoff by room, Detections, BOM, Wires, Assumptions, Corrections log |
+| `GET /api/sheets/{id}/quote.pdf` | Client quote: counts, priced BOM, assumptions, plan viewport image |
+| `GET /api/documents/{id}/export.xlsx` | Same tabs for all 4 sheets (Plan column) |
+| `GET /api/documents/{id}/quote.pdf` | One PDF section per sheet |
+
 ## How to run
 
 ```bash

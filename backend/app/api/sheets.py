@@ -200,6 +200,46 @@ async def export_csv(sheet_id: str, session: DbSession) -> Response:
     )
 
 
+@router.get("/api/sheets/{sheet_id}/export.xlsx")
+async def export_xlsx(
+    sheet_id: str, session: DbSession, settings: AppSettings
+) -> Response:
+    from app.services.export_data import load_sheet_export_bundle
+    from app.services.exports import build_sheet_workbook
+
+    sheet = await get_sheet_or_404(session, sheet_id)
+    bundle = await load_sheet_export_bundle(
+        session, settings, sheet, with_overlay=False
+    )
+    data = build_sheet_workbook(bundle)
+    return Response(
+        content=data,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={
+            "Content-Disposition": f'attachment; filename="{sheet_id}-takeoff.xlsx"'
+        },
+    )
+
+
+@router.get("/api/sheets/{sheet_id}/quote.pdf")
+async def quote_pdf(
+    sheet_id: str, session: DbSession, settings: AppSettings
+) -> Response:
+    from app.services.export_data import load_sheet_export_bundle
+    from app.services.exports import build_sheet_quote_pdf
+
+    sheet = await get_sheet_or_404(session, sheet_id)
+    bundle = await load_sheet_export_bundle(session, settings, sheet, with_overlay=True)
+    data = build_sheet_quote_pdf(bundle, settings)
+    return Response(
+        content=data,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="{sheet_id}-quote.pdf"'
+        },
+    )
+
+
 @router.post(
     "/api/sheets/{sheet_id}/detections",
     response_model=DetectionMutationResponse,

@@ -2,44 +2,44 @@
 
 ## Estado
 
-API lista; integridad del PDF original demostrada (sha256 + docs + hash en API).
+Exports Excel/PDF listos. Pedido a Agente 1: `openpyxl` + `reportlab` en `backend/pyproject.toml`.
 
 ## Hecho
 
-- Upload/jobs/CRUD/BOM/review + job fields en GET document
-- Idempotency, `ENGINE=real`, `max_jobs=4`
-- **PDF integrity:** store bytes unchanged; worker verifies sha256; `file_hash` en document/sheet API;
-  test vs `escondido_plans.pdf`; docs confirman vectors del PDF original / PNG solo render
-- Mensaje a Agente 6 para mostrar hash corto en el header
+- API completa (upload, jobs, CRUD, review, file_hash, job fields en document)
+- **Exports:** `export.xlsx` / `quote.pdf` a nivel sheet y document
+- Tests unitarios abren xlsx/pdf; mensaje a Agente 6
 
 ## Cómo probarlo
 
 ```bash
-docker compose up -d db redis
-cd backend && uv run alembic upgrade head
-uv run uvicorn app.main:app --app-dir backend --reload --port 8000
-uv run pytest backend/tests/test_pdf_integrity.py backend/tests/test_unit_engine_rooms.py -q
+# Tras Agente 1: uv sync (openpyxl, reportlab)
+uv run pytest backend/tests/test_exports.py -q -k "not endpoints"
+# Con Postgres:
+uv run pytest backend/tests/test_exports.py -q
 ```
 
 ## Siguiente
 
-- Agente 6: UI del hash corto
+- Confirmar deps de Agente 1 en pyproject
+- Agente 6: botones de descarga
 
 ## Bloqueos
 
-- Ninguno
+- `openpyxl` / `reportlab` aún no están en `backend/pyproject.toml` (pedido a Agente 1);
+  instalados localmente con `uv pip` para desarrollo
 
 ## Decisions
 
-- Content-addressed path `storage/documents/{sha256}.pdf`; never rewrite with PyMuPDF save
-- Worker fails the job if on-disk hash ≠ `documents.file_hash`
+- Document workbook: una sola pestaña por tipo con columna `Plan`
+- Quote PDF: una sección/página por hoja; overlay a 72 dpi
 
 ## Needs from Santiago
 
-- (ninguno)
+- Ninguno urgente
 
 ## Explicación para Santiago
 
-El PDF que subes se guarda tal cual (mismos bytes, mismo SHA-256). El análisis y la imagen
-del plano abren ese archivo; la PNG es solo un render del viewport, no un PDF nuevo. En la
-API verás `file_hash` en el documento y en cada hoja para comprobarlo.
+Ahora puedes bajar un Excel con el takeoff por cuarto, detecciones, BOM, cables,
+supuestos y correcciones, y un PDF de cotización limpio con totales y una imagen del
+plano. También hay exportación de las 4 hojas juntas (un Excel y un PDF).
