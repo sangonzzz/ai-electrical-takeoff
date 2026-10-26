@@ -22,13 +22,13 @@ export function HomePage() {
   const queryClient = useQueryClient();
   const fileRef = useRef<HTMLInputElement>(null);
   const [documentId, setDocumentId] = useState<string | null>(() =>
-    sessionStorage.getItem("atreyus.documentId"),
+    sessionStorage.getItem("takeoff.documentId"),
   );
   const [error, setError] = useState<string | null>(null);
 
   function rememberDoc(doc: DocumentSummary) {
     setDocumentId(doc.document_id);
-    sessionStorage.setItem("atreyus.documentId", doc.document_id);
+    sessionStorage.setItem("takeoff.documentId", doc.document_id);
     queryClient.setQueryData(["document", doc.document_id], doc);
     setError(null);
   }
@@ -69,10 +69,7 @@ export function HomePage() {
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-3">
           <div className="flex items-baseline gap-2">
             <span className="text-[15px] font-bold tracking-tight text-[var(--ink)]">
-              Atreyus
-            </span>
-            <span className="text-[12px] font-medium text-[var(--muted)]">
-              Electrical takeoff
+              Electrical Takeoff
             </span>
           </div>
           {isFixtureMode() && (

@@ -34,7 +34,7 @@ export function SheetHeader({
           title="Back to home"
         >
           <ArrowLeft size={14} />
-          <span className="font-bold tracking-tight">Atreyus</span>
+          <span className="font-bold tracking-tight">Electrical Takeoff</span>
         </Link>
 
         <nav className="flex flex-wrap items-center gap-1" aria-label="Plan switcher">
