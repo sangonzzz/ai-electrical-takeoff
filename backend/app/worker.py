@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import logging
 from datetime import UTC, datetime
-from pathlib import Path
-
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
@@ -14,6 +12,7 @@ from app.models import AnalysisRun, Document, Sheet
 from app.services.engine import get_engine
 from app.services.persist import apply_sheet_metadata, persist_sheet_result, uniquify_result_ids
 from app.services.queue import redis_settings_from_url
+from app.services.storage import assert_stored_matches_hash
 from app.settings import get_settings
 
 logger = logging.getLogger("takeoff.worker")
@@ -47,7 +46,18 @@ async def analyze_sheet_job(ctx: dict, run_id: str) -> dict:
 
         sheet = run.sheet
         document: Document = sheet.document
-        pdf_path = Path(document.storage_path)
+        # Analyze the exact bytes stored at upload (sha256 verified).
+        try:
+            pdf_path = assert_stored_matches_hash(
+                settings, document.storage_path, document.file_hash
+            )
+        except (FileNotFoundError, RuntimeError) as exc:
+            run.status = "failed"
+            run.progress = 1.0
+            run.error = str(exc)
+            run.finished_at = datetime.now(UTC)
+            await session.commit()
+            return {"ok": False, "error": str(exc)}
 
         engine = get_engine(settings)
 

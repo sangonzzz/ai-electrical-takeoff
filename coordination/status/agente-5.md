@@ -2,14 +2,15 @@
 
 ## Estado
 
-API lista; fix “Queued forever” en GET document (job_id + status por hoja).
+API lista; integridad del PDF original demostrada (sha256 + docs + hash en API).
 
 ## Hecho
 
-- Skeleton, upload/jobs, FakeEngine, CRUD, BOM, demo, review/ground-truth
-- Idempotency + `pipeline_version` = package version; `max_jobs=4`; `ENGINE=real` default
-- **Fix Queued forever:** `GET /api/documents/{id}` sheets ahora incluyen `job_id`, `status`, `error`
-- Mensaje a Agente 6 con los campos nuevos
+- Upload/jobs/CRUD/BOM/review + job fields en GET document
+- Idempotency, `ENGINE=real`, `max_jobs=4`
+- **PDF integrity:** store bytes unchanged; worker verifies sha256; `file_hash` en document/sheet API;
+  test vs `escondido_plans.pdf`; docs confirman vectors del PDF original / PNG solo render
+- Mensaje a Agente 6 para mostrar hash corto en el header
 
 ## Cómo probarlo
 
@@ -17,15 +18,12 @@ API lista; fix “Queued forever” en GET document (job_id + status por hoja).
 docker compose up -d db redis
 cd backend && uv run alembic upgrade head
 uv run uvicorn app.main:app --app-dir backend --reload --port 8000
-uv run arq app.worker.WorkerSettings
-curl -X POST http://localhost:8000/api/documents/demo
-# Luego GET /api/documents/{id} → cada sheet trae job_id + status
-uv run pytest backend/tests -q
+uv run pytest backend/tests/test_pdf_integrity.py backend/tests/test_unit_engine_rooms.py -q
 ```
 
 ## Siguiente
 
-- Nada bloqueante; Agente 6 puede polllear document detail para status de cards
+- Agente 6: UI del hash corto
 
 ## Bloqueos
 
@@ -33,8 +31,8 @@ uv run pytest backend/tests -q
 
 ## Decisions
 
-- `job_id` = run actual (`current_run_id`) / latest run de la hoja
-- `error` solo si `status=failed`
+- Content-addressed path `storage/documents/{sha256}.pdf`; never rewrite with PyMuPDF save
+- Worker fails the job if on-disk hash ≠ `documents.file_hash`
 
 ## Needs from Santiago
 
@@ -42,7 +40,6 @@ uv run pytest backend/tests -q
 
 ## Explicación para Santiago
 
-El front se quedaba en “Queued” porque al refrescar el documento la API no devolvía
-el `job_id` ni el `status` de cada hoja; el cliente perdía los ids y no podía actualizar
-las tarjetas. Ahora cada hoja en `GET /api/documents/{id}` trae `job_id`, `status` y
-`error` (si falló), igual que al subir, así el polling sigue funcionando.
+El PDF que subes se guarda tal cual (mismos bytes, mismo SHA-256). El análisis y la imagen
+del plano abren ese archivo; la PNG es solo un render del viewport, no un PDF nuevo. En la
+API verás `file_hash` en el documento y en cada hoja para comprobarlo.

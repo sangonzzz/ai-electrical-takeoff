@@ -26,10 +26,12 @@ class SheetJobInfo(BaseModel):
     sheet_id: str
     page_index: int
     job_id: str
+    file_hash: str | None = None
 
 
 class DocumentUploadResponse(BaseModel):
     document_id: str
+    file_hash: str
     sheets: list[SheetJobInfo]
 
 
@@ -63,6 +65,7 @@ class DocumentSheetSummary(BaseModel):
     job_id: str | None = None
     status: Literal["queued", "running", "succeeded", "failed"] | None = None
     error: str | None = None
+    file_hash: str | None = None
 
 
 class DocumentDetailResponse(BaseModel):
@@ -76,6 +79,7 @@ class DocumentDetailResponse(BaseModel):
 
 class SheetDetailResponse(BaseModel):
     sheet: Sheet
+    file_hash: str | None = None  # sha256 of the original stored PDF
     job: JobStatusResponse | None = None
     legend: list[LegendEntry] = []
     rooms: list[Room] = []

@@ -98,8 +98,10 @@ def build_sheet_detail(sheet: Sheet, run: AnalysisRun | None) -> SheetDetailResp
         takeoff = sheet_takeoff(rooms_m, dets_m)
         warnings = list(run.warnings or [])
         job = job_from_run(run)
+    file_hash = sheet.document.file_hash if sheet.document is not None else None
     return SheetDetailResponse(
         sheet=sheet_model_from_orm(sheet),
+        file_hash=file_hash,
         job=job,
         legend=legend,
         rooms=rooms,

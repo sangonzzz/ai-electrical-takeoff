@@ -7,7 +7,7 @@ from pathlib import Path
 import pymupdf
 
 from app.models import Document, Sheet
-from app.services.storage import ensure_dirs
+from app.services.storage import ensure_dirs, resolve_document_path
 from app.settings import Settings
 
 
@@ -28,9 +28,8 @@ def render_sheet_png(
     if out.exists():
         return out
 
-    pdf_path = Path(document.storage_path)
-    if not pdf_path.is_absolute():
-        pdf_path = settings.storage_dir.parent / pdf_path
+    # Render from the same original stored PDF the worker analyzes (not a regenerated file).
+    pdf_path = resolve_document_path(settings, document.storage_path)
 
     vp = sheet.viewport or {}
     clip = pymupdf.Rect(

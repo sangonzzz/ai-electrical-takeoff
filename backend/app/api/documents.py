@@ -41,8 +41,14 @@ async def _upload_bytes(
 
     return DocumentUploadResponse(
         document_id=doc.id,
+        file_hash=doc.file_hash,
         sheets=[
-            SheetJobInfo(sheet_id=s.id, page_index=s.page_index, job_id=r.id)
+            SheetJobInfo(
+                sheet_id=s.id,
+                page_index=s.page_index,
+                job_id=r.id,
+                file_hash=doc.file_hash,
+            )
             for s, r in sheets_runs
         ],
     )
@@ -128,6 +134,7 @@ async def get_document(
                 job_id=run.id if run else s.current_run_id,
                 status=_run_status(run),
                 error=run.error if run and run.status == "failed" else None,
+                file_hash=doc.file_hash,
             )
         )
     return DocumentDetailResponse(

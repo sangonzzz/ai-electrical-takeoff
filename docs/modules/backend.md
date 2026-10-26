@@ -4,12 +4,21 @@ FastAPI API + ARQ worker + SQLAlchemy/Alembic persistence for electrical takeoff
 
 ## What it does
 
-- Accepts a multi-page PDF, stores it under `storage/documents/{sha256}.pdf`.
+- Accepts a multi-page PDF, stores the **original uploaded bytes unchanged** under
+  `storage/documents/{sha256}.pdf` (content-addressed; sha256 recorded on `documents.file_hash`).
 - Creates one `sheets` row per page and one `analysis_runs` job per sheet.
-- Worker runs `takeoff_engine.pipeline.analyze_sheet` (or `FakeEngine` when `ENGINE=fake`) in a thread.
+- Worker opens **that exact stored file** (re-checks sha256 before analyze) and runs
+  `takeoff_engine.pipeline.analyze_sheet` (or `FakeEngine` when `ENGINE=fake`) in a thread.
 - Persists rooms, legend, detections, wire runs, and boxes for that run.
 - Serves sheet data, viewport PNG (PyMuPDF @ 150 dpi, disk-cached), takeoff, BOM, CRUD, corrections, CSV export.
 - **Never** recomputes counts in the API: always `takeoff_engine.takeoff.compute_takeoff` and Agente 8 `compute_bom`.
+
+## Original PDF (never regenerated)
+
+The engine reads **vector drawings and text** from the original PDF bytes on disk. Nothing in the
+backend rewrites or re-exports that PDF. The PNG shown in the UI (`GET /api/sheets/{id}/image.png`)
+is only a **viewport render** of that same stored file (PyMuPDF pixmap), cached under `.cache/images/`.
+`file_hash` (sha256) is exposed on document and sheet API responses so the UI can show the short hash.
 
 ## Data model
 
