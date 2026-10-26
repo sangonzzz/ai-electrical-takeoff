@@ -30,12 +30,25 @@ DIR_COS_SOFT = -0.5
 STROKE_WIDTH_NOMINAL = 0.24
 STROKE_WIDTH_TOL = 0.08
 
-# Reject runs that are mostly empty space (phantom straight chords). A sample
-# along the polyline is "covered" if within COVER_RADIUS_PT of a dash segment;
-# gaps between dashes of the same run still count as covered.
+# Device centers sit off the dashed stroke (symbol body). Associate any detection
+# within this distance of the chain polyline (config.WIRE_SNAP_PT=10 is too tight
+# for real Plan-1 centers; median endpoint gap is ~20 pt).
+WIRE_PATH_ASSOCIATE_PT = 28.0
+# If a chain still has <2 path-associated devices, try endpoint nearest-neighbor
+# out to this radius (covers switch bodies offset from the stroke tip).
+WIRE_END_ASSOCIATE_PT = 32.0
+
+# Reject only nearly-straight chords that lack dash ink underneath (phantom
+# wall→attic lines). Curved polylines that follow dashes are kept even if snap
+# stubs at the ends are uncovered.
 MAX_UNCOVERED_FRACTION = 0.30
+MIN_STRAIGHTNESS_FOR_COVERAGE_REJECT = 0.90
 COVER_RADIUS_PT = 4.0
 COVER_SAMPLE_SPACING_PT = 2.0
+# Do not drag a device center onto the polyline across empty plan (stub chords).
+MAX_SNAP_STUB_PT = 18.0
+# Sanity: residential sheet runs longer than this are almost always bogus merges.
+MAX_PLAN_LENGTH_FT = 40.0
 
 _THREE_WAY = frozenset({"three_way", "three_way_dimmer"})
 
@@ -260,19 +273,35 @@ def _nearest_detection(
     return best[1] if best else None
 
 
-def _path_parameter(points: list[Point], det: Detection) -> float | None:
+def _path_parameter(
+    points: list[Point],
+    det: Detection,
+    max_dist: float = WIRE_END_ASSOCIATE_PT,
+) -> float | None:
     """Return arc-length parameter of the closest point on the polyline, or None."""
+    got = _dist_to_polyline(points, det)
+    if got is None:
+        return None
+    t, dist = got
+    if dist > max_dist:
+        return None
+    return t
+
+
+def _dist_to_polyline(points: list[Point], det: Detection) -> tuple[float, float] | None:
+    """Return (path_parameter, distance) of ``det`` to the closest point on ``points``."""
     if len(points) < 2:
         return None
-    best_dist = None
+    best_dist: float | None = None
     best_t = 0.0
     traveled = 0.0
     for i in range(1, len(points)):
         ax, ay = points[i - 1].x, points[i - 1].y
         bx, by = points[i].x, points[i].y
         seg_len = math.hypot(bx - ax, by - ay) or 1e-9
-        # Project detection onto segment.
-        t = ((det.center.x - ax) * (bx - ax) + (det.center.y - ay) * (by - ay)) / (seg_len * seg_len)
+        t = ((det.center.x - ax) * (bx - ax) + (det.center.y - ay) * (by - ay)) / (
+            seg_len * seg_len
+        )
         t = max(0.0, min(1.0, t))
         px, py = ax + t * (bx - ax), ay + t * (by - ay)
         dist = math.hypot(det.center.x - px, det.center.y - py)
@@ -280,37 +309,73 @@ def _path_parameter(points: list[Point], det: Detection) -> float | None:
             best_dist = dist
             best_t = traveled + t * seg_len
         traveled += seg_len
-    if best_dist is None or best_dist > WIRE_SNAP_PT:
+    if best_dist is None:
         return None
-    return best_t
+    return best_t, best_dist
 
 
 def _devices_for_chain(
     points: list[Point], detections: list[Detection]
 ) -> list[Detection]:
-    """Snap chain ends; include only clear intermediate devices along the path."""
+    """Detections near the dashed polyline, ordered along the path.
+
+    Uses ``WIRE_PATH_ASSOCIATE_PT`` so device centers that sit a symbol-radius
+    off the stroke still count. If fewer than two are found, enrich with the
+    nearest distinct detections to each polyline endpoint.
+    """
     if len(points) < 2:
         return []
-    start = _nearest_detection(points[0], detections, WIRE_SNAP_PT)
-    end = _nearest_detection(points[-1], detections, WIRE_SNAP_PT)
-    if start is None or end is None or start.id == end.id:
-        return []
-
-    total = _polyline_length_pt(points)
-    # Intermediates must sit on the interior (not within 15% of either end)
-    # so endpoint clutter from nearby chains does not explode hop counts.
-    margin = max(WIRE_SNAP_PT, 0.15 * total)
-    mids: list[tuple[float, Detection]] = []
+    hits: list[tuple[float, Detection]] = []
     for d in detections:
-        if d.id in (start.id, end.id):
+        got = _dist_to_polyline(points, d)
+        if got is None:
             continue
-        t = _path_parameter(points, d)
-        if t is None:
+        t, dist = got
+        if dist <= WIRE_PATH_ASSOCIATE_PT:
+            hits.append((t, d))
+    hits.sort(key=lambda x: x[0])
+    out: list[Detection] = []
+    seen: set[str] = set()
+    for _, d in hits:
+        if d.id in seen:
             continue
-        if margin < t < (total - margin):
-            mids.append((t, d))
-    mids.sort(key=lambda x: x[0])
-    return [start] + [d for _, d in mids] + [end]
+        seen.add(d.id)
+        out.append(d)
+
+    if len(out) >= 2:
+        return out
+
+    # Endpoint enrichment: dashed links often terminate next to a switch whose
+    # center is farther from the stroke than PATH_ASSOCIATE allows mid-path.
+    total = _polyline_length_pt(points)
+    candidates: list[tuple[float, Detection]] = list(hits)
+    for end_pt, t_hint in ((points[0], 0.0), (points[-1], total)):
+        # Prefer a detection not already chosen, nearest to this end.
+        scored = sorted(
+            (
+                math.hypot(d.center.x - end_pt.x, d.center.y - end_pt.y),
+                d,
+            )
+            for d in detections
+        )
+        for dist, d in scored:
+            if dist > WIRE_END_ASSOCIATE_PT:
+                break
+            if d.id in seen:
+                continue
+            candidates.append((t_hint, d))
+            seen.add(d.id)
+            break
+
+    candidates.sort(key=lambda x: x[0])
+    out = []
+    seen2: set[str] = set()
+    for _, d in candidates:
+        if d.id in seen2:
+            continue
+        seen2.add(d.id)
+        out.append(d)
+    return out
 
 
 def _is_three_way(det: Detection) -> bool:
@@ -356,13 +421,22 @@ def _vertical_allowance_ft(det: Detection, assumptions: dict[str, Any]) -> float
 def _snap_points_to_devices(
     points: list[Point], from_det: Detection, to_det: Detection
 ) -> list[Point]:
-    """Replace polyline ends with device centers so the run is device-to-device."""
+    """Nudge polyline ends to device centers when the stub stays short.
+
+    Long stubs (device far from the dashed tip) become straight chords across
+    empty plan — refuse those nudges and keep the dash geometry instead.
+    """
     if not points:
-        # Never invent a bare device-to-device chord — caller must supply dash geometry.
         return []
     out = list(points)
-    out[0] = Point(x=from_det.center.x, y=from_det.center.y)
-    out[-1] = Point(x=to_det.center.x, y=to_det.center.y)
+
+    def _maybe_snap(idx: int, det: Detection) -> None:
+        stub = math.hypot(det.center.x - out[idx].x, det.center.y - out[idx].y)
+        if stub <= MAX_SNAP_STUB_PT:
+            out[idx] = Point(x=det.center.x, y=det.center.y)
+
+    _maybe_snap(0, from_det)
+    _maybe_snap(-1, to_det)
     return out
 
 
@@ -385,17 +459,12 @@ def _uncovered_fraction(
     sample_spacing_pt: float = COVER_SAMPLE_SPACING_PT,
     cover_radius_pt: float = COVER_RADIUS_PT,
 ) -> float:
-    """Fraction of polyline length with no dash within ``cover_radius_pt``.
-
-    Samples along the polyline; a sample is covered if it lies near any dash
-    segment (including the intentional gaps between dashes of a dashed stroke).
-    """
+    """Fraction of polyline samples with no dash within ``cover_radius_pt``."""
     total = _polyline_length_pt(points)
     if total <= 0 or len(points) < 2:
         return 1.0
 
     samples: list[tuple[float, float]] = [(points[0].x, points[0].y)]
-    # Walk arc length and emit samples every sample_spacing_pt.
     traveled = 0.0
     next_sample_at = sample_spacing_pt
     for i in range(1, len(points)):
@@ -425,6 +494,28 @@ def _uncovered_fraction(
         if not covered:
             uncovered += 1
     return uncovered / len(samples)
+
+
+def _polyline_straightness(points: list[Point]) -> float:
+    """chord / path length — 1.0 is a perfect straight line."""
+    length = _polyline_length_pt(points)
+    if length <= 0 or len(points) < 2:
+        return 1.0
+    chord = math.hypot(points[-1].x - points[0].x, points[-1].y - points[0].y)
+    return chord / length
+
+
+def _is_unsupported_straight_chord(points: list[Point], dashes: list[Segment]) -> bool:
+    """True only for nearly-straight paths that are not backed by dashed ink.
+
+    Curved runs that follow dashes are kept. This is the wall→attic phantom guard.
+    """
+    if len(points) < 2:
+        return True
+    straightness = _polyline_straightness(points)
+    if straightness < MIN_STRAIGHTNESS_FOR_COVERAGE_REJECT:
+        return False
+    return _uncovered_fraction(points, dashes) > MAX_UNCOVERED_FRACTION
 
 
 def _subpolyline_between_devices(
@@ -474,8 +565,8 @@ def find_wire_runs(
     assumptions (ceiling height, switch AFF, slack); waste is applied later in
     ``compute_bom``.
 
-    Runs where more than ``MAX_UNCOVERED_FRACTION`` of the polyline has no dash
-    nearby are rejected (prevents phantom straight chords across empty plan).
+    Nearly-straight chords with little dash ink underneath are rejected (phantom
+    wall→attic guard). Curved dash-following runs are kept.
     """
     if scale_pt_per_ft <= 0:
         raise ValueError("scale_pt_per_ft must be positive")
@@ -497,7 +588,7 @@ def find_wire_runs(
         if len(along) < 2:
             continue
 
-        # One WireRun per consecutive device pair along the chain.
+        # One WireRun per consecutive device pair along the dashed curve.
         for i in range(len(along) - 1):
             from_det, to_det = along[i], along[i + 1]
             pair = tuple(sorted((from_det.id, to_det.id)))
@@ -512,20 +603,21 @@ def find_wire_runs(
             if len(poly) < 2:
                 continue
 
-            uncovered = _uncovered_fraction(poly, dashes)
-            if uncovered > MAX_UNCOVERED_FRACTION:
-                # Phantom chord or bad snap: most of the path has no dashed ink.
+            if _is_unsupported_straight_chord(poly, dashes):
+                continue
+
+            plan_pt = _polyline_length_pt(poly)
+            plan_ft = plan_pt / scale_pt_per_ft
+            if plan_ft > MAX_PLAN_LENGTH_FT:
                 continue
 
             seen_pairs.add(pair)
-            plan_pt = _polyline_length_pt(poly)
-            plan_ft = plan_pt / scale_pt_per_ft
             vert = _vertical_allowance_ft(from_det, assumptions) + _vertical_allowance_ft(
                 to_det, assumptions
             )
             cable = _cable_type(from_det, to_det)
+            uncovered = _uncovered_fraction(poly, dashes)
             conf = min(0.95, 0.55 + 0.05 * len(chain))
-            # Lower confidence when some samples miss dashes (still under threshold).
             conf = round(max(0.4, conf - 0.5 * uncovered), 3)
 
             runs.append(

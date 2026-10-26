@@ -17,6 +17,7 @@ from takeoff_engine.wires import (
     DASH_LEN_MAX_PT,
     DASH_LEN_MIN_PT,
     MAX_UNCOVERED_FRACTION,
+    _is_unsupported_straight_chord,
     _uncovered_fraction,
     find_wire_runs,
     render_wire_debug_png,
@@ -153,14 +154,11 @@ def test_dash_length_constants_match_measurement() -> None:
 
 def test_rejects_straight_chord_without_dash_backing() -> None:
     """Phantom wall→attic style run: two devices + no dashes under the chord."""
-    # Dashes exist elsewhere in the viewport but NOT under the device chord.
     segs = [
         _dash(100, 100, 108, 100),
         _dash(112, 100, 120, 100),
         _dash(124, 100, 132, 100),
     ]
-    # Devices far from the dashed chain — would only connect via a bare chord
-    # if we invented one. Snap must fail OR coverage reject.
     dets = [
         _det("wall", Category.RECEPTACLE, "duplex", 50, 50),
         _det("attic", Category.JUNCTION_BOX, "junction_box", 400, 400),
@@ -177,24 +175,25 @@ def test_rejects_straight_chord_without_dash_backing() -> None:
     assert runs == []
 
 
-def test_uncovered_fraction_high_on_empty_chord() -> None:
+def test_unsupported_straight_chord_helper() -> None:
     dashes = [_dash(0, 0, 8, 0), _dash(12, 0, 20, 0)]
-    # Long diagonal with no dashes underneath.
-    poly = [Point(x=0, y=0), Point(x=200, y=200)]
-    frac = _uncovered_fraction(poly, dashes)
-    assert frac > MAX_UNCOVERED_FRACTION
+    empty = [Point(x=0, y=0), Point(x=200, y=200)]
+    assert _is_unsupported_straight_chord(empty, dashes)
+    assert _uncovered_fraction(empty, dashes) > MAX_UNCOVERED_FRACTION
 
+    # Curved path with no dashes is NOT rejected by the straight-chord guard
+    # (straightness low) — association still requires dash geometry upstream.
+    curved = [Point(x=0, y=0), Point(x=50, y=80), Point(x=100, y=0)]
+    assert not _is_unsupported_straight_chord(curved, dashes)
 
-def test_uncovered_fraction_low_along_dashed_run() -> None:
-    dashes = [
+    dashed_line = [
         _dash(100, 100, 108, 100),
         _dash(112, 100, 120, 100),
         _dash(124, 100, 132, 100),
         _dash(136, 100, 144, 100),
     ]
     poly = [Point(x=100, y=100), Point(x=144, y=100)]
-    frac = _uncovered_fraction(poly, dashes)
-    assert frac <= MAX_UNCOVERED_FRACTION
+    assert not _is_unsupported_straight_chord(poly, dashed_line)
 
 
 def test_multi_device_hop_does_not_emit_bare_chord() -> None:
@@ -237,15 +236,13 @@ def test_multi_device_hop_does_not_emit_bare_chord() -> None:
 
 @pytest.mark.skipif(not PLANS.is_file(), reason="plans PDF missing")
 def test_page1_find_wire_runs_smoke_and_debug_png() -> None:
-    """Smoke: run on real page 1 + fixture detections; write debug PNG and look at it."""
+    """Smoke: run on real page 1 + fixture detections; write debug PNG."""
     assumptions = load_assumptions(REPO_ROOT / "data" / "assumptions.yaml")
     ctx = load_page(PLANS, 0)
     vp_t = APPROX_VIEWPORTS[0]
     viewport = BBox(x0=vp_t[0], y0=vp_t[1], x1=vp_t[2], y1=vp_t[3])
 
     sample = SheetResult.model_validate(json.loads(FIXTURE.read_text(encoding="utf-8")))
-    # Fixture centers are hand-placed; still exercise the API. Prefer geometry-only
-    # run without requiring snaps to succeed for every chain.
     runs = find_wire_runs(
         ctx,
         viewport,
@@ -253,12 +250,10 @@ def test_page1_find_wire_runs_smoke_and_debug_png() -> None:
         scale_pt_per_ft=sample.sheet.scale_pt_per_ft or DEFAULT_PT_PER_FT,
         assumptions=assumptions,
     )
-    # Real plan has many dashed wires; with approximate fixture centers some may
-    # not snap, but the function must return a list without error.
     assert isinstance(runs, list)
 
     DEBUG_DIR.mkdir(parents=True, exist_ok=True)
-    out = DEBUG_DIR / "wires_plan1.png"
+    out = DEBUG_DIR / "wires_plan1_fixture.png"
     render_wire_debug_png(
         str(PLANS),
         0,
@@ -268,3 +263,42 @@ def test_page1_find_wire_runs_smoke_and_debug_png() -> None:
         str(out),
     )
     assert out.is_file() and out.stat().st_size > 1000
+
+
+@pytest.mark.skipif(not PLANS.is_file(), reason="plans PDF missing")
+def test_plan1_has_many_runs_none_over_40ft() -> None:
+    """Acceptance: Plan 1 yields >10 dash-backed runs; no run longer than 40 ft total."""
+    plan1 = REPO_ROOT / "out" / "plan1.json"
+    if not plan1.is_file():
+        pytest.skip("out/plan1.json missing — run analyze first")
+
+    from takeoff_engine.viewport import find_electrical_title, find_electrical_viewport, parse_scale
+
+    assumptions = load_assumptions(REPO_ROOT / "data" / "assumptions.yaml")
+    result = SheetResult.model_validate(json.loads(plan1.read_text(encoding="utf-8")))
+    ctx = load_page(PLANS, 0)
+    viewport, _ = find_electrical_viewport(ctx)
+    title_bbox, _ = find_electrical_title(ctx)
+    scale = float(parse_scale(ctx, title_bbox) or result.sheet.scale_pt_per_ft or DEFAULT_PT_PER_FT)
+
+    runs = find_wire_runs(
+        ctx,
+        result.sheet.viewport or viewport,
+        result.detections,
+        scale,
+        assumptions,
+    )
+    assert len(runs) > 10, f"expected >10 runs on plan 1, got {len(runs)}"
+    assert all(r.total_length_ft <= 40.0 for r in runs), (
+        f"run longer than 40 ft: {[r.total_length_ft for r in runs if r.total_length_ft > 40]}"
+    )
+
+    DEBUG_DIR.mkdir(parents=True, exist_ok=True)
+    render_wire_debug_png(
+        str(PLANS),
+        0,
+        result.sheet.viewport or viewport,
+        runs,
+        result.detections,
+        str(DEBUG_DIR / "wires_plan1.png"),
+    )

@@ -2,47 +2,57 @@
 
 ## Estado
 
-BOM listo; fix anti-phantom wires (cobertura de dashes ≥70%) en Plan 1.
+Wires restaurados: `analyze_sheet(page0, with_bom=True)` vuelve a devolver corridas; phantoms rectos sin dash siguen rechazados.
 
 ## Hecho
 
-- Medición Plan 1: dash median **7.1 pt**, gap median **3.8 pt**
-- `find_wire_runs` / `compute_boxes` / `compute_bom` + YAML precios/assumptions
-- **Fix:** ya no se emiten cuerdas rectas device→device sin tinta dashed
-  - Causa: al partir un chain en hops multi-device, si el bbox no encontraba puntos, se inventaba un segmento recto entre centros (p.ej. pared izq. → attic)
-  - Ahora: sub-polyline por parámetro de arco entre devices; si no hay geometría de dash, se descarta el hop
-  - Gate: si **>30%** de la longitud muestreada no tiene dash cerca (radio 4 pt), se rechaza el run
-- Tests BOM (incl. cobertura / anti-chord)
-- Docs `docs/modules/bom.md` actualizado
-- Mensajes a A5/A6/A1/A2
+- BOM completo (wires/boxes/pricing/bom) + precios Home Depot verificados donde se pudo
+- **Fix anti-zero-runs:** el gate de cobertura anterior rechazaba todo / el snap de 10 pt no asociaba devices reales
+  - Asociación por proximidad al polyline (`WIRE_PATH_ASSOCIATE_PT=28`) + enrich de extremos (`32`)
+  - Phantom gate solo si nearly-straight (chord/len ≥ 0.90) **y** >30% sin dash
+  - Snap stubs acotados (`MAX_SNAP_STUB_PT=18`); sin fallback a chain completa en hops
+  - Cap `MAX_PLAN_LENGTH_FT=40`
+- Debug PNGs: `out/debug/wires_plan{1..4}.png`
+- Test: Plan 1 `>10` runs y ninguna `total_length_ft > 40`
+
+## Run counts (recompute actual)
+
+| Plan | wire_runs |
+|------|-----------|
+| 1    | 12        |
+| 2    | 16        |
+| 3    | 26        |
+| 4    | 28        |
+
+`analyze_sheet(..., page_index=0, with_bom=True)` → **12** runs.
 
 ## Cómo probarlo
 
 ```bash
 .venv/Scripts/python -m pytest engine/tests/bom/ -v
 .venv/Scripts/python engine/tests/bom/render_debug.py
+.venv/Scripts/python -c "from takeoff_engine.pipeline import analyze_sheet; r=analyze_sheet('data/plans/escondido_plans.pdf',0,use_llm=False,with_bom=True); print(len(r.wire_runs))"
 ```
 
 ## Siguiente
 
-- Re-correr analyze Plan 1 con detections reales + ENABLE_BOM y revisar overlay
-- Completar precios `verified: false` cuando Santiago los pase
+- Mejorar recall de arcs largos (living multi-light) sin reintroducir chords
+- Completar precios `verified: false`
 
 ## Bloqueos
 
-- Ninguno para el fix de phantoms
+- Ninguno
 
 ## Decisions
 
-- Waste 10% en `compute_bom`, no en `WireRun.total_length_ft`
-- Encadenado por proximidad; dirección solo tie-break
-- **MAX_UNCOVERED_FRACTION = 0.30** — reject runs mostly over empty plan
-- Nunca emitir chord centro–centro sin puntos de dash
+- Path associate 28 / end 32 (centers of symbols sit off the stroke; WIRE_SNAP_PT=10 alone → 0 runs)
+- Reject phantoms only when straight **and** uncovered; curved dash paths always kept
+- Never emit bare center–center chords; never use full-chain geometry for a multi-device hop fallback
 
 ## Needs from Santiago
 
-Precios aún `verified: false` (ver `data/price_list.yaml`): 3-gang box/plate, dimmers/fan switches, receptacles, fixtures.
+Precios aún `verified: false` en `data/price_list.yaml` (3-gang, dimmers, receptacles, fixtures).
 
 ## Explicación para Santiago
 
-Había un cable “fantasma” en el overlay: una línea recta larga de la pared izquierda al attic que no seguía ninguna rayita dashed. Pasaba porque, al conectar varios dispositivos sobre una misma cadena, si el recorte fallaba el código inventaba un trazo recto entre los dos aparatos. Ahora solo aceptamos corridas cuya geometría viene de las rayitas del plano, y además medimos qué porcentaje del trazo tiene tinta dashed cerca: si más del 30% va por vacío, se tira. Así el BOM no cuenta metros inventados.
+El filtro “tiene que haber rayitas debajo” estaba demasiado agresivo y, junto con un radio de snap chico, dejaba **cero** cables. Lo aflojé: ahora cada curva dashed busca los aparatos que toca (con un margen realista) y arma corridas entre ellos. Solo tiro las líneas rectas inventadas que cruzan el plano vacío (como pared→attic). En el Plan 1 vuelven a salir más de 10 corridas y ninguna de más de 40 ft; hay PNGs de los 4 planos en `out/debug/`.
