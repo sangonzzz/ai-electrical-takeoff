@@ -15,6 +15,7 @@ from pathlib import Path
 
 import pymupdf
 
+from takeoff_engine import PIPELINE_VERSION
 from takeoff_engine.classify import classify_candidates
 from takeoff_engine.config import DEFAULT_PT_PER_FT, get_settings
 from takeoff_engine.legend import extract_legend, legend_bbox, legend_templates
@@ -30,8 +31,6 @@ from takeoff_engine.types import Candidate
 from takeoff_engine.viewport import find_electrical_title, find_electrical_viewport, parse_scale
 
 logger = logging.getLogger(__name__)
-
-PIPELINE_VERSION = "0.2.0-a2"
 
 
 def _ms(t0: float) -> float:

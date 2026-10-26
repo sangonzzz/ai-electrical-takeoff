@@ -2,53 +2,42 @@
 
 ## Estado
 
-v0.1.0 listo para tag. CLI `--page` ahora 1-based (Plan 1..4). E2E Docker aún pendiente.
+v0.3.0: una sola `PIPELINE_VERSION`, `ENGINE=real` por defecto, tag listo.
 
 ## Hecho
 
-- Inbox A2–A8: DECISIONS.md actualizado (rooms, LLM Sonnet tool_choice, BOM, frontend, backend, eval)
-- SPEC §1: CL Plan 3 = x4, Plan 4 = x2
-- Backend deps: `sqlalchemy[asyncio]` + `greenlet`; `.env.example` ENGINE/INLINE_JOBS
-- `takeoff eval` cableado; pytest pythonpath; eval/reports gitignore; CI regression step
-- Makefile `demo` → `backend/scripts/demo_upload.py`; compose alembic + PYTHONPATH + ENGINE=fake
-- README.md + docs/architecture.md (Mermaid)
-- Mensajes a A5, A6, A7, to-all
-- Tests: **82 passed, 8 skipped**; web vitest 5 + build OK; fixture UI: 4 sheets, marks, click total, BOM $20.65
+- `PIPELINE_VERSION = __version__ = "0.3.0"` solo en `engine/takeoff_engine/__init__.py`
+- `pipeline.py` importa esa constante (ya no `0.2.0-a2`)
+- CLI `takeoff --version` + analyze imprime `pipeline_version`
+- AGENTS.md §13: bump patch en todo cambio de comportamiento del engine
+- `docker-compose.yml` + `.env.example`: `ENGINE=real` (fake solo tests)
+- CHANGELOG v0.2.0 / v0.3.0; mensajes a A2, A3, A5, A8
 
 ## Cómo probarlo
 
 ```bash
-uv sync --all-packages --group dev
-uv run pytest
-cd web && pnpm exec vitest run && pnpm build
-# Fixture UI:
-cd web && set VITE_USE_FIXTURE=true&& pnpm dev
-# Full stack (requires Docker Desktop running):
-docker compose up -d && make demo
+uv run takeoff --version   # -> 0.3.0
+uv run python -c "from takeoff_engine import PIPELINE_VERSION; assert PIPELINE_VERSION=='0.3.0'"
+# SheetResult.pipeline_version must match after analyze
 ```
 
 ## Siguiente
 
-- Arrancar Docker Desktop → E2E upload → 4 jobs → CRUD real
-- Pushear `.github/workflows/ci.yml` cuando haya scope `workflow`
-- `ENGINE=real` cuando pipeline + DB estén estables
+- Tras cada cambio de engine de A2/A3/A4/A8: bump patch + commit/tag si aplica
+- Pushear CI cuando haya scope `workflow`
 
 ## Bloqueos
 
-- Docker Desktop no está corriendo en esta máquina
-- Token `gh` sin scope `workflow` para Actions
+- Token `gh` sin scope `workflow` para Actions (CI local only)
 
 ## Decisions
 
-Ver `coordination/DECISIONS.md` (pass de integración).
+Ver DECISIONS.md (PIPELINE_VERSION única, ENGINE=real).
 
 ## Needs from Santiago
 
-1. Encender Docker Desktop y avisar para re-correr E2E.
-2. `gh auth refresh -h github.com -s workflow,repo,read:org,gist` para subir CI.
-3. Llenar `eval/ground_truth/planN.counts.yaml` (ver `eval/COMO_CONTAR.md`).
-4. Confirmar precios BOM `verified: false` (lista en status A8).
+- (ninguno nuevo para este fix)
 
 ## Explicación para Santiago
 
-El sistema ya está armado de punta a punta en piezas: el motor detecta símbolos y cuartos en el PDF, Claude opcional interpreta la leyenda, el backend guarda trabajos por hoja, y el front muestra marcas + takeoff + BOM. En esta pasada de integración cableé dependencias del backend, el comando `takeoff eval`, el demo del Makefile y la documentación (README + diagramas). Los tests de Python y el build del front pasan. No pude levantar Docker (el motor de Desktop está apagado), así que el recorrido completo upload→4 jobs lo dejé pendiente; sí verifiqué el modo fixture del front: cargás demo, ves las 4 hojas, abrís Plan 1 con marcas de colores, tocás un total y se resaltan, y el BOM muestra un precio. Cuando enciendas Docker, re-corro el stack real.
+Antes el CLI decía una versión (`0.2.0-a2`) y el backend otra (`0.1.0`), así que al re-subir el mismo PDF el sistema podía creer que el análisis “ya estaba” con una versión vieja. Ahora hay **una sola** versión `0.3.0` en un solo archivo; CLI, JSON del motor y la clave de idempotencia del backend usan la misma. Si alguien cambia cómo se detectan símbolos o cuartos, hay que subir al menos el número de parche para forzar un análisis nuevo. Docker y `.env` arrancan con el motor **real** (el fake queda para tests).

@@ -43,6 +43,12 @@ Everyone also owns `coordination/status/agente-N.md` (your own number) and `docs
     parameters and thresholds, known limits.
 12. **Visual debugging:** engine agents must render debug PNGs to `out/debug/` (gitignored) and look at them before
     claiming something works.
+13. **Pipeline version:** `PIPELINE_VERSION` / `__version__` live only in
+    `engine/takeoff_engine/__init__.py` (semver). CLI, `analyze_sheet` (`SheetResult.pipeline_version`),
+    and the backend idempotency key all use that string. **Any engine behavior change must bump at least
+    the patch** (Agente 1 applies the bump, or you ask Agente 1) so
+    `(file_hash, page_index, pipeline_version)` never serves a stale run. Do not define a second version
+    constant in `pipeline.py` or elsewhere.
 
 ## Communication protocol (agents do not see each other's chats; files are the channel)
 

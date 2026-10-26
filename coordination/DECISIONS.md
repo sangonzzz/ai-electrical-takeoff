@@ -104,3 +104,6 @@ When several codes apply: `240V` > `MW` / `DW` / `H` / `FC` > `WP` > half-hot >
 - **CLI `--page` is 1-based** (Plan 1..4). Convert with `page_index = page - 1` before
   calling `analyze_sheet` / `load_page`. Contracts and engine APIs stay 0-based
   `page_index`. Do not squash or rewrite git history; Cursor co-author trailers OK.
+- **Single `PIPELINE_VERSION`** (`0.3.0`+) in `engine/takeoff_engine/__init__.py` only;
+  bump patch on any engine behavior change. `ENGINE=real` is the compose/.env default
+  (`fake` for tests).

@@ -11,6 +11,7 @@ from pathlib import Path
 
 import typer
 
+from takeoff_engine import PIPELINE_VERSION
 from takeoff_engine.models import (
     SCHEMA_VERSION,
     BBox,
@@ -37,6 +38,25 @@ app = typer.Typer(
     help="AI electrical plan takeoff CLI",
     no_args_is_help=True,
 )
+
+
+def _version_callback(value: bool) -> None:
+    if value:
+        typer.echo(PIPELINE_VERSION)
+        raise typer.Exit()
+
+
+@app.callback()
+def _main(
+    version: bool = typer.Option(  # noqa: B008
+        False,
+        "--version",
+        help="Print PIPELINE_VERSION and exit.",
+        callback=_version_callback,
+        is_eager=True,
+    ),
+) -> None:
+    """AI electrical plan takeoff CLI."""
 
 
 @app.command("analyze")
@@ -67,7 +87,10 @@ def analyze_cmd(
     result = analyze_sheet(pdf, page_index, use_llm=use_llm, with_bom=with_bom)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(result.model_dump_json(indent=2), encoding="utf-8")
-    typer.echo(f"Wrote {out} (plan {page}, page_index={page_index})")
+    typer.echo(
+        f"Wrote {out} (plan {page}, page_index={page_index}, "
+        f"pipeline_version={result.pipeline_version})"
+    )
     counts = Counter(d.category.value for d in result.detections)
     typer.echo(f"detections={len(result.detections)} by_category={dict(counts)}")
     if result.warnings:
