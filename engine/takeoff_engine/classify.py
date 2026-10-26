@@ -15,7 +15,7 @@ from typing import Any
 import cv2
 import numpy as np
 
-from takeoff_engine.config import CODE_TEXT_RADIUS_PT
+from takeoff_engine.config import CODE_TEXT_RADIUS_PT, GANG_GROUP_DIST_PT
 from takeoff_engine.legend import LegendTemplate
 from takeoff_engine.models import (
     BBox,
@@ -71,6 +71,8 @@ _RECESSED_FRAME_LEN_MAX = 11.0
 _RECESSED_MIN_RING_SHORTS = 20
 # Viewport scan requires a fuller ring so kitchen AA noise does not spawn cans.
 _RECESSED_SCAN_MIN_RING = 48
+# Multi-gang letter pairing: bath F/VS/D stack spacing can exceed box-gang 10 pt.
+_SWITCH_ALIGN_GANG_PT = max(14.0, GANG_GROUP_DIST_PT + 4.0)
 # Receptacle/appliance tokens on a weak non-geometric "light" → not a can.
 _LIGHT_RECEPTACLE_CODES = frozenset(
     {"240V", "GFI", "GFCI", "AFI", "AFCI", "MW", "DW", "H", "FC"}
@@ -311,6 +313,15 @@ def _parse_mount_height(codes: list[str]) -> float | None:
     return None
 
 
+def _is_mount_height_token(token: str) -> bool:
+    """True for ``+42"`` / ``42`` mount heights — not ``3D`` or ``240V`` (R6)."""
+    raw = token.strip().replace(" ", "")
+    if _MOUNT_RE.match(raw):
+        return True
+    # Bare ``+42`` without inch mark.
+    return bool(re.match(r"^\+\d+$", raw))
+
+
 def _refine_subtype(
     category: Category,
     base_subtype: str | None,
@@ -322,13 +333,18 @@ def _refine_subtype(
 ) -> str:
     """Apply SPEC §2 code priority on top of the legend row's subtype."""
     upper = {c.upper() for c in codes}
-    # Mount-like tokens are not type codes.
-    type_codes = {c for c in upper if not re.match(r"^\+?\d", c)}
+    # Mount heights only — never strip ``3D`` / ``240V`` (they start with a digit).
+    type_codes = {c for c in upper if not _is_mount_height_token(c)}
 
     if category == Category.SWITCH:
-        for code, subtype in _SWITCH_CODE_MAP.items():
-            if code in type_codes:
-                return subtype
+        # Nearest letter wins (``codes`` is distance-sorted). Do not let a
+        # neighbor's ``VS`` steal a ``D`` stacked below it (R6 Bath gang).
+        for c in codes:
+            cu = c.upper()
+            if _is_mount_height_token(c):
+                continue
+            if cu in _SWITCH_CODE_MAP:
+                return _SWITCH_CODE_MAP[cu]
         return base_subtype or "single_pole"
 
     if category == Category.RECEPTACLE:
@@ -1567,11 +1583,116 @@ def classify_candidates(
     )
 
     detections = _suppress_lights_at_fan_hubs(detections)
+    detections = _assign_switch_letters_by_alignment(ctx, detections)
     detections = _nms_detections(detections, dist_pt=8.0)
     detections = _nms_cross_category(detections)
     detections = _attic_switch_cap(detections, attic_boxes)
     _nudge_attic_centers(detections, attic_boxes)
     return detections
+
+
+def _switch_code_tokens_near_gang(
+    ctx: PageContext,
+    switches: list[Detection],
+) -> list[tuple[float, float, str]]:
+    """Switch letter tokens (``3D``, ``F``, …) near a multi-gang stack."""
+    if not switches:
+        return []
+    pad = 22.0
+    x0 = min(d.bbox.x0 for d in switches) - pad
+    y0 = min(d.bbox.y0 for d in switches) - pad
+    x1 = max(d.bbox.x1 for d in switches) + pad
+    y1 = max(d.bbox.y1 for d in switches) + pad
+    out: list[tuple[float, float, str]] = []
+    seen: set[tuple[float, float, str]] = set()
+    for w in ctx.words:
+        if w.size > 9.0:
+            continue
+        raw = w.text.strip().upper()
+        if raw not in _SWITCH_CODE_MAP:
+            continue
+        wx = 0.5 * (w.bbox[0] + w.bbox[2])
+        wy = 0.5 * (w.bbox[1] + w.bbox[3])
+        if not (x0 <= wx <= x1 and y0 <= wy <= y1):
+            continue
+        key = (round(wx, 1), round(wy, 1), raw)
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append((wx, wy, raw))
+    return out
+
+
+def _assign_switch_letters_by_alignment(
+    ctx: PageContext, dets: list[Detection]
+) -> list[Detection]:
+    """Pair each stacked ``$`` with the letter printed beside it (R6).
+
+    Letters are printed in the same order as the gang (vertical or horizontal).
+    Sharing every nearby token made Bath ``F VS D`` all become ``vacancy_sensor``.
+    """
+    switches = [d for d in dets if d.category == Category.SWITCH]
+    if len(switches) < 2:
+        return dets
+
+    gangs: list[list[Detection]] = []
+    remaining = sorted(switches, key=lambda d: (d.center.y, d.center.x))
+    while remaining:
+        seed = remaining.pop(0)
+        gang = [seed]
+        changed = True
+        while changed:
+            changed = False
+            still: list[Detection] = []
+            for d in remaining:
+                if any(
+                    math.hypot(d.center.x - g.center.x, d.center.y - g.center.y)
+                    < _SWITCH_ALIGN_GANG_PT
+                    for g in gang
+                ):
+                    gang.append(d)
+                    changed = True
+                else:
+                    still.append(d)
+            remaining = still
+        if len(gang) >= 2:
+            gangs.append(gang)
+
+    for gang in gangs:
+        xs = [d.center.x for d in gang]
+        ys = [d.center.y for d in gang]
+        vertical = (max(ys) - min(ys)) >= (max(xs) - min(xs))
+        if vertical:
+            gang_sorted = sorted(gang, key=lambda d: d.center.y)
+        else:
+            gang_sorted = sorted(gang, key=lambda d: d.center.x)
+
+        tokens = _switch_code_tokens_near_gang(ctx, gang_sorted)
+        if len(tokens) < len(gang_sorted):
+            continue
+        if vertical:
+            tokens_sorted = sorted(tokens, key=lambda t: t[1])
+        else:
+            tokens_sorted = sorted(tokens, key=lambda t: t[0])
+
+        # One letter per switch along the stack; extra tokens ignored.
+        for sw, (_tx, _ty, code) in zip(
+            gang_sorted, tokens_sorted[: len(gang_sorted)], strict=True
+        ):
+            subtype = _SWITCH_CODE_MAP[code]
+            sw.subtype = subtype
+            keep = [
+                c
+                for c in sw.codes
+                if c.upper() not in _SWITCH_CODE_MAP and not _is_mount_height_token(c)
+            ]
+            sw.codes = [code] + keep
+            notes = list(sw.evidence.notes) if sw.evidence else []
+            notes.append(f"switch_letter_aligned={code}")
+            if sw.evidence:
+                sw.evidence.notes = notes
+
+    return dets
 
 
 def _suppress_lights_at_fan_hubs(dets: list[Detection]) -> list[Detection]:
