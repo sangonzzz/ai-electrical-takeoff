@@ -13,7 +13,7 @@ export function CategoryFilter() {
       <button
         type="button"
         onClick={() => setAllCategories(!allOn)}
-        className="rounded px-2 py-1 text-[11px] font-semibold text-[var(--muted)] hover:bg-[var(--surface-2)]"
+        className="rounded-md px-2 py-1 text-[11px] font-semibold text-[var(--muted)] hover:bg-[var(--surface-3)]"
       >
         {allOn ? "Solo…" : "All"}
       </button>
@@ -24,19 +24,13 @@ export function CategoryFilter() {
             key={cat}
             type="button"
             onClick={() => toggleCategory(cat)}
-            className={`inline-flex items-center gap-1 rounded px-2 py-1 text-[11px] font-medium transition ${
-              on
-                ? "text-white"
-                : "bg-[var(--surface-2)] text-[var(--muted)] line-through opacity-70"
+            className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium transition ${
+              on ? "text-white" : "bg-[var(--surface-3)] text-[var(--muted)] line-through opacity-70"
             }`}
             style={on ? { background: CATEGORY_COLORS[cat] } : undefined}
             aria-pressed={on}
             title={CATEGORY_SHORT[cat]}
           >
-            <span
-              className="inline-block h-1.5 w-1.5 rounded-sm"
-              style={{ background: on ? "#fff" : CATEGORY_COLORS[cat] }}
-            />
             {CATEGORY_SHORT[cat]}
           </button>
         );

@@ -1,6 +1,8 @@
 import {
   useCallback,
   useEffect,
+  useImperativeHandle,
+  forwardRef,
   useRef,
   type MouseEvent as ReactMouseEvent,
 } from "react";
@@ -9,23 +11,27 @@ import {
   TransformWrapper,
   type ReactZoomPanPinchContentRef,
 } from "react-zoom-pan-pinch";
-import { Maximize2 } from "lucide-react";
 import type { SheetResult } from "@/types/contracts";
 import { useUiStore } from "@/store/uiStore";
 import { CategoryFilter } from "./CategoryFilter";
-import { ColorLegend } from "./ColorLegend";
-import { LayerToggles } from "./LayerToggles";
+import { FloatingToolbar } from "./FloatingToolbar";
+import { MiniLegend } from "./MiniLegend";
 import { PlanOverlay } from "./PlanOverlay";
+
+export interface PlanViewerHandle {
+  fitToScreen: () => void;
+}
 
 interface Props {
   result: SheetResult;
   imageUrl: string | null;
+  canUndo: boolean;
+  onUndo: () => void;
   onAddAt: (x: number, y: number) => void;
   onDragMove: (id: string, x: number, y: number) => void;
   onDragEnd: (id: string, x: number, y: number) => void;
 }
 
-/** Scale so the plan's aspect fills the canvas (meet), then center. */
 function fitPlanToCanvas(
   api: ReactZoomPanPinchContentRef,
   container: HTMLElement,
@@ -36,16 +42,10 @@ function fitPlanToCanvas(
   const ch = Math.max(1, container.clientHeight - pad * 2);
   const vw = Math.max(1, viewport.x1 - viewport.x0);
   const vh = Math.max(1, viewport.y1 - viewport.y0);
-  // Content div is sized to the container; SVG meet-letterboxes inside it.
-  // Zoom so the letterboxed plan edge nearly touches the canvas edge.
   const contentAspect = vw / vh;
   const boxAspect = cw / ch;
-  // When content is wider than the box, width is the limiting edge at scale 1.
-  // When taller, height limits. Scale up so the limiting edge fills.
   let scale = 1;
   if (contentAspect > boxAspect) {
-    // width-limited at scale 1 already fills width; height has bars — scale by height/width ratio of bars?
-    // At scale 1, SVG width = cw, drawn height = cw / contentAspect. Want drawn height = ch → scale = ch / (cw/contentAspect)
     const drawnH = cw / contentAspect;
     scale = ch / Math.max(1, drawnH);
   } else {
@@ -56,13 +56,10 @@ function fitPlanToCanvas(
   api.centerView(scale, 0);
 }
 
-export function PlanViewer({
-  result,
-  imageUrl,
-  onAddAt,
-  onDragMove,
-  onDragEnd,
-}: Props) {
+export const PlanViewer = forwardRef<PlanViewerHandle, Props>(function PlanViewer(
+  { result, imageUrl, canUndo, onUndo, onAddAt, onDragMove, onDragEnd },
+  ref,
+) {
   const mode = useUiStore((s) => s.mode);
   const layers = useUiStore((s) => s.layers);
   const categoryVisibility = useUiStore((s) => s.categoryVisibility);
@@ -88,6 +85,8 @@ export function PlanViewer({
     if (!api || !container) return;
     fitPlanToCanvas(api, container, result.sheet.viewport);
   }, [result.sheet.viewport]);
+
+  useImperativeHandle(ref, () => ({ fitToScreen }), [fitToScreen]);
 
   useEffect(() => {
     const t = window.setTimeout(fitToScreen, 60);
@@ -126,7 +125,6 @@ export function PlanViewer({
         originX: det.center.x,
         originY: det.center.y,
       };
-
       const target = e.target as SVGElement;
       const svg = target.ownerSVGElement;
       if (!svg) return;
@@ -162,34 +160,20 @@ export function PlanViewer({
   );
 
   return (
-    <div className="relative flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--surface)]">
-      <div className="flex flex-col gap-2 border-b border-[var(--border)] px-3 py-2">
-        <div className="flex items-center justify-between gap-3">
-          <div className="min-w-0">
-            <div className="truncate text-sm font-semibold text-[var(--ink)]">
-              {result.sheet.title ?? result.sheet.sheet_number ?? "Sheet"}
-            </div>
-            <div className="text-[11px] text-[var(--muted)]">
-              Fit on load · scroll zoom · drag pan
-              {mode === "add" ? " · click plan to place" : ""}
-            </div>
+    <div className="card relative flex h-full min-h-0 flex-col overflow-hidden">
+      <div className="flex items-center justify-between gap-2 border-b border-[var(--border)] px-3 py-2">
+        <div className="min-w-0">
+          <div className="truncate text-sm font-semibold text-[var(--ink)]">
+            {result.sheet.title ?? result.sheet.sheet_number ?? "Sheet"}
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={fitToScreen}
-              className="inline-flex items-center gap-1 rounded border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-[11px] font-medium text-[var(--ink)] hover:bg-[var(--surface-2)]"
-              title="Fit plan to canvas"
-            >
-              <Maximize2 size={12} /> Fit
-            </button>
-            <LayerToggles />
+          <div className="text-[11px] text-[var(--muted)]">
+            {mode === "add" ? "Click the plan to place a mark" : "Scroll zoom · drag pan"}
           </div>
         </div>
         <CategoryFilter />
       </div>
 
-      <div ref={canvasRef} className="relative min-h-0 flex-1 bg-[#e8eef5]">
+      <div ref={canvasRef} className="relative min-h-0 flex-1 bg-[var(--canvas)]">
         <TransformWrapper
           ref={transformRef}
           initialScale={1}
@@ -203,28 +187,31 @@ export function PlanViewer({
             wrapperClass="!h-full !w-full"
             contentClass="!h-full !w-full"
           >
-            <div className="h-full w-full p-2">
-              <PlanOverlay
-                result={result}
-                layers={layers}
-                categoryVisibility={categoryVisibility}
-                selectedId={selectedId}
-                highlightedIds={highlightedIds}
-                imageUrl={imageUrl}
-                onBackgroundClick={onBackgroundClick}
-                onSelect={selectDetection}
-                onDragStart={onDragStart}
-              />
+            <div className="h-full w-full p-3">
+              <div className="h-full w-full overflow-hidden rounded-[10px] bg-[var(--sheet)] shadow-[var(--shadow-lg)]">
+                <PlanOverlay
+                  result={result}
+                  layers={layers}
+                  categoryVisibility={categoryVisibility}
+                  selectedId={selectedId}
+                  highlightedIds={highlightedIds}
+                  imageUrl={imageUrl}
+                  onBackgroundClick={onBackgroundClick}
+                  onSelect={selectDetection}
+                  onDragStart={onDragStart}
+                />
+              </div>
             </div>
           </TransformComponent>
         </TransformWrapper>
 
-        <div className="pointer-events-none absolute bottom-3 left-3">
-          <div className="pointer-events-auto">
-            <ColorLegend />
-          </div>
+        <div className="pointer-events-none absolute left-3 top-3 z-10">
+          <FloatingToolbar canUndo={canUndo} onUndo={onUndo} onFit={fitToScreen} />
+        </div>
+        <div className="pointer-events-none absolute bottom-3 left-3 z-10">
+          <MiniLegend />
         </div>
       </div>
     </div>
   );
-}
+});

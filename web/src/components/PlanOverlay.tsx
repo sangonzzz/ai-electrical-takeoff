@@ -20,7 +20,7 @@ interface Props {
 
 /**
  * SVG overlay whose viewBox is the electrical viewport in PDF points.
- * Children use the same coordinate space — no manual px conversion.
+ * Bright sheet on dark canvas is painted by the parent; this draws the plan.
  */
 export function PlanOverlay({
   result,
@@ -80,6 +80,7 @@ export function PlanOverlay({
       {layers.detections && (
         <DetectionLayer
           detections={result.detections}
+          rooms={result.rooms}
           categoryVisibility={categoryVisibility}
           selectedId={selectedId}
           highlightedIds={highlightedIds}
@@ -128,24 +129,18 @@ function PlaceholderGrid({
   }
   return (
     <g data-layer="placeholder">
-      <rect
-        x={viewport.x0}
-        y={viewport.y0}
-        width={width}
-        height={height}
-        fill="#f8fafc"
-      />
+      <rect x={viewport.x0} y={viewport.y0} width={width} height={height} fill="#fafbfc" />
       {lines}
       <text
         x={viewport.x0 + width / 2}
         y={viewport.y0 + height / 2}
         textAnchor="middle"
         dominantBaseline="middle"
-        fontSize={14}
+        fontSize={12}
         fill="#94a3b8"
         style={{ pointerEvents: "none" }}
       >
-        Plan image placeholder (fixture mode)
+        Plan sheet (fixture — no image.png yet)
       </text>
     </g>
   );

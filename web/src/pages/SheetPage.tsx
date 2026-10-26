@@ -1,19 +1,23 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { Link, useParams } from "react-router-dom";
-import { useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { SheetBundle } from "@/api/types";
+import { getDocument } from "@/api/client";
 import { useSheetBundle, sheetQueryKey } from "@/hooks/useSheetBundle";
-import { PlanViewer } from "@/components/PlanViewer";
-import { ReviewActions } from "@/components/ReviewActions";
+import { KpiStrip } from "@/components/KpiStrip";
+import { PlanViewer, type PlanViewerHandle } from "@/components/PlanViewer";
 import { RightPanel } from "@/components/RightPanel";
-import { Toolbar } from "@/components/Toolbar";
+import { SheetHeader } from "@/components/SheetHeader";
+import { ShortcutsSheet } from "@/components/ShortcutsSheet";
+import { ErrorState } from "@/components/ui/ErrorState";
+import { SheetSkeleton } from "@/components/ui/Skeleton";
 import { useUiStore } from "@/store/uiStore";
 import { defaultSubtype } from "@/lib/subtypes";
 
 export function SheetPage() {
-  const { sheetId = "" } = useParams();
+  const { documentId = "", sheetId = "" } = useParams();
   const queryClient = useQueryClient();
+  const planRef = useRef<PlanViewerHandle>(null);
   const {
     sheetQuery,
     bomQuery,
@@ -27,12 +31,21 @@ export function SheetPage() {
     applyLocalMove,
   } = useSheetBundle(sheetId);
 
+  const docQuery = useQuery({
+    queryKey: ["document", documentId],
+    queryFn: () => getDocument(documentId),
+    enabled: !!documentId,
+  });
+
   const selectedId = useUiStore((s) => s.selectedDetectionId);
   const selectDetection = useUiStore((s) => s.selectDetection);
   const mode = useUiStore((s) => s.mode);
   const addCategory = useUiStore((s) => s.addCategory);
   const addSubtype = useUiStore((s) => s.addSubtype);
   const setMode = useUiStore((s) => s.setMode);
+  const shortcutsOpen = useUiStore((s) => s.shortcutsOpen);
+  const setShortcutsOpen = useUiStore((s) => s.setShortcutsOpen);
+  const toggleShortcuts = useUiStore((s) => s.toggleShortcuts);
 
   const result = sheetQuery.data?.result;
   const selected =
@@ -40,9 +53,32 @@ export function SheetPage() {
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
+      const tag = (e.target as HTMLElement)?.tagName;
+      const typing = tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
+
+      if (e.key === "?" || (e.shiftKey && e.key === "/")) {
+        if (!typing) {
+          e.preventDefault();
+          toggleShortcuts();
+        }
+        return;
+      }
+
+      if (typing) return;
+
+      if (e.key === "v" || e.key === "V") {
+        e.preventDefault();
+        setMode("select");
+      }
+      if (e.key === "a" || e.key === "A") {
+        e.preventDefault();
+        setMode("add");
+      }
+      if (e.key === "f" || e.key === "F") {
+        e.preventDefault();
+        planRef.current?.fitToScreen();
+      }
       if (e.key === "Delete" || e.key === "Backspace") {
-        const tag = (e.target as HTMLElement)?.tagName;
-        if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
         if (selectedId) {
           e.preventDefault();
           deleteDetection(selectedId);
@@ -56,88 +92,125 @@ export function SheetPage() {
       if (e.key === "Escape") {
         setMode("select");
         selectDetection(null);
+        setShortcutsOpen(false);
       }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [selectedId, deleteDetection, selectDetection, undo, setMode]);
+  }, [
+    selectedId,
+    deleteDetection,
+    selectDetection,
+    undo,
+    setMode,
+    toggleShortcuts,
+    setShortcutsOpen,
+  ]);
 
   if (sheetQuery.isLoading) {
-    return <div className="p-8 text-[var(--muted)]">Loading sheet…</div>;
+    return <SheetSkeleton />;
   }
+
   if (sheetQuery.isError || !result) {
     return (
-      <div className="p-8 text-red-700">
-        Failed to load sheet.{" "}
-        <Link to="/" className="underline">
-          Back home
-        </Link>
+      <div className="p-6">
+        <ErrorState
+          title="Failed to load sheet"
+          message="The sheet result could not be loaded. Check the API or try fixture mode."
+          action={
+            <Link to="/" className="btn btn-secondary">
+              Back home
+            </Link>
+          }
+        />
       </div>
     );
   }
 
-  return (
-    <div className="flex h-full min-h-0 flex-col">
-      <header className="flex flex-wrap items-center gap-3 border-b border-[var(--border)] bg-[var(--surface)]/90 px-4 py-2.5 backdrop-blur">
-        <Link
-          to="/"
-          className="inline-flex items-center gap-1 text-[12px] font-medium text-[var(--muted)] hover:text-[var(--ink)]"
-        >
-          <ArrowLeft size={14} /> Home
-        </Link>
-        <div className="h-4 w-px bg-[var(--border)]" />
-        <Toolbar canUndo={canUndo} onUndo={undo} />
-        <ReviewActions
-          sheetId={sheetId}
-          humanReviewed={sheetQuery.data?.humanReviewed ?? false}
-          onReviewed={() => {
-            queryClient.setQueryData(
-              sheetQueryKey(sheetId),
-              (old: SheetBundle | undefined) =>
-                old ? { ...old, humanReviewed: true } : old,
-            );
-          }}
-        />
-        <div className="ml-auto text-[11px] text-[var(--muted)]">
-          {result.detections.filter((d) => d.status !== "deleted").length} active marks
-          {mode === "add" ? " · add mode" : ""}
-        </div>
-      </header>
+  const needsReviewCount = result.detections.filter(
+    (d) => d.status !== "deleted" && d.needs_review === true,
+  ).length;
 
-      <div className="grid min-h-0 flex-1 gap-3 p-3 lg:grid-cols-[minmax(0,1fr)_360px]">
-        <PlanViewer
-          result={result}
-          imageUrl={imageUrl ?? result.sheet.image?.url ?? null}
-          onAddAt={(x, y) => {
-            createDetection({
-              category: addCategory,
-              subtype: addSubtype || defaultSubtype(addCategory),
-              center: { x, y },
-            });
-            setMode("select");
-          }}
-          onDragMove={applyLocalMove}
-          onDragEnd={(id, x, y) => {
-            patchDetection(id, { center: { x, y } });
-          }}
-        />
-        <RightPanel
-          rooms={result.rooms}
-          detections={result.detections}
-          selected={selected}
-          bom={bomQuery.data}
-          corrections={correctionsQuery.data ?? []}
-          onPatch={(patch) => {
-            if (!selected) return;
-            patchDetection(selected.id, patch);
-          }}
-          onDelete={() => {
-            if (!selected) return;
-            deleteDetection(selected.id);
-            selectDetection(null);
-          }}
-        />
+  const sheets =
+    docQuery.data?.sheets ??
+    [
+      {
+        sheet_id: sheetId,
+        page_index: result.sheet.page_index,
+        sheet_number: result.sheet.sheet_number ?? undefined,
+        title: result.sheet.title ?? undefined,
+        status: "succeeded" as const,
+      },
+    ];
+
+  return (
+    <div className="flex h-full min-h-0 flex-col bg-[var(--surface-2)]">
+      <SheetHeader
+        documentId={documentId}
+        sheetId={sheetId}
+        sheets={sheets}
+        pipelineVersion={result.pipeline_version}
+        needsReviewCount={needsReviewCount}
+        humanReviewed={sheetQuery.data?.humanReviewed ?? false}
+        onReviewed={() => {
+          queryClient.setQueryData(
+            sheetQueryKey(sheetId),
+            (old: SheetBundle | undefined) =>
+              old ? { ...old, humanReviewed: true } : old,
+          );
+        }}
+        onOpenShortcuts={() => setShortcutsOpen(true)}
+      />
+
+      <div className="flex min-h-0 flex-1 flex-col gap-2 p-2">
+        <KpiStrip rooms={result.rooms} detections={result.detections} />
+
+        <div className="grid min-h-0 flex-1 gap-2 lg:grid-cols-[minmax(0,1fr)_360px]">
+          <PlanViewer
+            ref={planRef}
+            result={result}
+            imageUrl={imageUrl ?? result.sheet.image?.url ?? null}
+            canUndo={canUndo}
+            onUndo={undo}
+            onAddAt={(x, y) => {
+              createDetection({
+                category: addCategory,
+                subtype: addSubtype || defaultSubtype(addCategory),
+                center: { x, y },
+              });
+              setMode("select");
+            }}
+            onDragMove={applyLocalMove}
+            onDragEnd={(id, x, y) => {
+              patchDetection(id, { center: { x, y } });
+            }}
+          />
+          <RightPanel
+            rooms={result.rooms}
+            detections={result.detections}
+            selected={selected}
+            bom={bomQuery.data}
+            corrections={correctionsQuery.data ?? []}
+            onPatch={(patch) => {
+              if (!selected) return;
+              patchDetection(selected.id, patch);
+            }}
+            onDelete={() => {
+              if (!selected) return;
+              deleteDetection(selected.id);
+              selectDetection(null);
+            }}
+          />
+        </div>
       </div>
+
+      <ShortcutsSheet open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
+
+      {mode === "add" && (
+        <div className="pointer-events-none fixed bottom-4 left-1/2 z-40 -translate-x-1/2 rounded-full bg-[var(--ink)] px-3 py-1.5 text-[12px] font-semibold text-white shadow-[var(--shadow-md)]">
+          Add mode — click the plan · Esc to cancel
+        </div>
+      )}
     </div>
   );
 }

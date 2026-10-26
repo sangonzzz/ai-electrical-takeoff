@@ -36,14 +36,14 @@ export function RightPanel({
   const setPanelTab = useUiStore((s) => s.setPanelTab);
 
   return (
-    <aside className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--surface)]">
+    <aside className="card flex h-full min-h-0 flex-col overflow-hidden">
       <nav className="flex border-b border-[var(--border)]">
         {TABS.map((tab) => (
           <button
             key={tab.id}
             type="button"
             onClick={() => setPanelTab(tab.id)}
-            className={`flex-1 px-2 py-2 text-[12px] font-semibold ${
+            className={`flex-1 px-2 py-2.5 text-[12px] font-semibold transition ${
               panelTab === tab.id
                 ? "border-b-2 border-[var(--ink)] text-[var(--ink)]"
                 : "text-[var(--muted)] hover:text-[var(--ink)]"
@@ -66,7 +66,9 @@ export function RightPanel({
           />
         )}
         {panelTab === "bom" && <BomPanel bom={bom} />}
-        {panelTab === "corrections" && <CorrectionsPanel corrections={corrections} />}
+        {panelTab === "corrections" && (
+          <CorrectionsPanel corrections={corrections} />
+        )}
       </div>
     </aside>
   );

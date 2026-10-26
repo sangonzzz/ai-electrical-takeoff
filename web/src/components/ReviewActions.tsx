@@ -42,26 +42,24 @@ export function ReviewActions({ sheetId, humanReviewed, onReviewed }: Props) {
         type="button"
         disabled={reviewed || reviewMut.isPending}
         onClick={() => reviewMut.mutate()}
-        className={`inline-flex items-center gap-1.5 rounded px-2.5 py-1.5 text-[12px] font-semibold ${
-          reviewed
-            ? "bg-emerald-100 text-emerald-800"
-            : "border border-[var(--border)] bg-[var(--surface)] text-[var(--ink)] hover:bg-[var(--surface-2)]"
-        } disabled:opacity-70`}
+        className={`btn !py-1.5 text-[12px] ${
+          reviewed ? "bg-[var(--success-soft)] text-[var(--success)]" : "btn-secondary"
+        }`}
       >
         <CheckCircle2 size={14} />
-        {reviewed ? "Sheet reviewed" : reviewMut.isPending ? "Marking…" : "Mark sheet reviewed"}
+        {reviewed ? "Reviewed" : reviewMut.isPending ? "Marking…" : "Mark reviewed"}
       </button>
       <button
         type="button"
         disabled={exportMut.isPending}
         onClick={() => exportMut.mutate()}
-        className="inline-flex items-center gap-1.5 rounded border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1.5 text-[12px] font-semibold text-[var(--ink)] hover:bg-[var(--surface-2)] disabled:opacity-60"
+        className="btn btn-secondary !py-1.5 text-[12px]"
       >
         <Download size={14} />
-        {exportMut.isPending ? "Exporting…" : "Export ground truth"}
+        {exportMut.isPending ? "Exporting…" : "Export GT"}
       </button>
       {error && (
-        <span className="max-w-[14rem] truncate text-[11px] text-red-600" title={error}>
+        <span className="max-w-[12rem] truncate text-[11px] text-[var(--danger)]" title={error}>
           {error}
         </span>
       )}

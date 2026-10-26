@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { CATEGORY_LABEL } from "@/lib/colors";
 import { SUBTYPES } from "@/lib/subtypes";
 import type { Category, Detection, Room } from "@/types/contracts";
+import { EmptyState } from "./ui/EmptyState";
 
 interface Props {
   detection: Detection | null;
@@ -13,14 +14,17 @@ interface Props {
 export function DetailsPanel({ detection, rooms, onChange, onDelete }: Props) {
   if (!detection) {
     return (
-      <div className="flex h-full flex-col items-start justify-center gap-2 px-4 text-[13px] text-[var(--muted)]">
-        <p className="font-medium text-[var(--ink)]">No mark selected</p>
-        <p>Click a detection on the plan to inspect type, room, confidence and evidence.</p>
-      </div>
+      <EmptyState
+        title="No mark selected"
+        description="Click a detection on the plan to inspect type, room, confidence and evidence."
+      />
     );
   }
 
   const subtypes = SUBTYPES[detection.category] ?? [detection.subtype];
+  const confPct = Math.round(detection.confidence * 100);
+  const roomName =
+    rooms.find((r) => r.id === detection.room_id)?.display_name ?? "Unassigned";
 
   return (
     <div className="flex h-full flex-col">
@@ -30,6 +34,19 @@ export function DetailsPanel({ detection, rooms, onChange, onDelete }: Props) {
       </div>
 
       <div className="flex flex-col gap-3 overflow-auto px-3 py-3 text-[13px]">
+        <div>
+          <div className="mb-1 flex items-center justify-between text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+            <span>Confidence</span>
+            <span className="font-mono normal-case text-[var(--ink)]">{confPct}%</span>
+          </div>
+          <div className="h-2 overflow-hidden rounded-full bg-[var(--surface-3)]">
+            <div
+              className="h-full rounded-full bg-[var(--accent)] transition-all"
+              style={{ width: `${confPct}%` }}
+            />
+          </div>
+        </div>
+
         <Field label="Category">
           <select
             className="field"
@@ -56,7 +73,7 @@ export function DetailsPanel({ detection, rooms, onChange, onDelete }: Props) {
           >
             {subtypes.map((s) => (
               <option key={s} value={s}>
-                {s}
+                {s.replace(/_/g, " ")}
               </option>
             ))}
           </select>
@@ -80,24 +97,33 @@ export function DetailsPanel({ detection, rooms, onChange, onDelete }: Props) {
               </option>
             ))}
           </select>
-          <p className="text-[11px] text-[var(--muted)]">
-            Room name on plan is hidden by default (hover a room polygon to peek).
-            Current:{" "}
-            <span className="font-semibold text-[var(--ink)]">
-              {rooms.find((r) => r.id === detection.room_id)?.display_name ?? "Unassigned"}
-            </span>
+          <p className="mt-1 text-[11px] text-[var(--muted)]">
+            Current: <span className="font-semibold text-[var(--ink)]">{roomName}</span>
           </p>
         </Field>
 
+        <div>
+          <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+            Codes
+          </div>
+          <div className="flex flex-wrap gap-1">
+            {(detection.codes ?? []).length === 0 ? (
+              <span className="text-[12px] text-[var(--muted)]">—</span>
+            ) : (
+              (detection.codes ?? []).map((c) => (
+                <span key={c} className="chip font-mono">
+                  {c}
+                </span>
+              ))
+            )}
+          </div>
+        </div>
+
         <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-[12px]">
-          <dt className="text-[var(--muted)]">Codes</dt>
-          <dd className="font-mono">{(detection.codes ?? []).join(", ") || "—"}</dd>
-          <dt className="text-[var(--muted)]">Confidence</dt>
-          <dd>{(detection.confidence * 100).toFixed(0)}%</dd>
           <dt className="text-[var(--muted)]">Source</dt>
           <dd>{detection.source}</dd>
           <dt className="text-[var(--muted)]">Needs review</dt>
-          <dd>{detection.needs_review ? "yes" : "no"}</dd>
+          <dd>{detection.needs_review === true ? "yes" : "no"}</dd>
           <dt className="text-[var(--muted)]">Center</dt>
           <dd className="font-mono">
             {detection.center.x.toFixed(1)}, {detection.center.y.toFixed(1)}
@@ -105,11 +131,11 @@ export function DetailsPanel({ detection, rooms, onChange, onDelete }: Props) {
         </dl>
 
         {detection.evidence && (
-          <div className="rounded border border-[var(--border)] bg-[var(--surface-2)]/50 p-2 text-[12px]">
+          <div className="rounded-[10px] border border-[var(--border)] bg-[var(--surface-2)] p-2 text-[12px]">
             <div className="mb-1 font-semibold text-[var(--ink)]">Evidence</div>
             <dl className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-1 text-[var(--muted)]">
               <dt>Match</dt>
-              <dd>
+              <dd className="font-mono text-[var(--ink)]">
                 {detection.evidence.match_score != null
                   ? detection.evidence.match_score.toFixed(2)
                   : "—"}
@@ -120,21 +146,11 @@ export function DetailsPanel({ detection, rooms, onChange, onDelete }: Props) {
               </dd>
               <dt>Notes</dt>
               <dd>{(detection.evidence.notes ?? []).join("; ") || "—"}</dd>
-              {detection.evidence.llm_reason && (
-                <>
-                  <dt>LLM</dt>
-                  <dd>{detection.evidence.llm_reason}</dd>
-                </>
-              )}
             </dl>
           </div>
         )}
 
-        <button
-          type="button"
-          onClick={onDelete}
-          className="mt-auto rounded border border-red-200 bg-red-50 px-3 py-2 text-[13px] font-medium text-red-700 hover:bg-red-100"
-        >
+        <button type="button" onClick={onDelete} className="btn btn-danger mt-auto">
           Delete mark (Del)
         </button>
       </div>
