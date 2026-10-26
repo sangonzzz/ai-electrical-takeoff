@@ -2,42 +2,39 @@
 
 ## Estado
 
-v0.3.0: una sola `PIPELINE_VERSION`, `ENGINE=real` por defecto, tag listo.
+v0.3.1: compose web arreglado (VITE_API_BASE_URL + volúmenes node_modules); pipeline 0.3.1.
 
 ## Hecho
 
-- `PIPELINE_VERSION = __version__ = "0.3.0"` solo en `engine/takeoff_engine/__init__.py`
-- `pipeline.py` importa esa constante (ya no `0.2.0-a2`)
-- CLI `takeoff --version` + analyze imprime `pipeline_version`
-- AGENTS.md §13: bump patch en todo cambio de comportamiento del engine
-- `docker-compose.yml` + `.env.example`: `ENGINE=real` (fake solo tests)
-- CHANGELOG v0.2.0 / v0.3.0; mensajes a A2, A3, A5, A8
+- `docker-compose.yml` web: `VITE_API_BASE_URL`, anonymous `/app/node_modules` + `.pnpm-store`
+- `PIPELINE_VERSION` → `0.3.1` (A2/A8 behavior after 0.3.0)
+- CHANGELOG v0.3.1; `docker compose config` OK
 
 ## Cómo probarlo
 
 ```bash
-uv run takeoff --version   # -> 0.3.0
-uv run python -c "from takeoff_engine import PIPELINE_VERSION; assert PIPELINE_VERSION=='0.3.0'"
-# SheetResult.pipeline_version must match after analyze
+docker compose config
+uv run takeoff --version   # -> 0.3.1
+docker compose up -d web   # should stay up on Windows Docker Desktop
 ```
 
 ## Siguiente
 
-- Tras cada cambio de engine de A2/A3/A4/A8: bump patch + commit/tag si aplica
+- Confirmar con Santiago que el contenedor `web` ya no sale
 - Pushear CI cuando haya scope `workflow`
 
 ## Bloqueos
 
-- Token `gh` sin scope `workflow` para Actions (CI local only)
+- Token `gh` sin scope `workflow` para Actions
 
 ## Decisions
 
-Ver DECISIONS.md (PIPELINE_VERSION única, ENGINE=real).
+Ninguna nueva (sigue ENGINE=real; bump patch por cambios A2/A8).
 
 ## Needs from Santiago
 
-- (ninguno nuevo para este fix)
+- Probar `docker compose up` y confirmar que `web` responde en :5173
 
 ## Explicación para Santiago
 
-Antes el CLI decía una versión (`0.2.0-a2`) y el backend otra (`0.1.0`), así que al re-subir el mismo PDF el sistema podía creer que el análisis “ya estaba” con una versión vieja. Ahora hay **una sola** versión `0.3.0` en un solo archivo; CLI, JSON del motor y la clave de idempotencia del backend usan la misma. Si alguien cambia cómo se detectan símbolos o cuartos, hay que subir al menos el número de parche para forzar un análisis nuevo. Docker y `.env` arrancan con el motor **real** (el fake queda para tests).
+El contenedor del front se caía en Windows porque montábamos tu carpeta `web` completa, incluidos los `node_modules` de Windows, dentro de Linux. Ahora el contenedor instala sus propios módulos Linux en un volumen aparte. También corregí el nombre de la variable de la API (`VITE_API_BASE_URL`). Subí la versión del motor a `0.3.1` porque agentes 2 y 8 ya cambiaron el comportamiento después de `0.3.0`, así el backend no reutiliza análisis viejos.

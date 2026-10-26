@@ -2,6 +2,14 @@
 
 Plain-language notes for Santiago. Newest first.
 
+## v0.3.1 — Docker web fix + engine patch after A2/A8
+
+- **Compose web:** `VITE_API_BASE_URL=http://localhost:8000` (was wrong `VITE_API_URL`).
+  Anonymous volumes for `/app/node_modules` and `/app/.pnpm-store` so pnpm installs
+  Linux binaries inside the container (Windows host `node_modules` no longer shared).
+- **Pipeline version** bumped to `0.3.1` after Agente 2 / Agente 8 engine behavior
+  changes so idempotency does not reuse `0.3.0` runs.
+
 ## v0.3.0 — review workflow, idempotency, single pipeline version
 
 - **One version string:** `PIPELINE_VERSION` / `__version__` = `0.3.0` only in

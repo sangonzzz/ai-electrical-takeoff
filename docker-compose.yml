@@ -89,11 +89,17 @@ services:
     command: sh -c "corepack enable && pnpm install && pnpm dev --host 0.0.0.0 --port 5173"
     volumes:
       - ./web:/app
+      # Anonymous volumes: keep Linux-native deps inside the container (Windows host
+      # node_modules / pnpm store break native binaries and can crash the web service).
+      - /app/node_modules
+      - /app/.pnpm-store
     ports:
       - "5173:5173"
     environment:
-      VITE_API_URL: http://localhost:8000
+      VITE_API_BASE_URL: http://localhost:8000
       VITE_USE_FIXTURE: "false"
+      # Isolate pnpm store from the bind-mounted Windows tree
+      PNPM_STORE_DIR: /app/.pnpm-store
     depends_on:
       - api
 
