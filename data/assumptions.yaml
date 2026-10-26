@@ -11,9 +11,9 @@ cable_roll_ft: 250
 
 # Measured on Escondido Plan 1 (page index 0), electrical viewport, 2026-10-25:
 # short black open strokes that form dashed wiring chains.
-# Main chain window: [3, 12] pt. Traveler (3-way) window includes ~1.5 pt
-# Bezier-flattened curve samples: [1.5, 14] pt, gap [0.5, 10].
+# v2 detector: dash length [1.5, 14] pt (flattened curves); gap_max = typical_max × 2.
 dash_length_pt_median: 7.1
 dash_length_pt_range: [4.0, 10.0]
 gap_pt_median: 3.8
 gap_pt_range: [2.0, 4.5]
+gap_max_pt: 9.0  # gap_pt_range[1] × 2

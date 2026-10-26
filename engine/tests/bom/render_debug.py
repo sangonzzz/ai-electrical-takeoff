@@ -18,7 +18,7 @@ from takeoff_engine.config import APPROX_VIEWPORTS, DEFAULT_PT_PER_FT
 from takeoff_engine.models import BBox, SheetResult
 from takeoff_engine.pdf_context import load_page
 from takeoff_engine.pricing import load_assumptions
-from takeoff_engine.wires import find_wire_runs, render_wire_debug_png
+from takeoff_engine.wires import _collect_dash_candidates, find_wire_runs, render_wire_debug_png
 
 try:
     from takeoff_engine.viewport import find_electrical_title, find_electrical_viewport, parse_scale
@@ -98,15 +98,16 @@ def main() -> int:
         )
         boxes = compute_boxes(result.detections, result.sheet.id)
 
+        ft2 = sum(r.total_length_ft for r in runs if r.cable_type == "nm_14_2")
+        ft3 = sum(r.total_length_ft for r in runs if r.cable_type == "nm_14_3")
+        n2 = sum(1 for r in runs if r.cable_type == "nm_14_2")
+        n3 = sum(1 for r in runs if r.cable_type == "nm_14_3")
         print(f"  detections={sum(1 for d in result.detections if d.status == 'active')}")
-        print(f"  wire_runs={len(runs)}")
-        if runs:
-            print(
-                f"  plan_ft max={max(r.plan_length_ft for r in runs):.1f} "
-                f"total_ft max={max(r.total_length_ft for r in runs):.1f}"
-            )
+        print(f"  wire_runs={len(runs)}  nm_14_2={n2} ({ft2:.1f} ft)  nm_14_3={n3} ({ft3:.1f} ft)")
         counts.append((page_index, len(runs)))
 
+        vp = result.sheet.viewport
+        dashes = _collect_dash_candidates(ctx, vp) if vp is not None else []
         wires_png = DEBUG_DIR / f"wires_plan{page_index + 1}.png"
         render_wire_debug_png(
             str(PLANS),
@@ -115,6 +116,7 @@ def main() -> int:
             runs,
             result.detections,
             str(wires_png),
+            dashes=dashes,
         )
         print(f"  wrote {wires_png}")
 

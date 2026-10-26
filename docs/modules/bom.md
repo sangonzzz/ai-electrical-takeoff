@@ -20,20 +20,20 @@ Inside `config.APPROX_VIEWPORTS[0]`, black open strokes (width ≈ 0.24) that fo
 | Gap (median, wiring-like pairs) | **3.8 pt** |
 | Gap (typical range) | **2–4.5 pt** |
 
-Detector window used in code: dash length **3–12 pt**, gap **1–6 pt**. Traveler pass (3-way only) uses **1.5–14 pt** / gap **0.5–10 pt** so flattened curved dashes still connect. Documented also in `data/assumptions.yaml`.
+Detector window (v2): dash length **1.5–14 pt** (includes Bezier-flattened curve samples), gap **≤ typical_max × 2 = 9.0 pt** (aligned tips up to ~12 pt). Documented also in `data/assumptions.yaml`.
 
-## Wire algorithm
+## Wire algorithm (v2)
 
-1. Collect short black segments in the viewport (stroke width ≈ 0.24, length in window).
-2. Build a proximity graph: edge if any endpoints are within the gap window.
-3. Connected components → candidate chains; drop tiny components (symbol fragments: need ≥3 dashes or ≥20 pt total ink).
-4. Order each component into a polyline (walk from a degree-1 end; soft direction preference when several neighbors exist).
-5. Associate detections along the dashed polyline within `WIRE_PATH_ASSOCIATE_PT` (28 pt); if fewer than two, enrich with nearest devices to each endpoint within `WIRE_END_ASSOCIATE_PT` (32 pt). (`WIRE_SNAP_PT`=10 alone is too tight for real symbol centers.) Consecutive devices along a chain become hops; each hop keeps the **sub-polyline of dashes** (never invent a bare center-to-center chord).
-6. **Phantom chord gate:** reject only if the polyline is nearly straight (chord/length ≥ 0.90) **and** more than 30% of samples lack a nearby dash. Curved dash-following runs are kept.
-7. **Length:** polyline length / `scale_pt_per_ft` → `plan_length_ft`.
-8. **Cable type:** `nm_14_3` if both ends are 3-way switches — by subtype (`three_way` / `three_way_dimmer`) **or** legend codes `3` / `3D` (Agente 2 often leaves subtype as dimmer/single_pole). Else `nm_14_2`.
-9. **3-way traveler pass:** cluster co-located 3-ways into gangs (<40 pt); BFS on the dash graph between distant gangs; emit one `nm_14_3` per gang pair with a dash-backed path (laundry↔entry on Plan 1).
-10. **Vertical allowance** (from assumptions): switch end → `(ceiling_height_ft − switch_height_in/12) + slack`; ceiling-ish end → `slack` only; wall receptacles/lights use mount height when known. Waste is **not** applied here — it is applied in `compute_bom`.
+1. **Collect** short black segments in the viewport (stroke width ≈ 0.24, length in window).
+2. **Link into full curves** by greedy bidirectional growth: at each tip, pick the unused dash whose near end is within `GAP_MAX` (= measured gap × 2) and whose tangent continues the tip direction (`cos ≥ DIR_COS_MIN`). Prefer high-alignment continuations so fan-blade branches lose. Prefer low-degree starts (true curve ends). Drop tiny components (<3 dashes and <16 pt ink).
+3. **Ends at bbox boundary:** each curve tip attaches to the device whose **bbox boundary** (not center) is nearest, within `DEVICE_BBOX_ASSOCIATE_PT` (22 pt). Snap tip onto that boundary only for short stubs.
+4. **One run per curve segment:** wiring-node devices whose bbox is within `DEVICE_PATH_ASSOCIATE_PT` (8 pt) of the polyline are ordered along the path; consecutive pairs become runs. A fixture mid-curve **splits** the curve. Each hop keeps the dash sub-polyline — never a bare center chord.
+5. **No dashless runs:** reject if uncovered sample fraction > 35% (and nearly-straight empty chords).
+6. **Length:** polyline length / `scale_pt_per_ft` → `plan_length_ft`.
+7. **Cable type:** `nm_14_3` if both ends are 3-way — subtype (`three_way` / `three_way_dimmer`) **or** legend codes `3` / `3D`. Else `nm_14_2`.
+8. **Vertical allowance** (from assumptions): switch end → `(ceiling_height_ft − switch_height_in/12) + slack`; ceiling-ish end → `slack` only. Waste is applied later in `compute_bom`.
+
+Debug PNGs (`out/debug/wires_plan{N}.png`) draw candidate dashes in light teal and each run in pink (`nm_14_2`) / green (`nm_14_3`) labeled `{cable_type} {total_ft}ft`.
 
 ### Routing assumption (honest limit)
 
@@ -70,9 +70,12 @@ Verified examples (2026-10-25): 14/2 250 ft roll $125; 14/3 250 ft $165; 1-gang 
 
 | Name | Value | Why |
 |------|-------|-----|
-| `WIRE_SNAP_PT` | 10 | Spec snap radius to device centers |
-| `GANG_GROUP_DIST_PT` | 10 | Spec multi-gang grouping |
-| Dash / gap windows | see above | Measured on Plan 1 |
+| `GAP_MAX_PT` / aligned | 9.0 / ~12 | Typical gap 4.5 × 2; farther if cos high |
+| `DASH_LEN_*` | 1.5–14 pt | Median ~7.1; include flattened arcs |
+| `DIR_COS_MIN` / prefer | −0.35 / 0.35 | Tangent continuity; prefer aligned |
+| `DEVICE_BBOX_ASSOCIATE_PT` | 22 | Curve end → nearest bbox boundary |
+| `DEVICE_PATH_ASSOCIATE_PT` | 8 | Mid-path fixture split (tight) |
+| `GANG_GROUP_DIST_PT` | 10 | Spec multi-gang grouping (boxes) |
 | `ceiling_height_ft` | 8 | Stated routing assumption |
 | `switch_height_in` | 48 | AFF for switch vertical |
 | `slack_ft_per_end` | 1 | Spec |

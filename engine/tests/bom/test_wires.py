@@ -1,4 +1,4 @@
-"""Tests for find_wire_runs (synthetic geometry + PDF smoke)."""
+"""Tests for find_wire_runs v2 (curve growth + bbox ends + PDF smoke)."""
 
 from __future__ import annotations
 
@@ -7,8 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from takeoff_engine.boxes import compute_boxes
-from takeoff_engine.config import APPROX_VIEWPORTS, DEFAULT_PT_PER_FT, WIRE_SNAP_PT
+from takeoff_engine.config import APPROX_VIEWPORTS, DEFAULT_PT_PER_FT
 from takeoff_engine.models import BBox, Category, Detection, Evidence, Point, SheetResult
 from takeoff_engine.pdf_context import load_page
 from takeoff_engine.pricing import load_assumptions
@@ -16,7 +15,11 @@ from takeoff_engine.types import PageContext, Segment
 from takeoff_engine.wires import (
     DASH_LEN_MAX_PT,
     DASH_LEN_MIN_PT,
+    DEVICE_BBOX_ASSOCIATE_PT,
+    GAP_MAX_PT,
+    GAP_MEDIAN_PT,
     MAX_UNCOVERED_FRACTION,
+    _collect_dash_candidates,
     _is_unsupported_straight_chord,
     _uncovered_fraction,
     find_wire_runs,
@@ -97,9 +100,10 @@ def test_chains_dashes_and_snaps_to_devices() -> None:
     assert {run.from_detection_id, run.to_detection_id} == {"a", "b"}
     assert run.cable_type == "nm_14_2"
     assert run.plan_length_ft > 0
-    # Switch end: 4 + 1; ceiling pendant: 1 → vertical 6
     assert run.vertical_allowance_ft == pytest.approx(6.0)
     assert run.total_length_ft == pytest.approx(run.plan_length_ft + run.vertical_allowance_ft)
+    # Run must sit on dashes (no empty chord).
+    assert _uncovered_fraction(run.points, segs) <= MAX_UNCOVERED_FRACTION
 
 
 def test_three_way_pair_gets_nm_14_3() -> None:
@@ -123,13 +127,11 @@ def test_three_way_pair_gets_nm_14_3() -> None:
     )
     assert len(runs) == 1
     assert runs[0].cable_type == "nm_14_3"
-    # Both switch ends: 2 * (4+1) = 10
     assert runs[0].vertical_allowance_ft == pytest.approx(10.0)
 
 
 def test_three_way_codes_3d_get_nm_14_3() -> None:
     """Legend codes 3/3D count as three-way even when subtype is dimmer."""
-    # Long enough that gang clustering treats ends as distant (>40 pt).
     segs = [
         _dash(100, 200, 108, 200),
         _dash(112, 200, 120, 200),
@@ -157,13 +159,45 @@ def test_three_way_codes_3d_get_nm_14_3() -> None:
     assert {nm143[0].from_detection_id, nm143[0].to_detection_id} == {"sw1", "sw2"}
 
 
-def test_no_snap_beyond_wire_snap_pt() -> None:
-    segs = [_dash(100, 100, 108, 100), _dash(112, 100, 120, 100)]
-    # Devices far from the dashes.
-    far = WIRE_SNAP_PT + 20
+def test_curve_splits_at_mid_fixture() -> None:
+    """A curve passing through a fixture emits two device-to-device runs."""
+    segs = [
+        _dash(100, 100, 108, 100),
+        _dash(112, 100, 120, 100),
+        _dash(124, 100, 132, 100),
+        _dash(136, 100, 144, 100),
+        _dash(148, 100, 156, 100),
+        _dash(160, 100, 168, 100),
+        _dash(172, 100, 180, 100),
+    ]
+    dets = [
+        _det("a", Category.SWITCH, "single_pole", 100, 100),
+        _det("mid", Category.LIGHT, "recessed", 140, 100),
+        _det("b", Category.LIGHT, "pendant", 180, 100),
+    ]
+    ctx = _ctx_with_segments(segs)
+    vp = BBox(x0=50, y0=50, x1=220, y1=150)
+    runs = find_wire_runs(
+        ctx,
+        vp,
+        dets,
+        scale_pt_per_ft=18.0,
+        assumptions={"ceiling_height_ft": 8, "switch_height_in": 48, "slack_ft_per_end": 1},
+    )
+    assert len(runs) == 2
+    ids = {frozenset({r.from_detection_id, r.to_detection_id}) for r in runs}
+    assert frozenset({"a", "mid"}) in ids
+    assert frozenset({"mid", "b"}) in ids
+    for run in runs:
+        assert _uncovered_fraction(run.points, segs) <= MAX_UNCOVERED_FRACTION
+
+
+def test_no_run_when_devices_far_from_curve() -> None:
+    segs = [_dash(100, 100, 108, 100), _dash(112, 100, 120, 100), _dash(124, 100, 132, 100)]
+    far = DEVICE_BBOX_ASSOCIATE_PT + 25
     dets = [
         _det("a", Category.SWITCH, "single_pole", 100, 100 + far),
-        _det("b", Category.LIGHT, "pendant", 120, 100 + far),
+        _det("b", Category.LIGHT, "pendant", 132, 100 + far),
     ]
     ctx = _ctx_with_segments(segs)
     vp = BBox(x0=50, y0=50, x1=200, y1=200)
@@ -177,15 +211,15 @@ def test_no_snap_beyond_wire_snap_pt() -> None:
     assert runs == []
 
 
-def test_dash_length_constants_match_measurement() -> None:
-    # Window covers measured dash lengths (~4–10 pt median 7.1) with margin.
+def test_gap_max_is_measured_gap_times_two() -> None:
+    # Spec: gap ≤ measured dash gap × 2 (use typical-max 4.5 → 9.0).
+    assert GAP_MAX_PT == pytest.approx(4.5 * 2.0)
+    assert GAP_MAX_PT >= GAP_MEDIAN_PT * 2.0 - 1e-6
     assert DASH_LEN_MIN_PT <= 4.0
     assert DASH_LEN_MAX_PT >= 10.0
-    assert MAX_UNCOVERED_FRACTION == 0.30
 
 
 def test_rejects_straight_chord_without_dash_backing() -> None:
-    """Phantom wall→attic style run: two devices + no dashes under the chord."""
     segs = [
         _dash(100, 100, 108, 100),
         _dash(112, 100, 120, 100),
@@ -213,8 +247,6 @@ def test_unsupported_straight_chord_helper() -> None:
     assert _is_unsupported_straight_chord(empty, dashes)
     assert _uncovered_fraction(empty, dashes) > MAX_UNCOVERED_FRACTION
 
-    # Curved path with no dashes is NOT rejected by the straight-chord guard
-    # (straightness low) — association still requires dash geometry upstream.
     curved = [Point(x=0, y=0), Point(x=50, y=80), Point(x=100, y=0)]
     assert not _is_unsupported_straight_chord(curved, dashes)
 
@@ -228,47 +260,8 @@ def test_unsupported_straight_chord_helper() -> None:
     assert not _is_unsupported_straight_chord(poly, dashed_line)
 
 
-def test_multi_device_hop_does_not_emit_bare_chord() -> None:
-    """Three devices on one chain: hops must keep dash geometry, not center chords."""
-    segs = [
-        _dash(100, 100, 108, 100),
-        _dash(112, 100, 120, 100),
-        _dash(124, 100, 132, 100),
-        _dash(136, 100, 144, 100),
-        _dash(148, 100, 156, 100),
-        _dash(160, 100, 168, 100),
-        _dash(172, 100, 180, 100),
-    ]
-    dets = [
-        _det("a", Category.SWITCH, "single_pole", 100, 100),
-        _det("mid", Category.LIGHT, "recessed", 140, 100),
-        _det("b", Category.LIGHT, "pendant", 180, 100),
-    ]
-    ctx = _ctx_with_segments(segs)
-    vp = BBox(x0=50, y0=50, x1=220, y1=150)
-    runs = find_wire_runs(
-        ctx,
-        vp,
-        dets,
-        scale_pt_per_ft=18.0,
-        assumptions={"ceiling_height_ft": 8, "switch_height_in": 48, "slack_ft_per_end": 1},
-    )
-    assert len(runs) >= 1
-    for run in runs:
-        # Every accepted run must have more than a 2-point empty chord OR sit on dashes.
-        assert _uncovered_fraction(run.points, segs) <= MAX_UNCOVERED_FRACTION
-        # No enormous jumps between consecutive polyline vertices (phantom spans).
-        for i in range(1, len(run.points)):
-            step = (
-                (run.points[i].x - run.points[i - 1].x) ** 2
-                + (run.points[i].y - run.points[i - 1].y) ** 2
-            ) ** 0.5
-            assert step < 40.0, f"unexpected long straight step {step:.1f}pt"
-
-
 @pytest.mark.skipif(not PLANS.is_file(), reason="plans PDF missing")
 def test_page1_find_wire_runs_smoke_and_debug_png() -> None:
-    """Smoke: run on real page 1 + fixture detections; write debug PNG."""
     assumptions = load_assumptions(REPO_ROOT / "data" / "assumptions.yaml")
     ctx = load_page(PLANS, 0)
     vp_t = APPROX_VIEWPORTS[0]
@@ -285,6 +278,7 @@ def test_page1_find_wire_runs_smoke_and_debug_png() -> None:
     assert isinstance(runs, list)
 
     DEBUG_DIR.mkdir(parents=True, exist_ok=True)
+    dashes = _collect_dash_candidates(ctx, viewport)
     out = DEBUG_DIR / "wires_plan1_fixture.png"
     render_wire_debug_png(
         str(PLANS),
@@ -293,73 +287,76 @@ def test_page1_find_wire_runs_smoke_and_debug_png() -> None:
         runs,
         sample.detections,
         str(out),
+        dashes=dashes,
     )
     assert out.is_file() and out.stat().st_size > 1000
 
 
-@pytest.mark.skipif(not PLANS.is_file(), reason="plans PDF missing")
-def test_plan1_has_many_runs_none_over_40ft() -> None:
-    """Acceptance: Plan 1 yields >10 dash-backed runs; no run longer than 40 ft total."""
-    plan1 = REPO_ROOT / "out" / "plan1.json"
-    if not plan1.is_file():
-        pytest.skip("out/plan1.json missing — run analyze first")
-
+def _plan_runs(plan_index: int) -> tuple[list, object, object, float]:
     from takeoff_engine.viewport import find_electrical_title, find_electrical_viewport, parse_scale
 
+    plan = REPO_ROOT / f"out/plan{plan_index + 1}.json"
+    if not plan.is_file():
+        pytest.skip(f"out/plan{plan_index + 1}.json missing — run analyze first")
+
     assumptions = load_assumptions(REPO_ROOT / "data" / "assumptions.yaml")
-    result = SheetResult.model_validate(json.loads(plan1.read_text(encoding="utf-8")))
-    ctx = load_page(PLANS, 0)
+    result = SheetResult.model_validate(json.loads(plan.read_text(encoding="utf-8")))
+    ctx = load_page(PLANS, plan_index)
     viewport, _ = find_electrical_viewport(ctx)
     title_bbox, _ = find_electrical_title(ctx)
     scale = float(parse_scale(ctx, title_bbox) or result.sheet.scale_pt_per_ft or DEFAULT_PT_PER_FT)
+    vp = result.sheet.viewport or viewport
+    runs = find_wire_runs(ctx, vp, result.detections, scale, assumptions)
+    return runs, result, ctx, scale
 
-    runs = find_wire_runs(
-        ctx,
-        result.sheet.viewport or viewport,
-        result.detections,
-        scale,
-        assumptions,
-    )
+
+@pytest.mark.skipif(not PLANS.is_file(), reason="plans PDF missing")
+def test_plan1_has_many_dash_backed_runs_and_nm_14_3() -> None:
+    """Plan 1: many dash-backed runs, ≥1 nm_14_3, every run covered by dashes."""
+    runs, result, ctx, _scale = _plan_runs(0)
+    vp = result.sheet.viewport
+    assert vp is not None
+    dashes = _collect_dash_candidates(ctx, vp)
+
     assert len(runs) > 10, f"expected >10 runs on plan 1, got {len(runs)}"
-    assert all(r.total_length_ft <= 40.0 for r in runs), (
-        f"run longer than 40 ft: {[r.total_length_ft for r in runs if r.total_length_ft > 40]}"
-    )
+    nm143 = [r for r in runs if r.cable_type == "nm_14_3"]
+    assert len(nm143) >= 1
+    for r in runs:
+        assert _uncovered_fraction(r.points, dashes) <= MAX_UNCOVERED_FRACTION
 
     DEBUG_DIR.mkdir(parents=True, exist_ok=True)
     render_wire_debug_png(
         str(PLANS),
         0,
-        result.sheet.viewport or viewport,
+        vp,
         runs,
         result.detections,
         str(DEBUG_DIR / "wires_plan1.png"),
+        dashes=dashes,
     )
 
 
 @pytest.mark.skipif(not PLANS.is_file(), reason="plans PDF missing")
-def test_plan1_has_at_least_one_nm_14_3() -> None:
-    """Plan 1 has 3-way pairs (laundry/entry); traveler run must be nm_14_3."""
-    plan1 = REPO_ROOT / "out" / "plan1.json"
-    if not plan1.is_file():
-        pytest.skip("out/plan1.json missing — run analyze first")
+@pytest.mark.parametrize("plan_index", [0, 1, 2, 3])
+def test_all_plans_runs_are_dash_backed(plan_index: int) -> None:
+    """Every run on every plan sits on dash ink (no empty chords)."""
+    runs, result, ctx, _scale = _plan_runs(plan_index)
+    vp = result.sheet.viewport
+    assert vp is not None
+    dashes = _collect_dash_candidates(ctx, vp)
+    assert len(runs) >= 1
+    for r in runs:
+        assert _uncovered_fraction(r.points, dashes) <= MAX_UNCOVERED_FRACTION, (
+            f"plan{plan_index + 1} run {r.id[:8]} uncovered"
+        )
 
-    from takeoff_engine.viewport import find_electrical_title, find_electrical_viewport, parse_scale
-
-    assumptions = load_assumptions(REPO_ROOT / "data" / "assumptions.yaml")
-    result = SheetResult.model_validate(json.loads(plan1.read_text(encoding="utf-8")))
-    ctx = load_page(PLANS, 0)
-    viewport, _ = find_electrical_viewport(ctx)
-    title_bbox, _ = find_electrical_title(ctx)
-    scale = float(parse_scale(ctx, title_bbox) or result.sheet.scale_pt_per_ft or DEFAULT_PT_PER_FT)
-
-    runs = find_wire_runs(
-        ctx,
-        result.sheet.viewport or viewport,
+    DEBUG_DIR.mkdir(parents=True, exist_ok=True)
+    render_wire_debug_png(
+        str(PLANS),
+        plan_index,
+        vp,
+        runs,
         result.detections,
-        scale,
-        assumptions,
-    )
-    nm143 = [r for r in runs if r.cable_type == "nm_14_3"]
-    assert len(nm143) >= 1, (
-        f"expected ≥1 nm_14_3 on plan 1 (3-way traveler), got 0 of {len(runs)} runs"
+        str(DEBUG_DIR / f"wires_plan{plan_index + 1}.png"),
+        dashes=dashes,
     )

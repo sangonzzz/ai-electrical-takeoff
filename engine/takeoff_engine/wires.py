@@ -1,68 +1,76 @@
-"""Dashed wiring chain detection and length measurement (owned by Agente 8).
+"""Dashed wiring curve detection and length measurement (owned by Agente 8).
 
 Measured on Escondido Plan 1 (page 0) inside APPROX_VIEWPORTS[0]:
-- dash length median ≈ 7.1 pt (typical 4–10 pt)
+- dash length median ≈ 7.1 pt (typical 4–10 pt; flattened curves ≈ 1.5–3 pt)
 - gap median ≈ 3.8 pt (typical 2–4.5 pt)
 
-Dashes are drawn as separate short black open strokes (width ≈ 0.24), not PDF
-dash patterns. We chain by endpoint proximity + direction continuity, then snap
-ends to detections within WIRE_SNAP_PT.
+Dashes are separate short black open strokes (width ≈ 0.24), not PDF dash
+patterns. v2 grows full curves by endpoint proximity + tangent continuity
+(gap ≤ measured_gap_median × 2), ends at the nearest device *bbox boundary*,
+and splits a curve into device-to-device runs at mid-path fixtures.
 """
 
 from __future__ import annotations
 
 import math
 import uuid
-from collections import deque
 from typing import Any
 
-from takeoff_engine.config import WIRE_SNAP_PT
 from takeoff_engine.models import BBox, Category, Detection, Point, WireRun
 from takeoff_engine.types import PageContext, Segment
 
 # Measured thresholds (see docs/modules/bom.md and data/assumptions.yaml).
-# Single-stroke dashes on these plans are typically 4–10 pt (median ~7.1).
-DASH_LEN_MIN_PT = 3.0
-DASH_LEN_MAX_PT = 12.0
-GAP_MIN_PT = 1.0
-GAP_MAX_PT = 6.0
-# Soft direction preference when several gap neighbors exist (not a hard cut).
-DIR_COS_SOFT = -0.5
-# Stroke width of electrical ink on these plans.
+GAP_MEDIAN_PT = 3.8
+GAP_TYPICAL_MAX_PT = 4.5  # upper end of measured wiring-like gaps
+# Include Bezier-flattened curve samples (~1.5 pt) so long arcs stay one curve.
+DASH_LEN_MIN_PT = 1.5
+DASH_LEN_MAX_PT = 14.0
+GAP_MIN_PT = 0.5
+# Spec: allow gaps up to measured dash gap × 2 (use typical-max so arcs still link).
+GAP_MAX_PT = GAP_TYPICAL_MAX_PT * 2.0  # 9.0
+# Aligned tips may bridge a bit farther (flattened samples leave uneven gaps).
+GAP_MAX_ALIGNED_PT = GAP_MAX_PT * 1.35  # ~12.15 when cos is high
+# Hard reject for tip→next tangent (allow room corners; prefer aligned).
+DIR_COS_MIN = -0.35
+DIR_COS_PREFER = 0.35
+
 STROKE_WIDTH_NOMINAL = 0.24
 STROKE_WIDTH_TOL = 0.08
 
-# Device centers sit off the dashed stroke (symbol body). Associate any detection
-# within this distance of the chain polyline (config.WIRE_SNAP_PT=10 is too tight
-# for real Plan-1 centers; median endpoint gap is ~20 pt).
-WIRE_PATH_ASSOCIATE_PT = 28.0
-# If a chain still has <2 path-associated devices, try endpoint nearest-neighbor
-# out to this radius (covers switch bodies offset from the stroke tip).
-WIRE_END_ASSOCIATE_PT = 32.0
+# Curve tip → nearest device bbox boundary.
+DEVICE_BBOX_ASSOCIATE_PT = 22.0
+# Mid-path split: tighter so wall devices near a flyover do not shatter the curve.
+DEVICE_PATH_ASSOCIATE_PT = 8.0
+# Snap curve tip onto bbox boundary only for short stubs (avoid empty chords).
+MAX_SNAP_STUB_PT = 20.0
 
-# Reject only nearly-straight chords that lack dash ink underneath (phantom
-# wall→attic lines). Curved polylines that follow dashes are kept even if snap
-# stubs at the ends are uncovered.
-MAX_UNCOVERED_FRACTION = 0.30
-MIN_STRAIGHTNESS_FOR_COVERAGE_REJECT = 0.90
+# Categories that may split a curve mid-path (wiring nodes). Tips may be any device.
+_SPLIT_CATEGORIES = frozenset(
+    {
+        Category.SWITCH,
+        Category.LIGHT,
+        Category.CEILING_FAN,
+        Category.JUNCTION_BOX,
+        Category.DETECTOR,
+        Category.EXHAUST_FAN,
+        Category.RECEPTACLE,
+    }
+)
+
 COVER_RADIUS_PT = 4.0
 COVER_SAMPLE_SPACING_PT = 2.0
-# Do not drag a device center onto the polyline across empty plan (stub chords).
-MAX_SNAP_STUB_PT = 18.0
-# Sanity: residential sheet runs longer than this are almost always bogus merges.
-MAX_PLAN_LENGTH_FT = 40.0
+MAX_UNCOVERED_FRACTION = 0.35
+MIN_STRAIGHTNESS_FOR_COVERAGE_REJECT = 0.92
+
+# Drop tiny symbol-arc components.
+MIN_CURVE_DASHES = 3
+MIN_CURVE_INK_PT = 16.0
+MAX_PLAN_LENGTH_FT = 50.0
 
 _THREE_WAY = frozenset({"three_way", "three_way_dimmer"})
-# Legend codes (Agente 2 often leaves subtype as dimmer/single_pole but codes=["3D"]).
 _THREE_WAY_CODES = frozenset({"3", "3D"})
-# Ignore co-located multi-gang 3D switches when searching traveler pairs.
-_THREE_WAY_PAIR_MIN_DIST_PT = 40.0
-# Traveler pass: curved dashes flatten to ~1.5–2 pt samples; need a looser window
-# than the main chain detector so distant 3-way gangs still connect (Plan 4).
-TRAVELER_DASH_LEN_MIN_PT = 1.5
-TRAVELER_DASH_LEN_MAX_PT = 14.0
-TRAVELER_GAP_MIN_PT = 0.5
-TRAVELER_GAP_MAX_PT = 10.0
+# Multi-gang 3D centers are ~10 pt apart; travelers are much farther.
+_THREE_WAY_TRAVELER_MIN_DIST_PT = 25.0
 
 
 def _seg_len(s: Segment) -> float:
@@ -78,12 +86,6 @@ def _in_viewport(x: float, y: float, viewport: BBox, inflate: float = 0.5) -> bo
 
 def _seg_in_viewport(s: Segment, viewport: BBox) -> bool:
     return _in_viewport(s.x0, s.y0, viewport) and _in_viewport(s.x1, s.y1, viewport)
-
-
-def _direction(s: Segment) -> tuple[float, float]:
-    dx, dy = s.x1 - s.x0, s.y1 - s.y0
-    L = math.hypot(dx, dy) or 1.0
-    return dx / L, dy / L
 
 
 def _dist(a: tuple[float, float], b: tuple[float, float]) -> float:
@@ -117,127 +119,173 @@ def _collect_dash_candidates(
     return out
 
 
-def _chain_dashes(dashes: list[Segment]) -> list[list[Segment]]:
-    """Chain dashes by endpoint proximity, then order each component into a path.
+def _ends(s: Segment) -> tuple[tuple[float, float], tuple[float, float]]:
+    return (s.x0, s.y0), (s.x1, s.y1)
 
-    Direction is a soft tie-break when several neighbors sit in the gap window
-    (curved runs turn). Hard direction cuts were dropping room-length wires.
+
+def _unit(dx: float, dy: float) -> tuple[float, float]:
+    L = math.hypot(dx, dy) or 1.0
+    return dx / L, dy / L
+
+
+def _orient_away_from(s: Segment, tip: tuple[float, float]) -> tuple[
+    tuple[float, float], tuple[float, float], tuple[float, float]
+]:
+    """Return (near, far, direction_near_to_far) for dash ``s`` relative to ``tip``."""
+    a, b = _ends(s)
+    if _dist(tip, a) <= _dist(tip, b):
+        near, far = a, b
+    else:
+        near, far = b, a
+    return near, far, _unit(far[0] - near[0], far[1] - near[1])
+
+
+def _build_endpoint_index(
+    dashes: list[Segment],
+) -> list[list[tuple[int, int, float]]]:
+    """For each dash, list (other_idx, other_end, gap) within GAP_MAX of either end.
+
+    other_end is 0 or 1 for (x0,y0)/(x1,y1) of the other dash.
     """
+    n = len(dashes)
+    # Flat list of (dash_i, end_k, x, y)
+    tips: list[tuple[int, int, float, float]] = []
+    for i, s in enumerate(dashes):
+        tips.append((i, 0, s.x0, s.y0))
+        tips.append((i, 1, s.x1, s.y1))
+
+    # Index up to the aligned gap so _best_continuation can extend farther when cos is high.
+    nbrs: list[list[tuple[int, int, float]]] = [[] for _ in range(n)]
+    for a in range(len(tips)):
+        ia, _, ax, ay = tips[a]
+        for b in range(a + 1, len(tips)):
+            ib, eb, bx, by = tips[b]
+            if ia == ib:
+                continue
+            gap = math.hypot(ax - bx, ay - by)
+            if gap <= GAP_MAX_ALIGNED_PT:
+                nbrs[ia].append((ib, eb, gap))
+                nbrs[ib].append((ia, tips[a][1], gap))
+    return nbrs
+
+
+def _best_continuation(
+    tip: tuple[float, float],
+    tip_dir: tuple[float, float],
+    dashes: list[Segment],
+    unused: set[int],
+    nbrs_of_cur: list[tuple[int, int, float]],
+) -> int | None:
+    """Pick unused dash that best continues the curve past ``tip``."""
+    candidates: list[tuple[float, float, int]] = []  # (score, cos, j)
+    seen: set[int] = set()
+    for j, _end, _gap in nbrs_of_cur:
+        if j not in unused or j in seen:
+            continue
+        seen.add(j)
+        near, _far, ddir = _orient_away_from(dashes[j], tip)
+        gap2 = _dist(tip, near)
+        cos = tip_dir[0] * ddir[0] + tip_dir[1] * ddir[1]
+        if cos < DIR_COS_MIN:
+            continue
+        gap_lim = GAP_MAX_ALIGNED_PT if cos >= DIR_COS_PREFER else GAP_MAX_PT
+        if gap2 > gap_lim:
+            continue
+        # Lower score is better: alignment dominates so fan-blade branches lose.
+        score = gap2 - 5.0 * cos
+        candidates.append((score, cos, j))
+    if not candidates:
+        return None
+    preferred = [c for c in candidates if c[1] >= DIR_COS_PREFER]
+    pool = preferred if preferred else candidates
+    pool.sort(key=lambda c: c[0])
+    return pool[0][2]
+
+
+def _grow_from(
+    start: int,
+    dashes: list[Segment],
+    unused: set[int],
+    nbrs: list[list[tuple[int, int, float]]],
+) -> list[int]:
+    """Greedy bidirectional growth from ``start``; mutates ``unused``."""
+    unused.discard(start)
+    path = [start]
+    # Tip at end of first dash: pick the end with a continuation if any.
+    s0 = dashes[start]
+    tip_a, tip_b = _ends(s0)
+    # Prefer growing toward the side that has a neighbor.
+    dir_ab = _unit(tip_b[0] - tip_a[0], tip_b[1] - tip_a[1])
+    dir_ba = (-dir_ab[0], -dir_ab[1])
+
+    def grow(tip: tuple[float, float], tip_dir: tuple[float, float], append: bool) -> tuple[
+        tuple[float, float], tuple[float, float]
+    ]:
+        cur = path[-1] if append else path[0]
+        while True:
+            nxt = _best_continuation(tip, tip_dir, dashes, unused, nbrs[cur])
+            if nxt is None:
+                return tip, tip_dir
+            unused.discard(nxt)
+            near, far, ddir = _orient_away_from(dashes[nxt], tip)
+            if append:
+                path.append(nxt)
+            else:
+                path.insert(0, nxt)
+            tip, tip_dir, cur = far, ddir, nxt
+        return tip, tip_dir  # pragma: no cover
+
+    # Grow forward from tip_b, then backward from tip_a (after re-orient).
+    tip, tip_dir = tip_b, dir_ab
+    tip, tip_dir = grow(tip, tip_dir, append=True)
+
+    # Recompute start tip after possible prepends aren't done yet — grow back from path[0].
+    s_start = dashes[path[0]]
+    # The free end of path[0] is the end farther from path[1] if len>1.
+    if len(path) > 1:
+        a, b = _ends(s_start)
+        s1 = dashes[path[1]]
+        # End of s_start closer to s1 is the "inside"; opposite is free tip.
+        s1_ends = _ends(s1)
+        if min(_dist(a, s1_ends[0]), _dist(a, s1_ends[1])) <= min(
+            _dist(b, s1_ends[0]), _dist(b, s1_ends[1])
+        ):
+            free, inside = b, a
+        else:
+            free, inside = a, b
+        tip_dir = _unit(inside[0] - free[0], inside[1] - free[1])
+        # Growing backward: tip is free, direction should point outward then we
+        # flip — continuation is away from the path, so tip_dir from inside→free
+        # reversed: from free looking for next is opposite of path direction.
+        tip_dir = _unit(free[0] - inside[0], free[1] - inside[1])
+        tip = free
+    else:
+        tip, tip_dir = tip_a, dir_ba
+
+    grow(tip, tip_dir, append=False)
+    return path
+
+
+def _link_dash_curves(dashes: list[Segment]) -> list[list[Segment]]:
+    """Link dashes into full curves via gap + tangent continuity (greedy growth)."""
     n = len(dashes)
     if n == 0:
         return []
-
-    # Undirected adjacency: gap between any endpoints in [GAP_MIN, GAP_MAX].
-    adj: list[list[tuple[int, float]]] = [[] for _ in range(n)]
-    for i in range(n):
-        si = dashes[i]
-        i_ends = ((si.x0, si.y0), (si.x1, si.y1))
-        for j in range(i + 1, n):
-            sj = dashes[j]
-            best_gap = None
-            for a in i_ends:
-                for b in ((sj.x0, sj.y0), (sj.x1, sj.y1)):
-                    gap = _dist(a, b)
-                    if GAP_MIN_PT <= gap <= GAP_MAX_PT:
-                        if best_gap is None or gap < best_gap:
-                            best_gap = gap
-            if best_gap is not None:
-                adj[i].append((j, best_gap))
-                adj[j].append((i, best_gap))
-
-    # Connected components.
-    seen = [False] * n
-    components: list[list[int]] = []
-    for i in range(n):
-        if seen[i]:
+    nbrs = _build_endpoint_index(dashes)
+    degree = [len({j for j, _, _ in nbrs[i]}) for i in range(n)]
+    # Start at low-degree dashes (true curve ends) so growth follows the stroke.
+    order = sorted(range(n), key=lambda i: (degree[i], i))
+    unused = set(range(n))
+    curves: list[list[Segment]] = []
+    for start in order:
+        if start not in unused:
             continue
-        stack = [i]
-        seen[i] = True
-        comp = [i]
-        while stack:
-            u = stack.pop()
-            for v, _ in adj[u]:
-                if not seen[v]:
-                    seen[v] = True
-                    stack.append(v)
-                    comp.append(v)
-        components.append(comp)
-
-    chains: list[list[Segment]] = []
-    for comp in components:
-        if len(comp) < 2:
+        idxs = _grow_from(start, dashes, unused, nbrs)
+        ink = sum(_seg_len(dashes[i]) for i in idxs)
+        if len(idxs) < MIN_CURVE_DASHES and ink < MIN_CURVE_INK_PT:
             continue
-        total_len = sum(_seg_len(dashes[i]) for i in comp)
-        if len(comp) < 3 and total_len < 20.0:
-            continue
-        ordered = _order_component(comp, dashes, adj)
-        if ordered:
-            chains.append([dashes[i] for i in ordered])
-    return chains
-
-
-def _order_component(
-    comp: list[int],
-    dashes: list[Segment],
-    adj: list[list[tuple[int, float]]],
-) -> list[int]:
-    """Walk the component from a degree-1 node (or arbitrary) via nearest neighbor."""
-    comp_set = set(comp)
-    degree = {i: sum(1 for v, _ in adj[i] if v in comp_set) for i in comp}
-    ends = [i for i in comp if degree[i] <= 1]
-    start = min(ends) if ends else min(comp)
-
-    ordered = [start]
-    used = {start}
-    # Tip = endpoint of current dash farthest from previous tip (or either for start).
-    cur = start
-    tip = (dashes[cur].x1, dashes[cur].y1)
-    tip_dir = _direction(dashes[cur])
-
-    while len(ordered) < len(comp):
-        candidates = [(v, gap) for v, gap in adj[cur] if v in comp_set and v not in used]
-        if not candidates:
-            # Disconnected residual inside component (should be rare) — append leftover.
-            leftover = [i for i in comp if i not in used]
-            ordered.extend(leftover)
-            break
-
-        def score(item: tuple[int, float]) -> tuple[float, float]:
-            v, gap = item
-            # Prefer small gap; among equals, prefer direction continuity.
-            s = dashes[v]
-            # Orient v so its near end faces tip.
-            a, b = (s.x0, s.y0), (s.x1, s.y1)
-            if _dist(tip, a) <= _dist(tip, b):
-                near, far = a, b
-            else:
-                near, far = b, a
-            dx, dy = far[0] - near[0], far[1] - near[1]
-            L = math.hypot(dx, dy) or 1.0
-            ddir = (dx / L, dy / L)
-            cos = tip_dir[0] * ddir[0] + tip_dir[1] * ddir[1]
-            # Lower is better: gap first, then -cos (higher cos better).
-            # Softly reject very sharp reversals.
-            penalty = 0.0 if cos >= DIR_COS_SOFT else 10.0
-            return (gap + penalty, -cos)
-
-        candidates.sort(key=score)
-        nxt, _ = candidates[0]
-        s = dashes[nxt]
-        a, b = (s.x0, s.y0), (s.x1, s.y1)
-        if _dist(tip, a) <= _dist(tip, b):
-            near, far = a, b
-        else:
-            near, far = b, a
-        dx, dy = far[0] - near[0], far[1] - near[1]
-        L = math.hypot(dx, dy) or 1.0
-        tip_dir = (dx / L, dy / L)
-        tip = far
-        ordered.append(nxt)
-        used.add(nxt)
-        cur = nxt
-
-    return ordered
+        curves.append([dashes[i] for i in idxs])
+    return curves
 
 
 def _ordered_polyline(chain: list[Segment]) -> list[Point]:
@@ -248,11 +296,9 @@ def _ordered_polyline(chain: list[Segment]) -> list[Point]:
         s = chain[0]
         return [Point(x=s.x0, y=s.y0), Point(x=s.x1, y=s.y1)]
 
-    # Orient first segment toward the second.
     s0, s1 = chain[0], chain[1]
     s0_ends = [(s0.x0, s0.y0), (s0.x1, s0.y1)]
     s1_ends = [(s1.x0, s1.y0), (s1.x1, s1.y1)]
-    # Choose orientation of s0 so its far end is closer to some end of s1.
     best = None
     for i, a in enumerate(s0_ends):
         for b in s1_ends:
@@ -260,7 +306,6 @@ def _ordered_polyline(chain: list[Segment]) -> list[Point]:
             if best is None or d < best[0]:
                 best = (d, i)
     assert best is not None
-    # If end i of s0 is the one near s1, start from the other end.
     start_idx = 1 - best[1]
     points = [Point(x=s0_ends[start_idx][0], y=s0_ends[start_idx][1])]
     points.append(Point(x=s0_ends[best[1]][0], y=s0_ends[best[1]][1]))
@@ -269,7 +314,6 @@ def _ordered_polyline(chain: list[Segment]) -> list[Point]:
         a, b = (s.x0, s.y0), (s.x1, s.y1)
         tip = (points[-1].x, points[-1].y)
         if _dist(tip, a) <= _dist(tip, b):
-            # a is nearer tip; append a (if needed) then b
             if _dist(tip, a) > 0.01:
                 points.append(Point(x=a[0], y=a[1]))
             points.append(Point(x=b[0], y=b[1]))
@@ -280,120 +324,164 @@ def _ordered_polyline(chain: list[Segment]) -> list[Point]:
     return points
 
 
-def _nearest_detection(
-    pt: Point, detections: list[Detection], max_dist: float
-) -> Detection | None:
-    best: tuple[float, Detection] | None = None
-    for d in detections:
-        dist = math.hypot(d.center.x - pt.x, d.center.y - pt.y)
-        if dist <= max_dist and (best is None or dist < best[0]):
-            best = (dist, d)
-    return best[1] if best else None
+def _dist_to_bbox_boundary(px: float, py: float, bbox: BBox) -> float:
+    """Distance from point to the axis-aligned bbox (0 if inside / on boundary)."""
+    dx = 0.0 if bbox.x0 <= px <= bbox.x1 else (
+        bbox.x0 - px if px < bbox.x0 else px - bbox.x1
+    )
+    dy = 0.0 if bbox.y0 <= py <= bbox.y1 else (
+        bbox.y0 - py if py < bbox.y0 else py - bbox.y1
+    )
+    if dx == 0.0 and dy == 0.0:
+        return 0.0
+    if dx == 0.0:
+        return abs(dy)
+    if dy == 0.0:
+        return abs(dx)
+    return math.hypot(dx, dy)
 
 
-def _path_parameter(
-    points: list[Point],
-    det: Detection,
-    max_dist: float = WIRE_END_ASSOCIATE_PT,
-) -> float | None:
-    """Return arc-length parameter of the closest point on the polyline, or None."""
-    got = _dist_to_polyline(points, det)
-    if got is None:
-        return None
-    t, dist = got
-    if dist > max_dist:
-        return None
-    return t
+def _closest_point_on_bbox(px: float, py: float, bbox: BBox) -> Point:
+    """Nearest point on the bbox boundary (or clamp inside → boundary toward center)."""
+    cx = min(max(px, bbox.x0), bbox.x1)
+    cy = min(max(py, bbox.y0), bbox.y1)
+    if bbox.x0 < px < bbox.x1 and bbox.y0 < py < bbox.y1:
+        # Inside: project to nearest edge.
+        left, right = px - bbox.x0, bbox.x1 - px
+        bottom, top = py - bbox.y0, bbox.y1 - py
+        m = min(left, right, bottom, top)
+        if m == left:
+            return Point(x=bbox.x0, y=py)
+        if m == right:
+            return Point(x=bbox.x1, y=py)
+        if m == bottom:
+            return Point(x=px, y=bbox.y0)
+        return Point(x=px, y=bbox.y1)
+    return Point(x=cx, y=cy)
 
 
-def _dist_to_polyline(points: list[Point], det: Detection) -> tuple[float, float] | None:
-    """Return (path_parameter, distance) of ``det`` to the closest point on ``points``."""
+def _point_to_segment_dist(
+    px: float, py: float, x0: float, y0: float, x1: float, y1: float
+) -> float:
+    seg_len2 = (x1 - x0) ** 2 + (y1 - y0) ** 2
+    if seg_len2 < 1e-12:
+        return math.hypot(px - x0, py - y0)
+    t = ((px - x0) * (x1 - x0) + (py - y0) * (y1 - y0)) / seg_len2
+    t = max(0.0, min(1.0, t))
+    qx, qy = x0 + t * (x1 - x0), y0 + t * (y1 - y0)
+    return math.hypot(px - qx, py - qy)
+
+
+def _bbox_to_polyline(
+    points: list[Point], bbox: BBox
+) -> tuple[float, float] | None:
+    """Return (path_parameter, dist_bbox_to_polyline) for closest approach."""
     if len(points) < 2:
         return None
+    # Sample bbox corners + center as proxies for boundary proximity to the path.
+    samples = [
+        (bbox.x0, bbox.y0),
+        (bbox.x1, bbox.y0),
+        (bbox.x0, bbox.y1),
+        (bbox.x1, bbox.y1),
+        ((bbox.x0 + bbox.x1) / 2, (bbox.y0 + bbox.y1) / 2),
+        (bbox.x0, (bbox.y0 + bbox.y1) / 2),
+        (bbox.x1, (bbox.y0 + bbox.y1) / 2),
+        ((bbox.x0 + bbox.x1) / 2, bbox.y0),
+        ((bbox.x0 + bbox.x1) / 2, bbox.y1),
+    ]
     best_dist: float | None = None
     best_t = 0.0
-    traveled = 0.0
-    for i in range(1, len(points)):
-        ax, ay = points[i - 1].x, points[i - 1].y
-        bx, by = points[i].x, points[i].y
-        seg_len = math.hypot(bx - ax, by - ay) or 1e-9
-        t = ((det.center.x - ax) * (bx - ax) + (det.center.y - ay) * (by - ay)) / (
-            seg_len * seg_len
-        )
-        t = max(0.0, min(1.0, t))
-        px, py = ax + t * (bx - ax), ay + t * (by - ay)
-        dist = math.hypot(det.center.x - px, det.center.y - py)
-        if best_dist is None or dist < best_dist:
-            best_dist = dist
-            best_t = traveled + t * seg_len
-        traveled += seg_len
+    for sx, sy in samples:
+        traveled = 0.0
+        for i in range(1, len(points)):
+            ax, ay = points[i - 1].x, points[i - 1].y
+            bx, by = points[i].x, points[i].y
+            seg_len = math.hypot(bx - ax, by - ay) or 1e-9
+            t = ((sx - ax) * (bx - ax) + (sy - ay) * (by - ay)) / (seg_len * seg_len)
+            t = max(0.0, min(1.0, t))
+            px, py = ax + t * (bx - ax), ay + t * (by - ay)
+            # Distance from path point to bbox boundary.
+            dist = _dist_to_bbox_boundary(px, py, bbox)
+            if best_dist is None or dist < best_dist:
+                best_dist = dist
+                best_t = traveled + t * seg_len
+            traveled += seg_len
     if best_dist is None:
         return None
     return best_t, best_dist
 
 
-def _devices_for_chain(
+def _tip_device_rank(det: Detection) -> int:
+    """Lower is better when several devices sit near a curve tip."""
+    if _is_three_way(det):
+        return 0
+    if det.category == Category.SWITCH:
+        return 1
+    if det.category in (Category.LIGHT, Category.CEILING_FAN, Category.JUNCTION_BOX):
+        return 2
+    return 3
+
+
+def _nearest_device_by_bbox(
+    tip: Point, detections: list[Detection], max_dist: float
+) -> Detection | None:
+    best: tuple[tuple[int, float], Detection] | None = None
+    for d in detections:
+        dist = _dist_to_bbox_boundary(tip.x, tip.y, d.bbox)
+        if dist > max_dist:
+            continue
+        key = (_tip_device_rank(d), dist)
+        if best is None or key < best[0]:
+            best = (key, d)
+    return best[1] if best else None
+
+
+def _devices_along_curve(
     points: list[Point], detections: list[Detection]
 ) -> list[Detection]:
-    """Detections near the dashed polyline, ordered along the path.
+    """Devices whose bbox meets the curve, ordered by path parameter.
 
-    Uses ``WIRE_PATH_ASSOCIATE_PT`` so device centers that sit a symbol-radius
-    off the stroke still count. If fewer than two are found, enrich with the
-    nearest distinct detections to each polyline endpoint.
+    End devices: nearest bbox to each curve tip. Mid devices: bbox within
+    DEVICE_PATH_ASSOCIATE_PT of the polyline (fixtures that split the curve).
     """
     if len(points) < 2:
         return []
-    hits: list[tuple[float, Detection]] = []
+
+    hits: dict[str, tuple[float, float, Detection]] = {}  # id -> (t, dist, det)
+
+    # Mid-path fixtures: wiring-node categories. 3-ways get a wider radius so
+    # travelers mid-curve (not only at tips) still register.
     for d in detections:
-        got = _dist_to_polyline(points, d)
+        if d.category not in _SPLIT_CATEGORIES:
+            continue
+        got = _bbox_to_polyline(points, d.bbox)
         if got is None:
             continue
         t, dist = got
-        if dist <= WIRE_PATH_ASSOCIATE_PT:
-            hits.append((t, d))
-    hits.sort(key=lambda x: x[0])
-    out: list[Detection] = []
-    seen: set[str] = set()
-    for _, d in hits:
-        if d.id in seen:
-            continue
-        seen.add(d.id)
-        out.append(d)
-
-    if len(out) >= 2:
-        return out
-
-    # Endpoint enrichment: dashed links often terminate next to a switch whose
-    # center is farther from the stroke than PATH_ASSOCIATE allows mid-path.
-    total = _polyline_length_pt(points)
-    candidates: list[tuple[float, Detection]] = list(hits)
-    for end_pt, t_hint in ((points[0], 0.0), (points[-1], total)):
-        # Prefer a detection not already chosen, nearest to this end.
-        scored = sorted(
-            (
-                math.hypot(d.center.x - end_pt.x, d.center.y - end_pt.y),
-                d,
-            )
-            for d in detections
+        lim = (
+            DEVICE_BBOX_ASSOCIATE_PT
+            if _is_three_way(d)
+            else DEVICE_PATH_ASSOCIATE_PT
         )
-        for dist, d in scored:
-            if dist > WIRE_END_ASSOCIATE_PT:
-                break
-            if d.id in seen:
-                continue
-            candidates.append((t_hint, d))
-            seen.add(d.id)
-            break
+        if dist <= lim:
+            prev = hits.get(d.id)
+            if prev is None or dist < prev[1]:
+                hits[d.id] = (t, dist, d)
 
-    candidates.sort(key=lambda x: x[0])
-    out = []
-    seen2: set[str] = set()
-    for _, d in candidates:
-        if d.id in seen2:
+    # Force tip association (curve ends at nearest bbox).
+    total = _polyline_length_pt(points)
+    for tip, t_hint in ((points[0], 0.0), (points[-1], total)):
+        det = _nearest_device_by_bbox(tip, detections, DEVICE_BBOX_ASSOCIATE_PT)
+        if det is None:
             continue
-        seen2.add(d.id)
-        out.append(d)
-    return out
+        dist = _dist_to_bbox_boundary(tip.x, tip.y, det.bbox)
+        prev = hits.get(det.id)
+        if prev is None or dist <= prev[1]:
+            hits[det.id] = (t_hint, dist, det)
+
+    ordered = sorted(hits.values(), key=lambda x: x[0])
+    return [d for _, _, d in ordered]
 
 
 def _is_three_way(det: Detection) -> bool:
@@ -407,8 +495,13 @@ def _is_three_way(det: Detection) -> bool:
 
 
 def _cable_type(a: Detection, b: Detection) -> str:
+    # Co-located multi-gang 3D switches share a box — not a traveler run.
     if _is_three_way(a) and _is_three_way(b):
-        return "nm_14_3"
+        if (
+            math.hypot(a.center.x - b.center.x, a.center.y - b.center.y)
+            >= _THREE_WAY_TRAVELER_MIN_DIST_PT
+        ):
+            return "nm_14_3"
     return "nm_14_2"
 
 
@@ -442,38 +535,62 @@ def _vertical_allowance_ft(det: Detection, assumptions: dict[str, Any]) -> float
     return slack
 
 
-def _snap_points_to_devices(
+def _snap_ends_to_bbox(
     points: list[Point], from_det: Detection, to_det: Detection
 ) -> list[Point]:
-    """Nudge polyline ends to device centers when the stub stays short.
-
-    Long stubs (device far from the dashed tip) become straight chords across
-    empty plan — refuse those nudges and keep the dash geometry instead.
-    """
+    """Nudge polyline ends onto device bbox boundaries when the stub is short."""
     if not points:
         return []
     out = list(points)
 
-    def _maybe_snap(idx: int, det: Detection) -> None:
-        stub = math.hypot(det.center.x - out[idx].x, det.center.y - out[idx].y)
+    def _maybe(idx: int, det: Detection) -> None:
+        p = out[idx]
+        target = _closest_point_on_bbox(p.x, p.y, det.bbox)
+        stub = math.hypot(target.x - p.x, target.y - p.y)
         if stub <= MAX_SNAP_STUB_PT:
-            out[idx] = Point(x=det.center.x, y=det.center.y)
+            out[idx] = target
 
-    _maybe_snap(0, from_det)
-    _maybe_snap(-1, to_det)
+    _maybe(0, from_det)
+    _maybe(-1, to_det)
     return out
 
 
-def _point_to_segment_dist(
-    px: float, py: float, x0: float, y0: float, x1: float, y1: float
-) -> float:
-    seg_len2 = (x1 - x0) ** 2 + (y1 - y0) ** 2
-    if seg_len2 < 1e-12:
-        return math.hypot(px - x0, py - y0)
-    t = ((px - x0) * (x1 - x0) + (py - y0) * (y1 - y0)) / seg_len2
-    t = max(0.0, min(1.0, t))
-    qx, qy = x0 + t * (x1 - x0), y0 + t * (y1 - y0)
-    return math.hypot(px - qx, py - qy)
+def _path_parameter_for_bbox(points: list[Point], det: Detection) -> float | None:
+    got = _bbox_to_polyline(points, det.bbox)
+    if got is None:
+        return None
+    t, dist = got
+    if dist > max(DEVICE_PATH_ASSOCIATE_PT, DEVICE_BBOX_ASSOCIATE_PT):
+        return None
+    return t
+
+
+def _subpolyline_between_devices(
+    points: list[Point], from_det: Detection, to_det: Detection
+) -> list[Point]:
+    """Dash-backed sub-polyline between two devices along ``points``."""
+    t0 = _path_parameter_for_bbox(points, from_det)
+    t1 = _path_parameter_for_bbox(points, to_det)
+    if t0 is None or t1 is None:
+        return []
+    if abs(t1 - t0) < 1e-3:
+        return []
+    if t1 < t0:
+        t0, t1 = t1, t0
+        from_det, to_det = to_det, from_det
+
+    mid: list[Point] = []
+    traveled = 0.0
+    for i, p in enumerate(points):
+        if i > 0:
+            traveled += math.hypot(p.x - points[i - 1].x, p.y - points[i - 1].y)
+        t_at = traveled
+        if t0 - 1e-6 <= t_at <= t1 + 1e-6:
+            mid.append(Point(x=p.x, y=p.y))
+
+    if len(mid) < 2:
+        return []
+    return _snap_ends_to_bbox(mid, from_det, to_det)
 
 
 def _uncovered_fraction(
@@ -521,7 +638,6 @@ def _uncovered_fraction(
 
 
 def _polyline_straightness(points: list[Point]) -> float:
-    """chord / path length — 1.0 is a perfect straight line."""
     length = _polyline_length_pt(points)
     if length <= 0 or len(points) < 2:
         return 1.0
@@ -530,237 +646,12 @@ def _polyline_straightness(points: list[Point]) -> float:
 
 
 def _is_unsupported_straight_chord(points: list[Point], dashes: list[Segment]) -> bool:
-    """True only for nearly-straight paths that are not backed by dashed ink.
-
-    Curved runs that follow dashes are kept. This is the wall→attic phantom guard.
-    """
+    """Reject nearly-straight paths that are not backed by dashed ink."""
     if len(points) < 2:
         return True
-    straightness = _polyline_straightness(points)
-    if straightness < MIN_STRAIGHTNESS_FOR_COVERAGE_REJECT:
+    if _polyline_straightness(points) < MIN_STRAIGHTNESS_FOR_COVERAGE_REJECT:
         return False
     return _uncovered_fraction(points, dashes) > MAX_UNCOVERED_FRACTION
-
-
-def _subpolyline_between_devices(
-    points: list[Point], from_det: Detection, to_det: Detection
-) -> list[Point]:
-    """Extract the dash-backed sub-polyline between two devices along ``points``.
-
-    Uses path parameters so we never fall back to a bare straight chord when the
-    devices are not axis-aligned with the chain bbox (that caused phantom runs
-    like left-wall → attic).
-    """
-    t0 = _path_parameter(points, from_det)
-    t1 = _path_parameter(points, to_det)
-    if t0 is None or t1 is None:
-        return []
-    if t1 < t0:
-        t0, t1 = t1, t0
-        from_det, to_det = to_det, from_det
-
-    mid: list[Point] = []
-    traveled = 0.0
-    for i, p in enumerate(points):
-        t_at = traveled if i > 0 else 0.0
-        if i > 0:
-            traveled += math.hypot(p.x - points[i - 1].x, p.y - points[i - 1].y)
-            t_at = traveled
-        if t0 - 1e-6 <= t_at <= t1 + 1e-6:
-            mid.append(Point(x=p.x, y=p.y))
-
-    if len(mid) < 2:
-        # Not enough dash geometry between the devices — refuse the hop.
-        return []
-    return _snap_points_to_devices(mid, from_det, to_det)
-
-
-def _dash_adjacency(
-    dashes: list[Segment],
-    *,
-    gap_min: float = GAP_MIN_PT,
-    gap_max: float = GAP_MAX_PT,
-) -> list[list[int]]:
-    """Undirected neighbors by endpoint gap in [gap_min, gap_max]."""
-    n = len(dashes)
-    adj: list[list[int]] = [[] for _ in range(n)]
-    for i in range(n):
-        si = dashes[i]
-        i_ends = ((si.x0, si.y0), (si.x1, si.y1))
-        for j in range(i + 1, n):
-            sj = dashes[j]
-            linked = False
-            for a in i_ends:
-                for b in ((sj.x0, sj.y0), (sj.x1, sj.y1)):
-                    gap = _dist(a, b)
-                    if gap_min <= gap <= gap_max:
-                        linked = True
-                        break
-                if linked:
-                    break
-            if linked:
-                adj[i].append(j)
-                adj[j].append(i)
-    return adj
-
-
-def _dashes_near_detection(
-    dashes: list[Segment], det: Detection, radius: float
-) -> list[int]:
-    out: list[int] = []
-    for i, s in enumerate(dashes):
-        for e in ((s.x0, s.y0), (s.x1, s.y1), ((s.x0 + s.x1) / 2, (s.y0 + s.y1) / 2)):
-            if math.hypot(det.center.x - e[0], det.center.y - e[1]) <= radius:
-                out.append(i)
-                break
-    return out
-
-
-def _polyline_from_dash_indices(dashes: list[Segment], indices: list[int]) -> list[Point]:
-    """Order a path of dash indices into a continuous polyline."""
-    if not indices:
-        return []
-    segs = [dashes[i] for i in indices]
-    return _ordered_polyline(segs)
-
-
-def _shortest_dash_path(
-    adj: list[list[int]], starts: list[int], goals: set[int]
-) -> list[int] | None:
-    """BFS from ``starts`` to any index in ``goals``; return index path or None."""
-    if not starts or not goals:
-        return None
-    q: deque[int] = deque()
-    parent: dict[int, int | None] = {}
-    for s in starts:
-        if s in parent:
-            continue
-        parent[s] = None
-        q.append(s)
-    hit: int | None = None
-    while q:
-        u = q.popleft()
-        if u in goals:
-            hit = u
-            break
-        for v in adj[u]:
-            if v in parent:
-                continue
-            parent[v] = u
-            q.append(v)
-    if hit is None:
-        return None
-    path: list[int] = []
-    cur: int | None = hit
-    while cur is not None:
-        path.append(cur)
-        cur = parent[cur]
-    path.reverse()
-    return path
-
-
-def _cluster_three_ways(threes: list[Detection]) -> list[list[Detection]]:
-    """Group co-located multi-gang 3-ways; one traveler per distant gang pair."""
-    remaining = list(threes)
-    gangs: list[list[Detection]] = []
-    while remaining:
-        seed = remaining.pop(0)
-        gang = [seed]
-        changed = True
-        while changed:
-            changed = False
-            still: list[Detection] = []
-            for d in remaining:
-                if any(
-                    math.hypot(d.center.x - g.center.x, d.center.y - g.center.y)
-                    < _THREE_WAY_PAIR_MIN_DIST_PT
-                    for g in gang
-                ):
-                    gang.append(d)
-                    changed = True
-                else:
-                    still.append(d)
-            remaining = still
-        gangs.append(gang)
-    return gangs
-
-
-def _three_way_traveler_runs(
-    dashes: list[Segment],
-    adj: list[list[int]],
-    active: list[Detection],
-    sheet_id: str,
-    scale_pt_per_ft: float,
-    assumptions: dict[str, Any],
-    seen_pairs: set[tuple[str, str]],
-) -> list[WireRun]:
-    """Find nm_14_3 runs between distant 3-way gangs linked by dashed ink.
-
-    Classification often stores 3D as dimmer/single_pole with codes=['3D']; we
-    still treat those as three-ways. Multi-gang boxes are clustered so each
-    traveler circuit emits one run (not every cross-product of switches).
-    """
-    threes = [d for d in active if _is_three_way(d)]
-    if len(threes) < 2:
-        return []
-
-    gangs = _cluster_three_ways(threes)
-    if len(gangs) < 2:
-        return []
-
-    runs: list[WireRun] = []
-    for i, gang_a in enumerate(gangs):
-        for gang_b in gangs[i + 1 :]:
-            # Closest pair of switches across the two gangs.
-            a, b = min(
-                ((xa, xb) for xa in gang_a for xb in gang_b),
-                key=lambda ab: math.hypot(
-                    ab[0].center.x - ab[1].center.x,
-                    ab[0].center.y - ab[1].center.y,
-                ),
-            )
-            pair = tuple(sorted((a.id, b.id)))
-            if pair in seen_pairs:
-                continue
-
-            starts = _dashes_near_detection(dashes, a, WIRE_END_ASSOCIATE_PT)
-            goals = set(_dashes_near_detection(dashes, b, WIRE_END_ASSOCIATE_PT))
-            path_idx = _shortest_dash_path(adj, starts, goals)
-            if not path_idx or len(path_idx) < 2:
-                continue
-
-            points = _polyline_from_dash_indices(dashes, path_idx)
-            poly = _snap_points_to_devices(points, a, b)
-            if len(poly) < 2:
-                continue
-            if _is_unsupported_straight_chord(poly, dashes):
-                continue
-
-            plan_pt = _polyline_length_pt(poly)
-            plan_ft = plan_pt / scale_pt_per_ft
-            if plan_ft > MAX_PLAN_LENGTH_FT or plan_ft < 0.5:
-                continue
-
-            seen_pairs.add(pair)
-            vert = _vertical_allowance_ft(a, assumptions) + _vertical_allowance_ft(
-                b, assumptions
-            )
-            runs.append(
-                WireRun(
-                    id=str(uuid.uuid4()),
-                    sheet_id=sheet_id or a.sheet_id,
-                    points=poly,
-                    from_detection_id=a.id,
-                    to_detection_id=b.id,
-                    cable_type="nm_14_3",
-                    plan_length_ft=round(plan_ft, 3),
-                    vertical_allowance_ft=round(vert, 3),
-                    total_length_ft=round(plan_ft + vert, 3),
-                    confidence=0.75,
-                    source="geometry",
-                )
-            )
-    return runs
 
 
 def find_wire_runs(
@@ -770,82 +661,64 @@ def find_wire_runs(
     scale_pt_per_ft: float,
     assumptions: dict[str, Any],
 ) -> list[WireRun]:
-    """Chain dashed black segments into device-to-device WireRun polylines.
+    """Grow dashed curves into device-to-device WireRun polylines (v2).
 
-    Length = polyline length / scale_pt_per_ft. Cable is ``nm_14_3`` when both
-    ends are 3-way switches (subtype *or* legend codes ``3`` / ``3D``); otherwise
-    ``nm_14_2``. Vertical allowance uses assumptions; waste is applied later in
-    ``compute_bom``.
-
-    Nearly-straight chords with little dash ink underneath are rejected (phantom
-    wall→attic guard). Curved dash-following runs are kept. A dedicated traveler
-    pass links distant 3-way pairs through the dash graph.
+    1. Collect short black dash segments in the viewport.
+    2. Link into full curves (endpoint gap ≤ gap_median×2 + tangent continuity).
+    3. Each curve end attaches to the device whose **bbox boundary** is nearest.
+    4. One run per curve segment between consecutive devices; mid-path fixtures
+       split the curve. ``nm_14_3`` when both ends are 3-way (subtype or codes
+       ``3``/``3D``); else ``nm_14_2``.
     """
     if scale_pt_per_ft <= 0:
         raise ValueError("scale_pt_per_ft must be positive")
 
     active = [d for d in detections if d.status == "active"]
     dashes = _collect_dash_candidates(ctx, viewport)
-    chains = _chain_dashes(dashes)
-    # Traveler graph: include flattened ~1.5–2 pt curve samples (main chain window
-    # starts at 3 pt and misses Plan-4 hallway↔living travelers).
-    traveler_dashes = _collect_dash_candidates(
-        ctx,
-        viewport,
-        len_min=TRAVELER_DASH_LEN_MIN_PT,
-        len_max=TRAVELER_DASH_LEN_MAX_PT,
-    )
-    traveler_adj = _dash_adjacency(
-        traveler_dashes,
-        gap_min=TRAVELER_GAP_MIN_PT,
-        gap_max=TRAVELER_GAP_MAX_PT,
-    )
+    curves = _link_dash_curves(dashes)
 
-    sheet_id = active[0].sheet_id if active else (detections[0].sheet_id if detections else "")
+    sheet_id = (
+        active[0].sheet_id
+        if active
+        else (detections[0].sheet_id if detections else "")
+    )
     runs: list[WireRun] = []
     seen_pairs: set[tuple[str, str]] = set()
 
-    for chain in chains:
+    for chain in curves:
         points = _ordered_polyline(chain)
         if len(points) < 2:
             continue
 
-        along = _devices_for_chain(points, active)
+        along = _devices_along_curve(points, active)
         if len(along) < 2:
             continue
 
-        # One WireRun per consecutive device pair along the dashed curve.
-        for i in range(len(along) - 1):
-            from_det, to_det = along[i], along[i + 1]
+        def _emit(from_det: Detection, to_det: Detection, cable: str) -> None:
             pair = tuple(sorted((from_det.id, to_det.id)))
             if pair in seen_pairs:
-                continue
-
-            if len(along) > 2:
+                return
+            if len(along) > 2 or cable == "nm_14_3":
                 poly = _subpolyline_between_devices(points, from_det, to_det)
             else:
-                poly = _snap_points_to_devices(points, from_det, to_det)
-
+                poly = _snap_ends_to_bbox(points, from_det, to_det)
             if len(poly) < 2:
-                continue
-
+                return
             if _is_unsupported_straight_chord(poly, dashes):
-                continue
-
+                return
+            if _uncovered_fraction(poly, dashes) > MAX_UNCOVERED_FRACTION:
+                return
             plan_pt = _polyline_length_pt(poly)
             plan_ft = plan_pt / scale_pt_per_ft
-            if plan_ft > MAX_PLAN_LENGTH_FT:
-                continue
-
+            if plan_ft > MAX_PLAN_LENGTH_FT or plan_ft < 0.25:
+                return
             seen_pairs.add(pair)
             vert = _vertical_allowance_ft(from_det, assumptions) + _vertical_allowance_ft(
                 to_det, assumptions
             )
-            cable = _cable_type(from_det, to_det)
             uncovered = _uncovered_fraction(poly, dashes)
-            conf = min(0.95, 0.55 + 0.05 * len(chain))
-            conf = round(max(0.4, conf - 0.5 * uncovered), 3)
-
+            conf = min(0.95, 0.5 + 0.04 * len(chain))
+            conf = round(max(0.4, conf - 0.4 * uncovered), 3)
             runs.append(
                 WireRun(
                     id=str(uuid.uuid4()),
@@ -862,18 +735,24 @@ def find_wire_runs(
                 )
             )
 
-    # Traveler pass: distant 3-way pairs connected by dashed ink → nm_14_3.
-    runs.extend(
-        _three_way_traveler_runs(
-            traveler_dashes,
-            traveler_adj,
-            active,
-            sheet_id,
-            scale_pt_per_ft,
-            assumptions,
-            seen_pairs,
-        )
-    )
+        # Traveler: farthest distant 3-way pair on this curve → nm_14_3.
+        # Curves often start and end at the same gang with the other 3-way mid-path,
+        # so first/last in path order is wrong — take max center separation.
+        threes_along = [d for d in along if _is_three_way(d)]
+        best_traveler: tuple[float, Detection, Detection] | None = None
+        for i, a in enumerate(threes_along):
+            for b in threes_along[i + 1 :]:
+                dist = math.hypot(a.center.x - b.center.x, a.center.y - b.center.y)
+                if dist < _THREE_WAY_TRAVELER_MIN_DIST_PT:
+                    continue
+                if best_traveler is None or dist > best_traveler[0]:
+                    best_traveler = (dist, a, b)
+        if best_traveler is not None:
+            _emit(best_traveler[1], best_traveler[2], "nm_14_3")
+
+        for i in range(len(along) - 1):
+            from_det, to_det = along[i], along[i + 1]
+            _emit(from_det, to_det, _cable_type(from_det, to_det))
 
     return runs
 
@@ -886,8 +765,9 @@ def render_wire_debug_png(
     detections: list[Detection],
     out_path: str,
     dpi: int = 150,
+    dashes: list[Segment] | None = None,
 ) -> str:
-    """Render viewport with every wire run labeled (type + length). Writes PNG."""
+    """Render viewport with dash ink (optional), runs labeled type+length."""
     import pymupdf
 
     doc = pymupdf.open(pdf_path)
@@ -896,8 +776,6 @@ def render_wire_debug_png(
         clip = pymupdf.Rect(viewport.x0, viewport.y0, viewport.x1, viewport.y1)
         mat = pymupdf.Matrix(dpi / 72.0, dpi / 72.0)
         pix = page.get_pixmap(matrix=mat, clip=clip, alpha=False)
-        # Draw overlays in a second pass via a display list on an empty page-sized
-        # pixmap is awkward; use PIL on the rendered raster instead.
         from PIL import Image, ImageDraw, ImageFont
 
         img = Image.frombytes("RGB", (pix.width, pix.height), pix.samples)
@@ -905,14 +783,22 @@ def render_wire_debug_png(
         sx = pix.width / (viewport.x1 - viewport.x0)
         sy = pix.height / (viewport.y1 - viewport.y0)
 
-        def to_px(p: Point) -> tuple[float, float]:
-            return ((p.x - viewport.x0) * sx, (p.y - viewport.y0) * sy)
+        def to_px(x: float, y: float) -> tuple[float, float]:
+            return ((x - viewport.x0) * sx, (y - viewport.y0) * sy)
 
-        # Devices as small crosses
+        # Candidate dashes in light teal so reviewers see uncovered curves.
+        if dashes:
+            for s in dashes:
+                draw.line(
+                    [to_px(s.x0, s.y0), to_px(s.x1, s.y1)],
+                    fill=(125, 211, 252),
+                    width=1,
+                )
+
         for d in detections:
             if d.status != "active":
                 continue
-            x, y = to_px(d.center)
+            x, y = to_px(d.center.x, d.center.y)
             draw.line((x - 4, y, x + 4, y), fill=(37, 99, 235), width=1)
             draw.line((x, y - 4, x, y + 4), fill=(37, 99, 235), width=1)
 
@@ -924,13 +810,31 @@ def render_wire_debug_png(
         for wr in wire_runs:
             if len(wr.points) < 2:
                 continue
-            pts = [to_px(p) for p in wr.points]
-            draw.line(pts, fill=(219, 39, 119), width=2)
+            pts = [to_px(p.x, p.y) for p in wr.points]
+            color = (219, 39, 119) if wr.cable_type == "nm_14_2" else (5, 150, 105)
+            draw.line(pts, fill=color, width=2)
             mid = pts[len(pts) // 2]
             label = f"{wr.cable_type} {wr.total_length_ft:.1f}ft"
-            draw.text(mid, label, fill=(190, 24, 93), font=font)
+            draw.text(mid, label, fill=color, font=font)
 
         img.save(out_path)
         return out_path
     finally:
         doc.close()
+
+
+# Re-export for older tests that imported WIRE_SNAP_PT coupling.
+__all__ = [
+    "DASH_LEN_MIN_PT",
+    "DASH_LEN_MAX_PT",
+    "DEVICE_BBOX_ASSOCIATE_PT",
+    "GAP_MAX_PT",
+    "GAP_MEDIAN_PT",
+    "MAX_UNCOVERED_FRACTION",
+    "find_wire_runs",
+    "render_wire_debug_png",
+    "_is_unsupported_straight_chord",
+    "_uncovered_fraction",
+    "_is_three_way",
+    "_collect_dash_candidates",
+]
