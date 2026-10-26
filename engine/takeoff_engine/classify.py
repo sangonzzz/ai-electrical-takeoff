@@ -362,6 +362,20 @@ def _refine_subtype(
             if need & type_codes:
                 return subtype
         if entry.subtype and entry.subtype in SUBTYPES["receptacle"]:
+            # Code-gated subtypes need the plan token — legend IoU alone falsely
+            # labeled a laundry-door dash as gfci_240v (R6 fix 5).
+            if entry.subtype == "gfci_240v" and "240V" not in type_codes:
+                return "duplex"
+            if entry.subtype in {
+                "gfci_microwave",
+                "gfci_dishwasher",
+                "range_hood",
+                "fan_coil_dedicated",
+            } and not (need_set := next(
+                (need for st, need, _ in _RECEPTACLE_PRIORITY if st == entry.subtype),
+                set(),
+            ) & type_codes):
+                return "duplex"
             return entry.subtype
         return "duplex"
 
@@ -1573,6 +1587,11 @@ def classify_candidates(
         )
     )
 
+    # Text-anchored FC (fan-coil) receptacles under counters / inside cabinetry.
+    detections.extend(
+        _receptacles_from_fc_tokens(ctx, candidates, detections, sheet_id, usable)
+    )
+
     # Half-filled circles that are not receptacles → exhaust / IAQ (R2 Fix 4).
     detections.extend(
         _exhausts_from_half_fills(ctx, candidates, detections, sheet_id, usable)
@@ -2550,6 +2569,109 @@ def _receptacles_from_afi_tokens(
                     match_score=0.9,
                     text_tokens=[w.text.strip()],
                     notes=notes,
+                ),
+            )
+        )
+    return out
+
+
+def _receptacle_glyph_near_fc(
+    ctx: PageContext, wx: float, wy: float
+) -> tuple[float, float] | None:
+    """Duplex center above/beside an ``FC`` label (laundry counter, R6 fix 4)."""
+    hits: list[tuple[float, float]] = []
+    for dy in range(-20, 6, 2):
+        for dx in range(-10, 12, 2):
+            cx, cy = wx + dx, wy + dy
+            if _has_duplex_slots_at(ctx, cx, cy):
+                hits.append((cx, cy))
+    if not hits:
+        return None
+    # Prefer hits above the label (FC prints under the duplex).
+    above = [(x, y) for x, y in hits if y <= wy - 6.0]
+    pool = above or hits
+    cx = sum(p[0] for p in pool) / len(pool)
+    cy = sum(p[1] for p in pool) / len(pool)
+    return cx, cy
+
+
+def _receptacles_from_fc_tokens(
+    ctx: PageContext,
+    candidates: list[Candidate],
+    detections: list[Detection],
+    sheet_id: str,
+    usable: list[LegendEntry],
+) -> list[Detection]:
+    """Every viewport ``FC`` token → ``fan_coil_dedicated`` when the duplex is swallowed.
+
+    Laundry counter FC sits inside a furniture rectangle; clustering merges it into
+    a mega-blob so legend IoU never sees a compact candidate (R6 fix 4).
+    """
+    bounds = _plan_bounds_from_candidates(candidates)
+    if bounds is None:
+        return []
+    bx0, by0, bx1, by1 = bounds
+    entry = next(
+        (
+            e
+            for e in usable
+            if e.category == Category.RECEPTACLE and e.subtype == "fan_coil_dedicated"
+        ),
+        next((e for e in usable if e.category == Category.RECEPTACLE), None),
+    )
+    out: list[Detection] = []
+    for w in ctx.words:
+        raw = w.text.strip().upper()
+        if raw != "FC" or w.size > 9.0:
+            continue
+        wx = 0.5 * (w.bbox[0] + w.bbox[2])
+        wy = 0.5 * (w.bbox[1] + w.bbox[3])
+        if not (bx0 <= wx <= bx1 and by0 <= wy <= by1):
+            continue
+        upgraded = False
+        for d in detections:
+            if d.category != Category.RECEPTACLE:
+                continue
+            if math.hypot(d.center.x - wx, d.center.y - wy) > 22.0:
+                continue
+            d.subtype = "fan_coil_dedicated"
+            if raw not in {c.upper() for c in d.codes}:
+                d.codes = list(d.codes) + [w.text.strip()]
+            if d.evidence:
+                d.evidence.notes = list(d.evidence.notes) + ["fc_token"]
+            upgraded = True
+            break
+        if upgraded:
+            continue
+        if any(
+            d.category == Category.RECEPTACLE
+            and math.hypot(d.center.x - wx, d.center.y - wy) < 22.0
+            for d in out
+        ):
+            continue
+        glyph = _receptacle_glyph_near_fc(ctx, wx, wy)
+        if glyph is None:
+            continue
+        cx, cy = glyph
+        pad = 6.0
+        out.append(
+            Detection(
+                id=str(uuid.uuid4()),
+                sheet_id=sheet_id,
+                category=Category.RECEPTACLE,
+                subtype="fan_coil_dedicated",
+                codes=[w.text.strip()],
+                center=Point(x=cx, y=cy),
+                bbox=BBox(x0=cx - pad, y0=cy - pad, x1=cx + pad, y1=cy + pad),
+                rotation_deg=0,
+                confidence=0.9,
+                source="geometry",
+                needs_review=False,
+                evidence=Evidence(
+                    legend_entry_id=entry.id if entry else None,
+                    match_score=0.9,
+                    text_tokens=[w.text.strip()],
+                    notes=["fc_token_duplex_glyph"],
                 ),
             )
         )
