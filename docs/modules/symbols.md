@@ -76,6 +76,10 @@ Order matters: remove non-symbol ink **before** clustering so dashes never join 
 | Wall light (R2.7) | Elongated circle+cross+tick, arc-heavy, no square → `wall` | Plan 1 bath vanity |
 | Ceiling fan | `J` hub + four blades | No door/cabinet fans |
 | IN ATTIC (R2.8) | Attic panel edges join wall mask; relax switch IoU inside panel; nudge centers into Attic | Spec: attic devices → room Attic |
+| Hallway cans (R3) | Peel ~12 pt short-stroke rings out of oversized clusters; don't merge compact lights into mega-blobs | Plan 4 hallway circles next to IN ATTIC |
+| Wall circle light (R3) | Circle-in-square near wall → light unless duplex slots | Kitchen sink can |
+| Wall vanity (R3) | Elongated (aspect≥1.5) + cross + tick, n≤90 → `wall` | Bath 2 mirror light |
+| Fan center (R3) | `Detection.center` = hub `J` point | Bed 1 fan marker was off-hub |
 
 4. NMS same category 8 pt; then cross-category NMS for known collisions.
 5. `needs_review` **only** when (a) top-two scores are close **and** different categories, or (b) weak match (&lt;0.30) with no type codes. Same-glyph receptacle/switch legend rows no longer flood review (target &lt;15%; measured ~5%).
