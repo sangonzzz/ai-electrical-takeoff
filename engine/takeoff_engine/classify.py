@@ -1547,6 +1547,14 @@ def classify_candidates(
                     break
             if weak_wall:
                 continue
+            # Exhaust yin-yang rings look circular — do not mint a recessed can.
+            if any(
+                math.hypot(cx - fx, cy - fy) < 10.0
+                for fx, fy in _half_disc_fills_in_bounds(
+                    ctx, plan_bounds or (0, 0, ctx.page_width, ctx.page_height)
+                )
+            ):
+                continue
             codes = _codes_near_point(ctx, cx, cy, radius=14.0)
             detections.append(
                 Detection(
@@ -1614,6 +1622,13 @@ def classify_candidates(
     detections.extend(
         _switches_from_attic_bars(
             ctx, attic_boxes, detections, sheet_id, usable, switch_tmpls
+        )
+    )
+
+    # Kitchen sink disposal ``$`` (horizontal, weak legend IoU) next to exhaust.
+    detections.extend(
+        _switches_near_exhaust(
+            ctx, detections, sheet_id, usable, switch_tmpls, wall_mask
         )
     )
 
@@ -1942,6 +1957,136 @@ def _switches_from_attic_bars(
     return out
 
 
+def _switches_near_exhaust(
+    ctx: PageContext,
+    detections: list[Detection],
+    sheet_id: str,
+    usable: list[LegendEntry],
+    switch_tmpls: list[LegendTemplate],
+    wall_mask: np.ndarray,
+) -> list[Detection]:
+    """Recover a wall ``$`` wired to an exhaust when legend IoU is weak (R6 sink).
+
+    The disposal switch beside the kitchen sink is drawn rotated; template IoU
+    stays ~0.22, below the normal switch floor, so seed from a stem bar on the
+    wall within ~36 pt of the exhaust hub.
+    """
+    if not switch_tmpls:
+        return []
+    entry = next((e for e in usable if e.category == Category.SWITCH), None)
+    exhausts = [d for d in detections if d.category == Category.EXHAUST_FAN]
+    existing_sw = [d for d in detections if d.category == Category.SWITCH]
+    existing_rec = [d for d in detections if d.category == Category.RECEPTACLE]
+    out: list[Detection] = []
+    for ex in exhausts:
+        # Already has a controlling switch nearby — skip (cooktop F switch).
+        if any(
+            math.hypot(ex.center.x - s.center.x, ex.center.y - s.center.y) < 40.0
+            for s in existing_sw
+        ):
+            continue
+        best: tuple[float, Detection] | None = None
+        for _i, seg in enumerate(ctx.black_segments):
+            length = math.hypot(seg.x1 - seg.x0, seg.y1 - seg.y0)
+            if not (10.0 <= length <= 16.5):
+                continue
+            # Sink disposal switch is drawn with a horizontal stem on the wall.
+            if abs(seg.y1 - seg.y0) > 1.2:
+                continue
+            mx = 0.5 * (seg.x0 + seg.x1)
+            my = 0.5 * (seg.y0 + seg.y1)
+            dist = math.hypot(mx - ex.center.x, my - ex.center.y)
+            if not (18.0 <= dist <= 36.0):
+                continue
+            # Prefer below the exhaust (sink → wall switch under basin).
+            if my < ex.center.y - 2.0:
+                continue
+            if not _near_wall(wall_mask, mx, my):
+                continue
+            if _has_duplex_slots_at(ctx, mx, my):
+                continue
+            if any(math.hypot(mx - s.center.x, my - s.center.y) < 12.0 for s in existing_sw):
+                continue
+            if any(math.hypot(mx - r.center.x, my - r.center.y) < 10.0 for r in existing_rec):
+                continue
+            seg_ids: list[int] = []
+            xs: list[float] = []
+            ys: list[float] = []
+            for j, s2 in enumerate(ctx.black_segments):
+                cx = 0.5 * (s2.x0 + s2.x1)
+                cy = 0.5 * (s2.y0 + s2.y1)
+                if abs(cx - mx) > 9.0 or abs(cy - my) > 9.0:
+                    continue
+                ln = math.hypot(s2.x1 - s2.x0, s2.y1 - s2.y0)
+                if ln > 14.0:
+                    continue
+                if abs(s2.y1 - s2.y0) <= 0.8 and ln > 10.0:
+                    continue
+                seg_ids.append(j)
+                xs.extend([s2.x0, s2.x1])
+                ys.extend([s2.y0, s2.y1])
+            if len(seg_ids) < 10:
+                continue
+            bb = (min(xs) - 0.5, min(ys) - 0.5, max(xs) + 0.5, max(ys) + 0.5)
+            bw, bh = bb[2] - bb[0], bb[3] - bb[1]
+            if min(bw, bh) < 5.0 or max(bw, bh) > 22.0:
+                continue
+            cand = Candidate(
+                id=str(uuid.uuid4()),
+                bbox=bb,
+                center=(0.5 * (bb[0] + bb[2]), 0.5 * (bb[1] + bb[3])),
+                segment_ids=seg_ids,
+                fill_ids=[],
+                features={
+                    "n_segments": len(seg_ids),
+                    "n_fills": 0,
+                    "width": bw,
+                    "height": bh,
+                },
+            )
+            iou = _best_switch_iou(ctx, cand, switch_tmpls)
+            if iou < 0.20:
+                continue
+            codes = _codes_near_candidate(ctx, cand)
+            # Dedicated appliance codes mean this stem is a receptacle, not ``$``.
+            if any(c.upper() in {"MW", "DW", "H", "FC", "240V", "WP"} for c in codes):
+                continue
+            subtype = _refine_subtype(
+                Category.SWITCH,
+                entry.subtype if entry else "single_pole",
+                codes,
+                cand,
+                entry or usable[0],
+            )
+            cx, cy = cand.center
+            det = Detection(
+                id=str(uuid.uuid4()),
+                sheet_id=sheet_id,
+                category=Category.SWITCH,
+                subtype=subtype,
+                codes=codes,
+                mount_height_in=_parse_mount_height(codes),
+                center=Point(x=cx, y=cy),
+                bbox=BBox(x0=bb[0], y0=bb[1], x1=bb[2], y1=bb[3]),
+                rotation_deg=0,
+                confidence=min(0.85, 0.5 + iou),
+                source="geometry",
+                needs_review=False,
+                evidence=Evidence(
+                    legend_entry_id=entry.id if entry else None,
+                    match_score=iou,
+                    text_tokens=codes,
+                    notes=["exhaust_adjacent_switch"],
+                ),
+            )
+            if best is None or iou > best[0]:
+                best = (iou, det)
+        if best is not None:
+            out.append(best[1])
+            existing_sw.append(best[1])
+    return out
+
+
 def _drop_attic_wiring_dash_switches(
     dets: list[Detection],
     attic_boxes: list[tuple[float, float, float, float]],
@@ -2211,8 +2356,8 @@ def _has_duplex_slots_at(ctx: PageContext, cx: float, cy: float) -> bool:
         along = abs(a[1 - sep_axis] - b[1 - sep_axis])
         return 5.0 <= sep <= 12.0 and along <= 2.5
 
-    # Four left/right chords ⇒ circle outline (exhaust), not duplex slots.
-    if len(verts) >= 4:
+    # Circle outline (exhaust yin-yang): opposing chords on both axes (R6 kitchen).
+    if len(verts) >= 4 or len(hors) >= 4:
         return False
     if len(verts) == 2 and _exactly_two_paired(verts, 0):
         return True
@@ -2223,19 +2368,33 @@ def _has_duplex_slots_at(ctx: PageContext, cx: float, cy: float) -> bool:
     return False
 
 
+def _is_half_hot_fill(fw: float, fh: float) -> bool:
+    """AFCI half-hot legend fill is a thin *vertical* sliver (~2.5×7.5)."""
+    if not (5.0 <= fh <= 14.0 and 2.0 <= fw <= 4.5):
+        return False
+    return fh >= fw * 1.6
+
+
+def _is_exhaust_half_disc_fill(fw: float, fh: float) -> bool:
+    """Exhaust / IAQ half-disc: wide fill spanning most of the circle."""
+    if not (5.0 <= max(fw, fh) <= 12.0 and 2.2 <= min(fw, fh) <= 10.0):
+        return False
+    if _is_half_hot_fill(fw, fh):
+        return False
+    aspect = max(fw, fh) / max(min(fw, fh), 0.1)
+    # Typical ~1.2–1.7; sink exhaust can be flatter (~2.8) when clipped.
+    return 1.1 <= aspect <= 3.2
+
+
 def _half_disc_fills_in_bounds(
     ctx: PageContext, bounds: tuple[float, float, float, float]
 ) -> list[tuple[float, float]]:
-    """Centers of semicircle-sized black fills inside the plan bounds."""
+    """Centers of exhaust-style half-disc fills inside the plan bounds."""
     bx0, by0, bx1, by1 = bounds
     out: list[tuple[float, float]] = []
     for f in ctx.black_fills:
         fw, fh = f.x1 - f.x0, f.y1 - f.y0
-        if not (5.0 <= max(fw, fh) <= 12.0 and 4.0 <= min(fw, fh) <= 10.0):
-            continue
-        aspect = max(fw, fh) / max(min(fw, fh), 0.1)
-        # Half-discs are mildly elongated; near-square blobs are other fills.
-        if not (1.15 <= aspect <= 1.7):
+        if not _is_exhaust_half_disc_fill(fw, fh):
             continue
         cx, cy = 0.5 * (f.x0 + f.x1), 0.5 * (f.y0 + f.y1)
         if bx0 <= cx <= bx1 and by0 <= cy <= by1:
@@ -2339,6 +2498,22 @@ def _exhausts_from_half_fills(
     return out
 
 
+def _half_hot_fill_centers(
+    ctx: PageContext, bounds: tuple[float, float, float, float]
+) -> list[tuple[float, float]]:
+    """Centers of thin half-hot receptacle fills (not exhaust half-discs)."""
+    bx0, by0, bx1, by1 = bounds
+    out: list[tuple[float, float]] = []
+    for f in ctx.black_fills:
+        fw, fh = f.x1 - f.x0, f.y1 - f.y0
+        if not _is_half_hot_fill(fw, fh):
+            continue
+        cx, cy = 0.5 * (f.x0 + f.x1), 0.5 * (f.y0 + f.y1)
+        if bx0 <= cx <= bx1 and by0 <= cy <= by1:
+            out.append((cx, cy))
+    return out
+
+
 def _halfhots_from_fills(
     ctx: PageContext,
     candidates: list[Candidate],
@@ -2346,7 +2521,11 @@ def _halfhots_from_fills(
     sheet_id: str,
     usable: list[LegendEntry],
 ) -> list[Detection]:
-    """Half-filled duplex receptacle → ``afci_half_hot`` (R2 Fix 5)."""
+    """Half-filled duplex receptacle → ``afci_half_hot`` (R2 Fix 5).
+
+    Uses the thin vertical fill of the legend glyph — wide yin-yang fills are
+    exhaust fans (R6 kitchen cooktop / sink).
+    """
     bounds = _plan_bounds_from_candidates(candidates)
     if bounds is None:
         return []
@@ -2359,7 +2538,7 @@ def _halfhots_from_fills(
         next((e for e in usable if e.category == Category.RECEPTACLE), None),
     )
     out: list[Detection] = []
-    for cx, cy in _half_disc_fills_in_bounds(ctx, bounds):
+    for cx, cy in _half_hot_fill_centers(ctx, bounds):
         if not _has_duplex_slots_at(ctx, cx, cy):
             continue
         if any(
@@ -2377,7 +2556,8 @@ def _halfhots_from_fills(
             if math.hypot(d.center.x - cx, d.center.y - cy) > 14.0:
                 continue
             d.subtype = "afci_half_hot"
-            d.evidence.notes = list(d.evidence.notes) + ["half_fill_duplex"]
+            if d.evidence:
+                d.evidence.notes = list(d.evidence.notes) + ["half_fill_duplex"]
             upgraded = True
             break
         if upgraded:
@@ -2821,11 +3001,8 @@ def _cross_winner(a: Detection, b: Detection) -> Detection | None:
     if pair == frozenset({Category.EXHAUST_FAN, Category.LIGHT}):
         return a if a.category == Category.EXHAUST_FAN else b
     if pair == frozenset({Category.EXHAUST_FAN, Category.RECEPTACLE}):
-        if a.subtype == "afci_half_hot":
-            return a
-        if b.subtype == "afci_half_hot":
-            return b
-        return a if a.confidence >= b.confidence else b
+        # Yin-yang exhaust vs false half-hot on the same glyph (R6 kitchen).
+        return a if a.category == Category.EXHAUST_FAN else b
     return None
 
 
