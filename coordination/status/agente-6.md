@@ -2,41 +2,46 @@
 
 ## Estado
 
-pnpm pinned to 10.28.0 via `packageManager`; frozen-lockfile verified; compose change asked of A1.
+UI redesign “precision blueprint review” shipped for the interview demo; screenshots checked.
 
 ## Hecho
 
-- Demo polish (takeoff subtypes, filters, fit, review/export) — previous milestone
-- Pin `"packageManager": "pnpm@10.28.0"` in `web/package.json` (fixes Docker
-  `ERR_PNPM_MINIMUM_RELEASE_AGE_VIOLATION` when corepack grabs newest pnpm)
-- Confirmed `corepack pnpm install --frozen-lockfile` works with 10.28.0
-- Message to Agente 1: compose should use `pnpm install --frozen-lockfile`
+- Visual system: slate chrome, dark canvas + bright sheet, Inter + JetBrains Mono, 8px / 10px / 150ms
+- Home: hero, Load demo primary, 4 sheet cards with thumbnails + status, empty/loading states
+- Sheet header: plan tabs 1–4, pipeline badge, needs-review count, review/export, shortcuts
+- KPI strip (Fans…Detectors) clickable → highlight marks
+- Plan canvas: crisp marks + tooltip, pulse select, highlight dim, wire pills, floating toolbar, mini legend
+- Right panel: zebra takeoff + expandable subtypes, details (confidence bar, code chips), BOM sections, log timeline
+- Keyboard: V/A/F/Del/Ctrl+Z/? cheat sheet
+- Screenshots: `out/debug/ui-home.png`, `out/debug/ui-sheet.png` (verified in browser)
+- Earlier: pnpm pin 10.28.0, takeoff/CRUD/review wiring
 
 ## Cómo probarlo
 
 ```bash
 cd web
-corepack enable
-corepack prepare pnpm@10.28.0 --activate   # or: corepack pnpm …
 pnpm install --frozen-lockfile
+pnpm dev
+# http://localhost:5173 → Load demo plans → Open Plan 1
+# Check KPI click, takeoff expand, hover marks, ? shortcuts
 pnpm exec tsc --noEmit
 pnpm exec vitest run
-pnpm dev
 ```
 
 ## Siguiente
 
-- Wait for Agente 1 to update `docker-compose.yml` web command
-- Optional: undo endpoint when A5 adds one
+- Optional: real sheet thumbnails from `image.png` when API available
+- Compose `--frozen-lockfile` (asked Agente 1)
 
 ## Bloqueos
 
-- Compose still runs unpinned `pnpm install` until Agente 1 lands the change
+- Ninguno para la demo
 
 ## Decisions
 
-- Pin exactly the lockfile-era pnpm (10.28.0), not latest
-- Recommend `--frozen-lockfile` in Docker/CI for reproducible installs
+- Product display name in chrome: **Atreyus** (repo remains ai-electrical-takeoff)
+- KPI strip omits junction_box (still in takeoff table + legend)
+- Document id remembered in sessionStorage so home restores after sheet navigation
 
 ## Needs from Santiago
 
@@ -44,8 +49,10 @@ pnpm dev
 
 ## Explicación para Santiago
 
-El contenedor web fallaba porque corepack bajaba un pnpm muy nuevo que rechaza
-paquetes recién publicados (minimum release age). Fijé `packageManager` a
-`pnpm@10.28.0` (la versión con la que se generó el lockfile) y comprobé que
-`pnpm install --frozen-lockfile` funciona. Pedí a Agente 1 que cambie el comando
-de docker-compose para usar ese install congelado.
+Rediseñé la UI para la demo de entrevista: se ve como un producto de review de planos,
+no como un dashboard genérico. El plano va en una hoja clara sobre un fondo oscuro; los
+colores de categoría solo están en las marcas. Arriba tenés tabs Plan 1–4, el badge de
+versión y cuántos necesitan review; una franja de KPIs muestra los totales y al clickear
+ilumina esas marcas. A la derecha sigue el takeoff expandible, details con barra de
+confianza, BOM y el log. Atajos de teclado con “?”. Saqué capturas de home y sheet y
+las miré antes de cerrar.
