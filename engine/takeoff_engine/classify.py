@@ -431,10 +431,11 @@ def _is_wall_light_shape(ctx: PageContext, cand: Candidate) -> bool:
         return False
     if n < 16 or n > 90:
         return False
-    if not (8.0 <= min(w, h) <= 16.0 and 16.0 <= max(w, h) <= 36.0):
+    # Plan-4 Bath-2 vanity tick can push the short side just past 16 pt (R6).
+    if not (8.0 <= min(w, h) <= 19.0 and 16.0 <= max(w, h) <= 36.0):
         return False
     aspect = max(w, h) / max(min(w, h), 0.1)
-    if aspect < 1.5:
+    if aspect < 1.45:
         return False
     verts = 0
     hors = 0
@@ -844,11 +845,11 @@ def _may_force_wall_light(
         return False
     if light_score >= 0.55:
         return True
-    # Plan-1 bath vanity is very elongated (tick) and scores ~0.35.
+    # Bath / sink vanity ticks often score ~0.35–0.40 (plan-1 / plan-4 sink).
     w = float(cand.features.get("width", 0.0))
     h = float(cand.features.get("height", 0.0))
     aspect = max(w, h) / max(min(w, h), 0.1)
-    return aspect >= 1.9 and light_score >= 0.30
+    return aspect >= 1.5 and light_score >= 0.30 and _has_wall_tick(cand)
 
 
 def _scan_recessed_downlight_centers(
@@ -1301,20 +1302,16 @@ def classify_candidates(
         )
         wall_light = _is_wall_light_shape(ctx, cand)
         forced_center: tuple[float, float] | None = None
-        # Recessed vs wall-tick on the same cluster (R5):
-        # - strong wall legend match → wall vanity (Bath 2)
-        # - tall weak wall-tick → drop (plan-4 kitchen false)
-        # - wide merge with recessed ring → recessed (plan-2 kitchen cans)
+        # Recessed vs wall-tick on the same cluster (R5/R6):
+        # - strong wall legend match → wall vanity
+        # - geometric recessed ring wins over a weak elongated tick (sink can)
+        # - tall tick with no force and no ring → drop
         if (
             recessed_center is not None
             and wall_light
             and not can_force_wall
         ):
-            bw = float(cand.features.get("width", 0.0))
-            bh = float(cand.features.get("height", 0.0))
-            if bh >= bw and max(bw, bh) / max(min(bw, bh), 0.1) >= 1.5:
-                recessed_center = None
-                wall_light = False
+            wall_light = False  # keep recessed_center
         if wall_light and can_force_wall:
             cat = Category.LIGHT
             best_entry = next(
@@ -1629,6 +1626,13 @@ def classify_candidates(
     detections.extend(
         _switches_near_exhaust(
             ctx, detections, sheet_id, usable, switch_tmpls, wall_mask
+        )
+    )
+
+    # Orphan switch letters (plan-3 kitchen ``3D``) when the ``$`` cluster is thin.
+    detections.extend(
+        _switches_from_letter_tokens(
+            ctx, detections, sheet_id, usable, switch_tmpls, wall_mask, plan_bounds
         )
     )
 
@@ -1954,6 +1958,124 @@ def _switches_from_attic_bars(
                     ),
                 )
             )
+    return out
+
+
+def _switches_from_letter_tokens(
+    ctx: PageContext,
+    detections: list[Detection],
+    sheet_id: str,
+    usable: list[LegendEntry],
+    switch_tmpls: list[LegendTemplate],
+    wall_mask: np.ndarray,
+    plan_bounds: tuple[float, float, float, float] | None,
+) -> list[Detection]:
+    """Recover a ``$`` for orphan ``3D`` / ``F`` / ``D`` / … tokens (R6 plan 3).
+
+    When clustering keeps only a thin vertical dash, legend IoU rejects the
+    switch even though the letter is printed beside a real ``$``.
+    """
+    if not switch_tmpls or plan_bounds is None:
+        return []
+    entry = next((e for e in usable if e.category == Category.SWITCH), None)
+    existing = [d for d in detections if d.category == Category.SWITCH]
+    bx0, by0, bx1, by1 = plan_bounds
+    out: list[Detection] = []
+    for w in ctx.words:
+        raw = w.text.strip().upper()
+        if raw not in _SWITCH_CODE_MAP or w.size > 9.0:
+            continue
+        wx = 0.5 * (w.bbox[0] + w.bbox[2])
+        wy = 0.5 * (w.bbox[1] + w.bbox[3])
+        if not (bx0 <= wx <= bx1 and by0 <= wy <= by1):
+            continue
+        if any(math.hypot(wx - s.center.x, wy - s.center.y) < 16.0 for s in existing):
+            continue
+        if any(math.hypot(wx - s.center.x, wy - s.center.y) < 16.0 for s in out):
+            continue
+        # Stem bar near the letter (below/beside — letters sit above stacked $).
+        best_bar: tuple[float, float, float, bool] | None = None
+        for seg in ctx.black_segments:
+            length = math.hypot(seg.x1 - seg.x0, seg.y1 - seg.y0)
+            if not (10.0 <= length <= 16.5):
+                continue
+            vert = abs(seg.x1 - seg.x0) <= 1.2
+            horiz = abs(seg.y1 - seg.y0) <= 1.2
+            if not (vert or horiz):
+                continue
+            mx = 0.5 * (seg.x0 + seg.x1)
+            my = 0.5 * (seg.y0 + seg.y1)
+            dist = math.hypot(mx - wx, my - wy)
+            if dist > 18.0:
+                continue
+            if not _near_wall(wall_mask, mx, my):
+                continue
+            if best_bar is None or dist < best_bar[0]:
+                best_bar = (dist, mx, my, vert)
+        if best_bar is None:
+            continue
+        _dist, mx, my, vert = best_bar
+        seg_ids: list[int] = []
+        xs: list[float] = []
+        ys: list[float] = []
+        for j, s2 in enumerate(ctx.black_segments):
+            cx = 0.5 * (s2.x0 + s2.x1)
+            cy = 0.5 * (s2.y0 + s2.y1)
+            if abs(cx - mx) > 9.0 or abs(cy - my) > 11.0:
+                continue
+            ln = math.hypot(s2.x1 - s2.x0, s2.y1 - s2.y0)
+            if ln > 16.0:
+                continue
+            seg_ids.append(j)
+            xs.extend([s2.x0, s2.x1])
+            ys.extend([s2.y0, s2.y1])
+        if len(seg_ids) < 6:
+            continue
+        bb = (min(xs) - 0.5, min(ys) - 0.5, max(xs) + 0.5, max(ys) + 0.5)
+        bw, bh = bb[2] - bb[0], bb[3] - bb[1]
+        if min(bw, bh) < 3.5 or max(bw, bh) > 24.0:
+            continue
+        cand = Candidate(
+            id=str(uuid.uuid4()),
+            bbox=bb,
+            center=(0.5 * (bb[0] + bb[2]), 0.5 * (bb[1] + bb[3])),
+            segment_ids=seg_ids,
+            fill_ids=[],
+            features={
+                "n_segments": len(seg_ids),
+                "n_fills": 0,
+                "width": bw,
+                "height": bh,
+            },
+        )
+        iou = _best_switch_iou(ctx, cand, switch_tmpls)
+        # Letter is authoritative; allow weaker IoU than the normal switch floor.
+        if iou < 0.22 and len(seg_ids) < 12:
+            continue
+        if iou < 0.18:
+            continue
+        subtype = _SWITCH_CODE_MAP[raw]
+        out.append(
+            Detection(
+                id=str(uuid.uuid4()),
+                sheet_id=sheet_id,
+                category=Category.SWITCH,
+                subtype=subtype,
+                codes=[w.text.strip()],
+                center=Point(x=cand.center[0], y=cand.center[1]),
+                bbox=BBox(x0=bb[0], y0=bb[1], x1=bb[2], y1=bb[3]),
+                rotation_deg=0,
+                confidence=min(0.88, 0.55 + max(iou, 0.25)),
+                source="geometry",
+                needs_review=False,
+                evidence=Evidence(
+                    legend_entry_id=entry.id if entry else None,
+                    match_score=max(iou, 0.45),
+                    text_tokens=[w.text.strip()],
+                    notes=[f"switch_letter_token={raw}"],
+                ),
+            )
+        )
     return out
 
 
