@@ -35,6 +35,7 @@ interface UiState {
   highlight: TakeoffHighlight | null;
   layers: LayerVisibility;
   categoryVisibility: CategoryVisibility;
+  shortcutsOpen: boolean;
   setPanelTab: (tab: PanelTab) => void;
   setMode: (mode: InteractionMode) => void;
   setAddType: (category: Category, subtype: string) => void;
@@ -43,6 +44,8 @@ interface UiState {
   toggleLayer: (layer: keyof LayerVisibility) => void;
   toggleCategory: (category: Category) => void;
   setAllCategories: (on: boolean) => void;
+  setShortcutsOpen: (open: boolean) => void;
+  toggleShortcuts: () => void;
 }
 
 export const useUiStore = create<UiState>((set) => ({
@@ -59,6 +62,7 @@ export const useUiStore = create<UiState>((set) => ({
     boxes: false, // off by default — clutter; toggle when reviewing gangs
   },
   categoryVisibility: allCategoriesOn(),
+  shortcutsOpen: false,
   setPanelTab: (panelTab) => set({ panelTab }),
   setMode: (mode) => set({ mode }),
   setAddType: (addCategory, addSubtype) => set({ addCategory, addSubtype, mode: "add" }),
@@ -91,4 +95,6 @@ export const useUiStore = create<UiState>((set) => ({
         ALL_CATEGORIES.map((c) => [c, on]),
       ) as CategoryVisibility,
     }),
+  setShortcutsOpen: (shortcutsOpen) => set({ shortcutsOpen }),
+  toggleShortcuts: () => set((s) => ({ shortcutsOpen: !s.shortcutsOpen })),
 }));

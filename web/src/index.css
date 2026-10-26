@@ -1,23 +1,44 @@
 @import "tailwindcss";
 
 :root {
+  /* Precision blueprint review — light chrome, dark canvas, one accent */
   --ink: #0f172a;
+  --ink-soft: #334155;
   --muted: #64748b;
-  --border: #d8dee8;
+  --border: #e2e8f0;
+  --border-strong: #cbd5e1;
   --surface: #ffffff;
-  --surface-2: #f1f5f9;
-  --accent: #0e7490;
-  --bg0: #eef2f7;
-  --bg1: #e2eaf3;
+  --surface-2: #f8fafc;
+  --surface-3: #f1f5f9;
+  --accent: #0ea5e9;
+  --accent-ink: #0369a1;
+  --accent-soft: #e0f2fe;
+  --danger: #dc2626;
+  --danger-soft: #fef2f2;
+  --success: #059669;
+  --success-soft: #ecfdf5;
+  --warn: #d97706;
+  --warn-soft: #fffbeb;
+  --canvas: #1e293b;
+  --canvas-grid: #334155;
+  --sheet: #fafbfc;
+  --shadow-sm: 0 1px 2px rgb(15 23 42 / 0.06);
+  --shadow-md: 0 4px 12px rgb(15 23 42 / 0.08);
+  --shadow-lg: 0 12px 32px rgb(15 23 42 / 0.12);
+  --radius: 10px;
+  --space: 8px;
+  --ease: 150ms ease;
+
   color: var(--ink);
-  font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
 }
 
-.font-display {
-  font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+.font-mono,
+.tabular {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
 }
 
 * {
@@ -32,10 +53,7 @@ body,
 }
 
 body {
-  background:
-    radial-gradient(1200px 600px at 10% -10%, #dbeafe 0%, transparent 55%),
-    radial-gradient(900px 500px at 100% 0%, #ccfbf1 0%, transparent 45%),
-    linear-gradient(180deg, var(--bg0), var(--bg1));
+  background: var(--surface-2);
   min-height: 100%;
 }
 
@@ -44,21 +62,155 @@ body {
   min-height: 100%;
 }
 
-.field {
-  width: 100%;
-  border-radius: 0.375rem;
+.card {
+  border-radius: var(--radius);
   border: 1px solid var(--border);
   background: var(--surface);
-  padding: 0.4rem 0.55rem;
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow var(--ease), border-color var(--ease);
+}
+
+.card:hover {
+  box-shadow: var(--shadow-md);
+}
+
+.field {
+  width: 100%;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  padding: 8px 10px;
   font-size: 13px;
   color: var(--ink);
+  transition: border-color var(--ease), box-shadow var(--ease);
 }
 
 .field:focus {
-  outline: 2px solid color-mix(in srgb, var(--accent) 35%, white);
-  outline-offset: 1px;
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  transition: background var(--ease), border-color var(--ease), color var(--ease),
+    opacity var(--ease), transform var(--ease);
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: var(--ink);
+  color: white;
+  border: 1px solid var(--ink);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: #1e293b;
+}
+
+.btn-secondary {
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--border);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  border-color: var(--border-strong);
+  background: var(--surface-2);
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid transparent;
+}
+
+.btn-ghost:hover:not(:disabled) {
+  background: var(--surface-3);
+  color: var(--ink);
+}
+
+.btn-danger {
+  background: var(--danger-soft);
+  color: var(--danger);
+  border: 1px solid #fecaca;
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: #fee2e2;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 6px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  background: var(--surface-3);
+  color: var(--ink-soft);
+}
+
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--surface-3) 0%,
+    #e8eef5 50%,
+    var(--surface-3) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.2s ease-in-out infinite;
+  border-radius: 8px;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: -100% 0;
+  }
+}
+
+@keyframes pulse-ring {
+  0% {
+    opacity: 0.9;
+    stroke-width: 2;
+  }
+  50% {
+    opacity: 0.35;
+    stroke-width: 3.5;
+  }
+  100% {
+    opacity: 0.9;
+    stroke-width: 2;
+  }
+}
+
+.mark-pulse {
+  animation: pulse-ring 1.2s ease-in-out infinite;
 }
 
 button {
   font-family: inherit;
+}
+
+/* Zebra takeoff rows */
+.takeoff-row:nth-child(even) {
+  background: var(--surface-2);
+}
+
+.takeoff-row:hover {
+  background: var(--accent-soft) !important;
 }
