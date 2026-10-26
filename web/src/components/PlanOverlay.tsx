@@ -1,5 +1,6 @@
-import type { MouseEvent, ReactNode } from "react";
-import type { SheetResult } from "@/types/contracts";
+import type { DragEvent, MouseEvent, ReactNode } from "react";
+import { PALETTE_MIME, parsePaletteDrag } from "@/lib/palette";
+import type { Category, SheetResult } from "@/types/contracts";
 import type { CategoryVisibility, LayerVisibility } from "@/store/uiStore";
 import { BoxLayer } from "./overlay/BoxLayer";
 import { DetectionLayer } from "./overlay/DetectionLayer";
@@ -16,6 +17,18 @@ interface Props {
   onBackgroundClick: (pdfX: number, pdfY: number) => void;
   onSelect: (id: string) => void;
   onDragStart: (id: string, e: MouseEvent) => void;
+  onPaletteDrop?: (category: Category, subtype: string, x: number, y: number) => void;
+  onPaletteDragOverChange?: (over: boolean) => void;
+}
+
+function clientToPdf(svg: SVGSVGElement, clientX: number, clientY: number) {
+  const pt = svg.createSVGPoint();
+  pt.x = clientX;
+  pt.y = clientY;
+  const ctm = svg.getScreenCTM();
+  if (!ctm) return null;
+  const local = pt.matrixTransform(ctm.inverse());
+  return { x: local.x, y: local.y };
 }
 
 /**
@@ -32,6 +45,8 @@ export function PlanOverlay({
   onBackgroundClick,
   onSelect,
   onDragStart,
+  onPaletteDrop,
+  onPaletteDragOverChange,
 }: Props) {
   const { viewport } = result.sheet;
   const width = viewport.x1 - viewport.x0;
@@ -39,14 +54,32 @@ export function PlanOverlay({
   const viewBox = `${viewport.x0} ${viewport.y0} ${width} ${height}`;
 
   function handleClick(e: MouseEvent<SVGSVGElement>) {
-    const svg = e.currentTarget;
-    const pt = svg.createSVGPoint();
-    pt.x = e.clientX;
-    pt.y = e.clientY;
-    const ctm = svg.getScreenCTM();
-    if (!ctm) return;
-    const local = pt.matrixTransform(ctm.inverse());
+    const local = clientToPdf(e.currentTarget, e.clientX, e.clientY);
+    if (!local) return;
     onBackgroundClick(local.x, local.y);
+  }
+
+  function handleDragOver(e: DragEvent<SVGSVGElement>) {
+    if (![...e.dataTransfer.types].includes(PALETTE_MIME)) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "copy";
+    onPaletteDragOverChange?.(true);
+  }
+
+  function handleDragLeave(e: DragEvent<SVGSVGElement>) {
+    if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+    onPaletteDragOverChange?.(false);
+  }
+
+  function handleDrop(e: DragEvent<SVGSVGElement>) {
+    e.preventDefault();
+    onPaletteDragOverChange?.(false);
+    const raw = e.dataTransfer.getData(PALETTE_MIME);
+    const parsed = parsePaletteDrag(raw);
+    if (!parsed || !onPaletteDrop) return;
+    const local = clientToPdf(e.currentTarget, e.clientX, e.clientY);
+    if (!local) return;
+    onPaletteDrop(parsed.category, parsed.subtype, local.x, local.y);
   }
 
   return (
@@ -58,6 +91,9 @@ export function PlanOverlay({
       preserveAspectRatio="xMidYMid meet"
       className="block h-full w-full"
       onClick={handleClick}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
       role="img"
       aria-label={result.sheet.title ?? "Electrical plan"}
     >
@@ -84,13 +120,14 @@ export function PlanOverlay({
           categoryVisibility={categoryVisibility}
           selectedId={selectedId}
           highlightedIds={highlightedIds}
-          onSelect={onSelect}
-          onDragStart={onDragStart}
-        />
-      )}
+            onSelect={onSelect}
+            onDragStart={onDragStart}
+          />
+        )}
     </svg>
   );
 }
+
 
 function PlaceholderGrid({
   viewport,

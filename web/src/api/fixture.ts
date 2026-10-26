@@ -1,4 +1,5 @@
 import type { Bom, Detection, SheetResult, Takeoff } from "@/types/contracts";
+import { assignRoomId } from "@/lib/rooms";
 import { computeTakeoff } from "@/lib/takeoff";
 import type {
   CorrectionEvent,
@@ -213,6 +214,8 @@ export async function fixtureCreateDetection(
 ): Promise<{ detection: Detection; takeoff: Takeoff }> {
   pushUndo();
   const half = 8;
+  const room_id =
+    body.room_id ?? assignRoomId(body.center, fixtureResult.rooms ?? []);
   const detection: Detection = {
     id: `det-user-${crypto.randomUUID()}`,
     sheet_id: sheetId,
@@ -228,7 +231,7 @@ export async function fixtureCreateDetection(
       y1: body.center.y + half,
     },
     rotation_deg: 0,
-    room_id: body.room_id ?? null,
+    room_id,
     room_source: body.room_id ? "manual" : "auto",
     confidence: 1,
     source: "user",

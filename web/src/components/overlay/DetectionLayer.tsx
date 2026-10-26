@@ -59,6 +59,8 @@ export function DetectionLayer({
         return (
           <g
             key={det.id}
+            data-testid="detection-mark"
+            data-detection-id={det.id}
             transform={`translate(${det.center.x}, ${det.center.y})`}
             opacity={opacity}
             style={{ cursor: "pointer" }}

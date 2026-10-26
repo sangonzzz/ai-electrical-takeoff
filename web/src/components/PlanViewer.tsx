@@ -4,6 +4,7 @@ import {
   useImperativeHandle,
   forwardRef,
   useRef,
+  useState,
   type MouseEvent as ReactMouseEvent,
 } from "react";
 import {
@@ -11,10 +12,11 @@ import {
   TransformWrapper,
   type ReactZoomPanPinchContentRef,
 } from "react-zoom-pan-pinch";
-import type { SheetResult } from "@/types/contracts";
+import type { Category, SheetResult } from "@/types/contracts";
 import { useUiStore } from "@/store/uiStore";
 import { CategoryFilter } from "./CategoryFilter";
 import { FloatingToolbar } from "./FloatingToolbar";
+import { MarkGhost } from "./MarkGhost";
 import { MiniLegend } from "./MiniLegend";
 import { PlanOverlay } from "./PlanOverlay";
 
@@ -26,6 +28,7 @@ interface Props {
   result: SheetResult;
   imageUrl: string | null;
   onAddAt: (x: number, y: number) => void;
+  onPaletteDrop: (category: Category, subtype: string, x: number, y: number) => void;
   onDragMove: (id: string, x: number, y: number) => void;
   onDragEnd: (id: string, x: number, y: number) => void;
 }
@@ -55,7 +58,7 @@ function fitPlanToCanvas(
 }
 
 export const PlanViewer = forwardRef<PlanViewerHandle, Props>(function PlanViewer(
-  { result, imageUrl, onAddAt, onDragMove, onDragEnd },
+  { result, imageUrl, onAddAt, onPaletteDrop, onDragMove, onDragEnd },
   ref,
 ) {
   const mode = useUiStore((s) => s.mode);
@@ -64,6 +67,8 @@ export const PlanViewer = forwardRef<PlanViewerHandle, Props>(function PlanViewe
   const selectedId = useUiStore((s) => s.selectedDetectionId);
   const highlight = useUiStore((s) => s.highlight);
   const selectDetection = useUiStore((s) => s.selectDetection);
+  const paletteDrag = useUiStore((s) => s.paletteDrag);
+  const setPaletteDrag = useUiStore((s) => s.setPaletteDrag);
   const transformRef = useRef<ReactZoomPanPinchContentRef>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{
@@ -73,6 +78,8 @@ export const PlanViewer = forwardRef<PlanViewerHandle, Props>(function PlanViewe
     originX: number;
     originY: number;
   } | null>(null);
+  const [ghostPos, setGhostPos] = useState<{ x: number; y: number } | null>(null);
+  const [overPlan, setOverPlan] = useState(false);
 
   const highlightedIds = new Set(highlight?.detectionIds ?? []);
   const fitKey = `${result.sheet.id}:${imageUrl ?? "none"}`;
@@ -98,6 +105,30 @@ export const PlanViewer = forwardRef<PlanViewerHandle, Props>(function PlanViewe
     ro.observe(container);
     return () => ro.disconnect();
   }, [fitToScreen]);
+
+  useEffect(() => {
+    if (!paletteDrag) {
+      setGhostPos(null);
+      setOverPlan(false);
+      return;
+    }
+    const onMove = (ev: DragEvent) => {
+      setGhostPos({ x: ev.clientX, y: ev.clientY });
+    };
+    const onEnd = () => {
+      setPaletteDrag(null);
+      setGhostPos(null);
+      setOverPlan(false);
+    };
+    window.addEventListener("dragover", onMove);
+    window.addEventListener("dragend", onEnd);
+    window.addEventListener("drop", onEnd);
+    return () => {
+      window.removeEventListener("dragover", onMove);
+      window.removeEventListener("dragend", onEnd);
+      window.removeEventListener("drop", onEnd);
+    };
+  }, [paletteDrag, setPaletteDrag]);
 
   const onBackgroundClick = useCallback(
     (pdfX: number, pdfY: number) => {
@@ -165,7 +196,11 @@ export const PlanViewer = forwardRef<PlanViewerHandle, Props>(function PlanViewe
             {result.sheet.title ?? result.sheet.sheet_number ?? "Sheet"}
           </div>
           <div className="text-[11px] text-[var(--muted)]">
-            {mode === "add" ? "Click the plan to place a mark" : "Scroll zoom · drag pan"}
+            {paletteDrag
+              ? "Drop on the plan to place"
+              : mode === "add"
+                ? "Click the plan to place a mark"
+                : "Scroll zoom · drag pan · drag components from the palette"}
           </div>
         </div>
         <CategoryFilter />
@@ -180,6 +215,7 @@ export const PlanViewer = forwardRef<PlanViewerHandle, Props>(function PlanViewe
           limitToBounds={false}
           doubleClick={{ disabled: true }}
           wheel={{ step: 0.12 }}
+          panning={{ disabled: !!paletteDrag }}
         >
           <TransformComponent
             wrapperClass="!h-full !w-full"
@@ -197,6 +233,8 @@ export const PlanViewer = forwardRef<PlanViewerHandle, Props>(function PlanViewe
                   onBackgroundClick={onBackgroundClick}
                   onSelect={selectDetection}
                   onDragStart={onDragStart}
+                  onPaletteDrop={onPaletteDrop}
+                  onPaletteDragOverChange={setOverPlan}
                 />
               </div>
             </div>
@@ -210,6 +248,15 @@ export const PlanViewer = forwardRef<PlanViewerHandle, Props>(function PlanViewe
           <MiniLegend />
         </div>
       </div>
+
+      {paletteDrag && ghostPos && (
+        <MarkGhost
+          category={paletteDrag.category}
+          clientX={ghostPos.x}
+          clientY={ghostPos.y}
+          overPlan={overPlan}
+        />
+      )}
     </div>
   );
 });

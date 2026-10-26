@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { SheetBundle } from "@/api/types";
 import { getDocument } from "@/api/client";
 import { useSheetBundle, sheetQueryKey } from "@/hooks/useSheetBundle";
+import { ComponentPalette } from "@/components/ComponentPalette";
 import { KpiStrip } from "@/components/KpiStrip";
 import { PlanViewer, type PlanViewerHandle } from "@/components/PlanViewer";
 import { RightPanel } from "@/components/RightPanel";
@@ -177,7 +178,8 @@ export function SheetPage() {
       <div className="flex min-h-0 flex-1 flex-col gap-2 p-2">
         <KpiStrip rooms={result.rooms} detections={result.detections} />
 
-        <div className="grid min-h-0 flex-1 gap-2 lg:grid-cols-[minmax(0,1fr)_360px]">
+        <div className="grid min-h-0 flex-1 gap-2 lg:grid-cols-[200px_minmax(0,1fr)_360px]">
+          <ComponentPalette />
           <PlanViewer
             ref={planRef}
             result={result}
@@ -188,6 +190,10 @@ export function SheetPage() {
                 subtype: addSubtype || defaultSubtype(addCategory),
                 center: { x, y },
               });
+              setMode("select");
+            }}
+            onPaletteDrop={(category, subtype, x, y) => {
+              createDetection({ category, subtype, center: { x, y } });
               setMode("select");
             }}
             onDragMove={applyLocalMove}

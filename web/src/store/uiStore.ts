@@ -26,6 +26,11 @@ function allCategoriesOn(): CategoryVisibility {
   return Object.fromEntries(ALL_CATEGORIES.map((c) => [c, true])) as CategoryVisibility;
 }
 
+export interface PaletteDrag {
+  category: Category;
+  subtype: string;
+}
+
 interface UiState {
   panelTab: PanelTab;
   mode: InteractionMode;
@@ -36,6 +41,8 @@ interface UiState {
   layers: LayerVisibility;
   categoryVisibility: CategoryVisibility;
   shortcutsOpen: boolean;
+  /** Active palette drag (ghost preview + drop target). */
+  paletteDrag: PaletteDrag | null;
   setPanelTab: (tab: PanelTab) => void;
   setMode: (mode: InteractionMode) => void;
   setAddType: (category: Category, subtype: string) => void;
@@ -46,6 +53,7 @@ interface UiState {
   setAllCategories: (on: boolean) => void;
   setShortcutsOpen: (open: boolean) => void;
   toggleShortcuts: () => void;
+  setPaletteDrag: (drag: PaletteDrag | null) => void;
 }
 
 export const useUiStore = create<UiState>((set) => ({
@@ -63,6 +71,7 @@ export const useUiStore = create<UiState>((set) => ({
   },
   categoryVisibility: allCategoriesOn(),
   shortcutsOpen: false,
+  paletteDrag: null,
   setPanelTab: (panelTab) => set({ panelTab }),
   setMode: (mode) => set({ mode }),
   setAddType: (addCategory, addSubtype) => set({ addCategory, addSubtype, mode: "add" }),
@@ -97,4 +106,5 @@ export const useUiStore = create<UiState>((set) => ({
     }),
   setShortcutsOpen: (shortcutsOpen) => set({ shortcutsOpen }),
   toggleShortcuts: () => set((s) => ({ shortcutsOpen: !s.shortcutsOpen })),
+  setPaletteDrag: (paletteDrag) => set({ paletteDrag }),
 }));
