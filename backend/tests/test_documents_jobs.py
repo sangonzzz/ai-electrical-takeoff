@@ -76,6 +76,14 @@ async def test_get_document(client: AsyncClient, sample_pdf: Path) -> None:
             files={"file": ("escondido_plans.pdf", f, "application/pdf")},
         )
     doc_id = up.json()["document_id"]
+    upload_jobs = {s["sheet_id"]: s["job_id"] for s in up.json()["sheets"]}
     resp = await client.get(f"/api/documents/{doc_id}")
     assert resp.status_code == 200
-    assert resp.json()["page_count"] == 4
+    body = resp.json()
+    assert body["page_count"] == 4
+    assert len(body["sheets"]) == 4
+    for sheet in body["sheets"]:
+        assert sheet["job_id"] == upload_jobs[sheet["sheet_id"]]
+        assert sheet["status"] == "succeeded"
+        assert sheet["error"] is None
+        assert sheet["current_run_id"] == sheet["job_id"]

@@ -52,13 +52,26 @@ class ReviewCompleteResponse(BaseModel):
     human_reviewed: bool = True
 
 
+class DocumentSheetSummary(BaseModel):
+    """Per-sheet row on GET /api/documents/{id} — includes job fields for polling."""
+
+    sheet_id: str
+    page_index: int
+    sheet_number: str | None = None
+    title: str | None = None
+    current_run_id: str | None = None
+    job_id: str | None = None
+    status: Literal["queued", "running", "succeeded", "failed"] | None = None
+    error: str | None = None
+
+
 class DocumentDetailResponse(BaseModel):
     id: str
     filename: str
     file_hash: str
     page_count: int
     created_at: datetime
-    sheets: list[dict[str, Any]]
+    sheets: list[DocumentSheetSummary]
 
 
 class SheetDetailResponse(BaseModel):

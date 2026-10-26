@@ -2,21 +2,27 @@
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, File, HTTPException, UploadFile
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from app.api.deps import AppSettings, DbSession
-from app.models import Document
-from app.schemas.api import DocumentDetailResponse, DocumentUploadResponse, SheetJobInfo
+from app.models import AnalysisRun, Document, Sheet
+from app.schemas.api import (
+    DocumentDetailResponse,
+    DocumentSheetSummary,
+    DocumentUploadResponse,
+    SheetJobInfo,
+)
 from app.services.documents import upload_document
 from app.settings import REPO_ROOT
 
 router = APIRouter(tags=["documents"])
 
 _DEMO_PDF = REPO_ROOT / "data" / "plans" / "escondido_plans.pdf"
+_JOB_STATUSES = frozenset({"queued", "running", "succeeded", "failed"})
 
 
 async def _upload_bytes(
@@ -72,6 +78,27 @@ async def post_document_demo(
     )
 
 
+def _run_status(
+    run: AnalysisRun | None,
+) -> Literal["queued", "running", "succeeded", "failed"] | None:
+    if run is None:
+        return None
+    if run.status in _JOB_STATUSES:
+        return run.status  # type: ignore[return-value]
+    return "failed"
+
+
+def _latest_run(sheet: Sheet) -> AnalysisRun | None:
+    """Prefer current_run_id; else the most recently created run on the sheet."""
+    if sheet.current_run_id:
+        for run in sheet.runs:
+            if run.id == sheet.current_run_id:
+                return run
+    if not sheet.runs:
+        return None
+    return max(sheet.runs, key=lambda r: (r.created_at is not None, r.created_at, r.id))
+
+
 @router.get("/api/documents/{document_id}", response_model=DocumentDetailResponse)
 async def get_document(
     document_id: str,
@@ -80,26 +107,34 @@ async def get_document(
     result = await session.execute(
         select(Document)
         .where(Document.id == document_id)
-        .options(selectinload(Document.sheets))
+        .options(selectinload(Document.sheets).selectinload(Sheet.runs))
     )
     doc = result.scalar_one_or_none()
     if doc is None:
         raise HTTPException(status_code=404, detail="document not found")
     sheets = sorted(doc.sheets, key=lambda s: s.page_index)
+    summaries: list[DocumentSheetSummary] = []
+    for s in sheets:
+        run = _latest_run(s)
+        if run is None and s.current_run_id:
+            run = await session.get(AnalysisRun, s.current_run_id)
+        summaries.append(
+            DocumentSheetSummary(
+                sheet_id=s.id,
+                page_index=s.page_index,
+                sheet_number=s.sheet_number,
+                title=s.title,
+                current_run_id=s.current_run_id,
+                job_id=run.id if run else s.current_run_id,
+                status=_run_status(run),
+                error=run.error if run and run.status == "failed" else None,
+            )
+        )
     return DocumentDetailResponse(
         id=doc.id,
         filename=doc.filename,
         file_hash=doc.file_hash,
         page_count=doc.page_count,
         created_at=doc.created_at,
-        sheets=[
-            {
-                "sheet_id": s.id,
-                "page_index": s.page_index,
-                "sheet_number": s.sheet_number,
-                "title": s.title,
-                "current_run_id": s.current_run_id,
-            }
-            for s in sheets
-        ],
+        sheets=summaries,
     )
