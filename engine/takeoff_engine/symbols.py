@@ -436,8 +436,107 @@ def find_candidates(ctx: PageContext, viewport: BBox) -> list[Candidate]:
             filtered.append(c)
         candidates = filtered
 
+    # Peel recessed / plain circles that were absorbed into attic/hallway mega-blobs.
+    candidates.extend(_peel_recessed_circles(ctx, candidates))
+
     candidates.sort(key=lambda c: (c.bbox[1], c.bbox[0]))
     return candidates
+
+
+def _peel_recessed_circles(
+    ctx: PageContext, candidates: list[Candidate]
+) -> list[Candidate]:
+    """Recover ~12 pt circle-in-square lights trapped inside oversized clusters."""
+    existing_centers = [c.center for c in candidates if _is_compact_light_bbox(c.bbox)]
+    extra: list[Candidate] = []
+    for c in candidates:
+        w = float(c.features.get("width", 0.0))
+        h = float(c.features.get("height", 0.0))
+        n = int(c.features.get("n_segments", 0))
+        if max(w, h) < 50.0 or n < 80:
+            continue
+        for cx, cy, rw, rh, ring_ids in _circle_rings_in_seg_ids(ctx, c.segment_ids):
+            if any(math.hypot(cx - ex, cy - ey) < 10.0 for ex, ey in existing_centers):
+                continue
+            if any(math.hypot(cx - e.center[0], cy - e.center[1]) < 10.0 for e in extra):
+                continue
+            bb = (cx - rw / 2.0, cy - rh / 2.0, cx + rw / 2.0, cy + rh / 2.0)
+            extra.append(
+                Candidate(
+                    id=str(uuid.uuid4()),
+                    bbox=bb,
+                    center=(cx, cy),
+                    segment_ids=ring_ids,
+                    fill_ids=[],
+                    features={
+                        "n_segments": len(ring_ids),
+                        "n_fills": 0,
+                        "width": rw,
+                        "height": rh,
+                    },
+                )
+            )
+            existing_centers.append((cx, cy))
+    return extra
+
+
+def _circle_rings_in_seg_ids(
+    ctx: PageContext, seg_ids: list[int]
+) -> list[tuple[float, float, float, float, list[int]]]:
+    """Compact near-round rings of short strokes inside a segment id list."""
+    shorts: list[tuple[int, float, float]] = []
+    for i in seg_ids:
+        s = ctx.black_segments[i]
+        length = math.hypot(s.x1 - s.x0, s.y1 - s.y0)
+        if length > 6.0:
+            continue
+        shorts.append((i, 0.5 * (s.x0 + s.x1), 0.5 * (s.y0 + s.y1)))
+    if len(shorts) < 10:
+        return []
+
+    parent = list(range(len(shorts)))
+
+    def find(a: int) -> int:
+        while parent[a] != a:
+            parent[a] = parent[parent[a]]
+            a = parent[a]
+        return a
+
+    for i in range(len(shorts)):
+        _, xi, yi = shorts[i]
+        for j in range(i + 1, len(shorts)):
+            _, xj, yj = shorts[j]
+            # Tight gap so neighboring hallway cans stay separate rings.
+            if math.hypot(xi - xj, yi - yj) < 2.5:
+                parent[find(j)] = find(i)
+
+    groups: dict[int, list[int]] = defaultdict(list)
+    for i in range(len(shorts)):
+        groups[find(i)].append(i)
+
+    rings: list[tuple[float, float, float, float, list[int]]] = []
+    for members in groups.values():
+        if not (10 <= len(members) <= 80):
+            continue
+        xs = [shorts[k][1] for k in members]
+        ys = [shorts[k][2] for k in members]
+        rw, rh = max(xs) - min(xs), max(ys) - min(ys)
+        if not (7.0 <= min(rw, rh) <= 16.0 and max(rw, rh) <= 18.0):
+            continue
+        if max(rw, rh) / max(min(rw, rh), 0.1) > 1.5:
+            continue
+        cx, cy = sum(xs) / len(xs), sum(ys) / len(ys)
+        ring_ids = [shorts[k][0] for k in members]
+        rings.append((cx, cy, rw, rh, ring_ids))
+    return rings
+
+
+def _is_compact_light_bbox(bb: tuple[float, float, float, float]) -> bool:
+    """Near-square ~8–16 pt glyph — recessed / plain circle light."""
+    w, h = bb[2] - bb[0], bb[3] - bb[1]
+    if not (7.0 <= min(w, h) <= 18.0 and max(w, h) <= 22.0):
+        return False
+    return max(w, h) / max(min(w, h), 0.1) <= 1.45
 
 
 def _merge_large_neighbors(
@@ -462,6 +561,12 @@ def _merge_large_neighbors(
             wj, hj = bj[2] - bj[0], bj[3] - bj[1]
             # Only merge if at least one side looks like part of a large symbol.
             if max(wi, hi, wj, hj) < _LARGE_MIN_SIZE_PT and max(wi * hi, wj * hj) < 200:
+                continue
+            # Never absorb a compact light glyph into a much larger blob
+            # (hallway recessed circles next to attic panel ink — R3).
+            if _is_compact_light_bbox(bi) and max(wj, hj) > 40:
+                continue
+            if _is_compact_light_bbox(bj) and max(wi, hi) > 40:
                 continue
             if _bbox_gap(bi, bj) >= _LARGE_MERGE_GAP_PT:
                 continue
