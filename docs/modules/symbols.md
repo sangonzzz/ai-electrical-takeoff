@@ -86,25 +86,30 @@ Order matters: remove non-symbol ink **before** clustering so dashes never join 
 | Viewport ring scan (R5) | Frame clusters + short-stroke rings recover cans that never formed a candidate | Plan 2 attic can @ (917,302) |
 | AFI wall receptacles (freeze) | Keep coded wall devices mis-labeled Exterior; text-anchored `AFI`/`AFCI` → `afci` when mega-clusters swallow the duplex | Plan 3 Bed 2 walls; plan 4 orphans |
 | Exhaust vs light NMS (freeze) | Overlapping exhaust + recessed → keep exhaust | Bath 2 double marks |
-| AFI wall receptacles (freeze) | Keep coded wall devices mis-labeled Exterior; text-anchored `AFI`/`AFCI` → `afci` when mega-clusters swallow the duplex | Plan 3 Bed 2 walls; plan 4 orphans |
-| Exhaust vs light NMS (freeze) | Overlapping exhaust + recessed → keep exhaust | Bath 2 double marks |
+| Switch letter align (R6.1) | Multi-gang `$` paired 1:1 with stacked letters; `3D`→`three_way_dimmer`; mount filter no longer strips `3D`/`240V` | Plan 1 Bath F/VS/D, Entry A/3D/3D |
+| 240V priority (R6.2) | SPEC: `240V` → `gfci_240v`; never legend-only | Laundry / B14 / kitchen / B38 |
+| IN ATTIC `$` (R6.3) | Seed from vertical bar; drop left wiring-dash sliver | Plan 1 attic panel |
+| FC token (R6.4) | Duplex glyph above `FC` when counter mega-blob swallows it | Plan 1 laundry FC |
+| False 240V (R6.5) | Drop weak uncoded receptacle IoU; gate `gfci_240v` on `240V` token | Laundry door ~1096,276 |
+| Exhaust vs half-hot (R6.6) | Wide yin-yang fill → exhaust; thin vertical fill + duplex → half-hot; sink `$` via exhaust-adjacent stem | Plan 1 kitchen |
+| Orphan letters (R6.7) | `3D`/`F`/… token without nearby switch → stem bar recovery | Plan 3 kitchen left wall |
 
-4. NMS same category 8 pt; then cross-category NMS for known collisions (fan > light).
+4. NMS same category 8 pt; then cross-category NMS for known collisions (fan > light; exhaust > light).
 5. `needs_review` **only** when (a) top-two scores are close **and** different categories, or (b) weak match (&lt;0.30) with no type codes. Same-glyph receptacle/switch legend rows no longer flood review (target &lt;15%; measured ~5%).
-6. Regression: `engine/tests/symbols/test_category_count_regression.py` — all 4 plans (lights ≥9/13/15; plan 4 lights 13–17; fans 1/2/2/3; switches not below R5).
+6. Regression: `engine/tests/symbols/test_category_count_regression.py` + `test_switch_letter_alignment.py` + `test_gfci_240v.py`.
 
 ### Duplex vs exhaust half-fill
 
-Both use a black semicircle fill. Distinction: a **duplex** has exactly two parallel short interior slots; a **circle** outline leaves four edge chords — those are exhaust/IAQ, not half-hot.
+Both use a black semicircle fill. Distinction: a **duplex** has exactly two parallel short interior slots; a **circle** outline leaves four edge chords (often with ≥4 horizontal chords too) — those are exhaust/IAQ, not half-hot. AFCI half-hot legend fill is a **thin vertical** sliver; exhaust fills are wide half-discs.
 
-### Rough counts after R5 (`--no-llm --no-bom`)
+### Rough counts after R6 (`--no-llm --no-bom`)
 
 | plan | sw | fan | light | rec | exhaust | detector | JB | notes |
 |------|----|-----|-------|-----|---------|----------|----|-------|
-| 1 | 12 | 1 | ~10 | ~24 | 2 | 2 | 0 | wall vanity + recessed geometry |
-| 2 | 10 | 2 | ~13 | ~33 | 3 | 3 | 0 | kitchen row + attic ring scan |
-| 3 | 11 | 2 | ~17 | ~26 | 4 | 4 | 0 | Bed 2 fan restored; living/dining cans |
-| 4 | 15 | 3 | ~16 | ~38 | 2 | 5 | 0 | no hub lights; EXT kept; Bath 2 wall |
+| 1 | 13 | 1 | 9 | 25 | 4 | 2 | 0 | aligned gangs; kitchen exhausts; attic `$`; laundry FC |
+| 2 | 11 | 2 | 13 | 31 | 4 | 3 | 0 | |
+| 3 | 14 | 2 | 13 | 30 | 5 | 4 | 0 | kitchen left-wall `3D` recovered |
+| 4 | 17 | 3 | 17 | 41 | 4 | 5 | 0 | sink light; Bath-2 wall vanity still weak |
 
 ## Pipeline (`analyze_sheet`)
 
