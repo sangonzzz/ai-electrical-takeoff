@@ -26,8 +26,8 @@ _MINIMA: dict[int, dict[Category, int]] = {
         Category.CEILING_FAN: 2,
         Category.SWITCH: 10,
     },
-    2: {  # plan 3
-        Category.LIGHT: 15,
+    2: {  # plan 3 — lights ≥13 after exhaust/light dedupe (was 15 with doubles)
+        Category.LIGHT: 13,
         Category.CEILING_FAN: 2,
         Category.SWITCH: 11,
     },

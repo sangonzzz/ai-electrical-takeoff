@@ -1549,6 +1549,13 @@ def classify_candidates(
         _exterior_from_ext_tokens(ctx, candidates, detections, sheet_id, usable)
     )
 
+    # Text-anchored AFI wall receptacles (Bed walls swallowed by mega-clusters).
+    detections.extend(
+        _receptacles_from_afi_tokens(
+            ctx, candidates, detections, sheet_id, usable, wall_mask
+        )
+    )
+
     # Half-filled circles that are not receptacles → exhaust / IAQ (R2 Fix 4).
     detections.extend(
         _exhausts_from_half_fills(ctx, candidates, detections, sheet_id, usable)
@@ -1592,6 +1599,30 @@ def _suppress_lights_at_fan_hubs(dets: list[Detection]) -> list[Detection]:
     return out
 
 
+# Wall-device codes that prove a receptacle/switch is real (not sheet-margin ink).
+# Rooms sometimes assign Bed-2 wall AFI outlets to Exterior (final freeze).
+_WALL_DEVICE_KEEP_CODES = frozenset(
+    {
+        "AFI",
+        "AFCI",
+        "GFI",
+        "GFCI",
+        "WP",
+        "240V",
+        "MW",
+        "DW",
+        "H",
+        "FC",
+        "3D",
+        "3",
+        "D",
+        "VS",
+        "F",
+        "A",
+    }
+)
+
+
 def drop_outside_footprint(
     dets: list[Detection],
     rooms: list[Any],
@@ -1600,8 +1631,8 @@ def drop_outside_footprint(
 
     Called after ``assign_rooms``. Never drops fans / detectors / exhaust —
     rooms sometimes mis-labels bedroom fans as Exterior. Geometric recessed
-    cans are also kept (same mis-label). Sheet-margin false lights without
-    EXT/WP still go away.
+    cans and coded wall receptacles/switches (AFI, GFI, …) are also kept.
+    Sheet-margin false lights without EXT/WP still go away.
     """
     by_id = {r.id: r for r in rooms}
     out: list[Detection] = []
@@ -1629,6 +1660,13 @@ def drop_outside_footprint(
         if (
             d.category == Category.LIGHT
             and "recessed_downlight_geometry" in notes
+        ):
+            out.append(d)
+            continue
+        # Bed-wall AFI/GFI (etc.) mis-labeled Exterior — keep the wall device.
+        if (
+            d.category in (Category.RECEPTACLE, Category.SWITCH)
+            and codes_up & _WALL_DEVICE_KEEP_CODES
         ):
             out.append(d)
             continue
@@ -2082,6 +2120,168 @@ def _is_exterior_light_shape(cand: Candidate) -> bool:
     return True
 
 
+def _receptacle_glyph_near_afi(
+    ctx: PageContext,
+    wx: float,
+    wy: float,
+    wall_mask: np.ndarray,
+) -> tuple[float, float] | None:
+    """Locate a compact wall-receptacle glyph next to an ``AFI`` / ``AFCI`` token.
+
+    The duplex sits ~8–14 pt above/beside the label. Mega-clusters often swallow
+    the glyph, so we search local short strokes rather than whole candidates.
+    """
+    shorts: list[tuple[float, float]] = []
+    for s in ctx.black_segments:
+        length = math.hypot(s.x1 - s.x0, s.y1 - s.y0)
+        if length > 12.0:
+            continue
+        mx, my = 0.5 * (s.x0 + s.x1), 0.5 * (s.y0 + s.y1)
+        if math.hypot(mx - wx, my - wy) > 20.0:
+            continue
+        shorts.append((mx, my))
+    if len(shorts) < 6:
+        return None
+
+    best: tuple[float, float, float] | None = None  # score, cx, cy
+    for dx, dy in (
+        (0.0, -11.0),
+        (0.0, 11.0),
+        (-11.0, 0.0),
+        (11.0, 0.0),
+        (0.0, -8.0),
+        (0.0, 8.0),
+        (-8.0, 0.0),
+        (8.0, 0.0),
+    ):
+        cx, cy = wx + dx, wy + dy
+        if not _near_wall(wall_mask, cx, cy):
+            continue
+        near = [(x, y) for x, y in shorts if math.hypot(x - cx, y - cy) <= 8.0]
+        if len(near) < 8:
+            continue
+        gx = sum(p[0] for p in near) / len(near)
+        gy = sum(p[1] for p in near) / len(near)
+        if not _near_wall(wall_mask, gx, gy):
+            continue
+        # Prefer denser clusters closer to the token.
+        score = len(near) - 0.15 * math.hypot(gx - wx, gy - wy)
+        if best is None or score > best[0]:
+            best = (score, gx, gy)
+    if best is None:
+        return None
+    return best[1], best[2]
+
+
+def _receptacles_from_afi_tokens(
+    ctx: PageContext,
+    candidates: list[Candidate],
+    detections: list[Detection],
+    sheet_id: str,
+    usable: list[LegendEntry],
+    wall_mask: np.ndarray,
+) -> list[Detection]:
+    """Every viewport ``AFI`` / ``AFCI`` token → wall ``afci`` receptacle.
+
+    Compact candidates usually match via legend IoU; this pass recovers Bed-wall
+    duplexes swallowed by mega-clusters (plan 3 Bed 2 / plan 4).
+    """
+    bounds = _plan_bounds_from_candidates(candidates)
+    if bounds is None:
+        return []
+    bx0, by0, bx1, by1 = bounds
+    entry = next(
+        (
+            e
+            for e in usable
+            if e.category == Category.RECEPTACLE and e.subtype == "afci"
+        ),
+        next((e for e in usable if e.category == Category.RECEPTACLE), None),
+    )
+    out: list[Detection] = []
+    for w in ctx.words:
+        raw = w.text.strip().upper()
+        if raw not in {"AFI", "AFCI"} or w.size > 9.0:
+            continue
+        wx = 0.5 * (w.bbox[0] + w.bbox[2])
+        wy = 0.5 * (w.bbox[1] + w.bbox[3])
+        if not (bx0 <= wx <= bx1 and by0 <= wy <= by1):
+            continue
+        # Already have a receptacle at this AFI — ensure subtype/codes.
+        upgraded = False
+        for d in detections:
+            if d.category != Category.RECEPTACLE:
+                continue
+            if math.hypot(d.center.x - wx, d.center.y - wy) > 20.0:
+                continue
+            if "afci" not in d.subtype:
+                d.subtype = "afci"
+            if raw not in {c.upper() for c in d.codes}:
+                d.codes = list(d.codes) + [w.text.strip()]
+            d.evidence.notes = list(d.evidence.notes) + ["afi_token"]
+            upgraded = True
+            break
+        if upgraded:
+            continue
+        if any(
+            d.category == Category.RECEPTACLE
+            and math.hypot(d.center.x - wx, d.center.y - wy) < 20.0
+            for d in out
+        ):
+            continue
+        # Prefer a compact candidate near the token.
+        best_cand: tuple[float, Candidate] | None = None
+        for cand in candidates:
+            w_ = float(cand.features.get("width", 0.0))
+            h_ = float(cand.features.get("height", 0.0))
+            n = int(cand.features.get("n_segments", 0))
+            if max(w_, h_) > 22.0 or min(w_, h_) < 5.0:
+                continue
+            if not (8 <= n <= 45):
+                continue
+            dist = math.hypot(cand.center[0] - wx, cand.center[1] - wy)
+            if dist > 18.0:
+                continue
+            if not _near_wall(wall_mask, cand.center[0], cand.center[1]):
+                continue
+            if best_cand is None or dist < best_cand[0]:
+                best_cand = (dist, cand)
+        if best_cand is not None:
+            _, cand = best_cand
+            cx, cy = cand.center
+            bb = cand.bbox
+            notes = ["afi_token_compact_cand"]
+        else:
+            glyph = _receptacle_glyph_near_afi(ctx, wx, wy, wall_mask)
+            if glyph is None:
+                continue
+            cx, cy = glyph
+            bb = (cx - 6.0, cy - 6.0, cx + 6.0, cy + 6.0)
+            notes = ["afi_token_local_glyph"]
+        out.append(
+            Detection(
+                id=str(uuid.uuid4()),
+                sheet_id=sheet_id,
+                category=Category.RECEPTACLE,
+                subtype="afci",
+                codes=[w.text.strip()],
+                center=Point(x=cx, y=cy),
+                bbox=BBox(x0=bb[0], y0=bb[1], x1=bb[2], y1=bb[3]),
+                rotation_deg=0,
+                confidence=0.9,
+                source="geometry",
+                needs_review=False,
+                evidence=Evidence(
+                    legend_entry_id=entry.id if entry else None,
+                    match_score=0.9,
+                    text_tokens=[w.text.strip()],
+                    notes=notes,
+                ),
+            )
+        )
+    return out
+
+
 def _exterior_from_ext_tokens(
     ctx: PageContext,
     candidates: list[Candidate],
@@ -2213,6 +2413,9 @@ def _cross_winner(a: Detection, b: Detection) -> Detection | None:
         return a if a.category == Category.DETECTOR else b
     if pair == frozenset({Category.CEILING_FAN, Category.LIGHT}):
         return a if a.category == Category.CEILING_FAN else b
+    # Half-disc exhaust and a peeled/false recessed can share one glyph (Bath 2).
+    if pair == frozenset({Category.EXHAUST_FAN, Category.LIGHT}):
+        return a if a.category == Category.EXHAUST_FAN else b
     if pair == frozenset({Category.EXHAUST_FAN, Category.RECEPTACLE}):
         if a.subtype == "afci_half_hot":
             return a

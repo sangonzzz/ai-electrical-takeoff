@@ -84,6 +84,10 @@ Order matters: remove non-symbol ink **before** clustering so dashes never join 
 | Outside footprint (R4.3) | After `assign_rooms`, drop Exterior LIGHT/SWITCH/RECEPTACLE unless EXT/WP; never drop fans/detectors/exhaust | Plan 4 margin false recessed; plan 3 Bed 2 fan kept |
 | Recessed geometry (R5) | **Deterministic** circle r≈3.5–4.5 pt in ~8–12 pt square (frame center or compact bbox). Not a template-score gate. Skip gray cabinets, fan-hub `J`, mega hosts | Restores plan 2/3 kitchen/living cans after R4 over-cull |
 | Viewport ring scan (R5) | Frame clusters + short-stroke rings recover cans that never formed a candidate | Plan 2 attic can @ (917,302) |
+| AFI wall receptacles (freeze) | Keep coded wall devices mis-labeled Exterior; text-anchored `AFI`/`AFCI` → `afci` when mega-clusters swallow the duplex | Plan 3 Bed 2 walls; plan 4 orphans |
+| Exhaust vs light NMS (freeze) | Overlapping exhaust + recessed → keep exhaust | Bath 2 double marks |
+| AFI wall receptacles (freeze) | Keep coded wall devices mis-labeled Exterior; text-anchored `AFI`/`AFCI` → `afci` when mega-clusters swallow the duplex | Plan 3 Bed 2 walls; plan 4 orphans |
+| Exhaust vs light NMS (freeze) | Overlapping exhaust + recessed → keep exhaust | Bath 2 double marks |
 
 4. NMS same category 8 pt; then cross-category NMS for known collisions (fan > light).
 5. `needs_review` **only** when (a) top-two scores are close **and** different categories, or (b) weak match (&lt;0.30) with no type codes. Same-glyph receptacle/switch legend rows no longer flood review (target &lt;15%; measured ~5%).

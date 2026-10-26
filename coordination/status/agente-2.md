@@ -2,57 +2,53 @@
 
 ## Estado
 
-Round 5 listo: recessed downlights son geometría (no score). Overlays 1–4 revisados.
+**Engine freeze ready.** Final pass: Bed-2 AFI wall receptacles + exhaust/light dedupe. No further engine changes unless Santiago asks.
 
 ## Hecho
 
-### Round 5
+### Final freeze commits (this round)
 
-| Cambio | Qué |
-|--------|-----|
-| Geometric recessed | Círculo r≈3.5–4.5 pt en cuadrado ~8–12 pt; exclusiones R4 (hub J, gray, footprint) |
-| Viewport ring scan | Recupera cans sin candidate propio (plan 2 attic) |
-| Footprint | Nunca dropea fans/detectors/exhaust (Bed 2 fan plan 3) |
-| Regression | Mínimos plan1–4 luces/fans; plan4 luces 13–17; switches sin bajar |
+| Fix | Behavior |
+|-----|----------|
+| AFI wall receptacles | Keep coded receptacles/switches when rooms mis-label Exterior; text-anchored `AFI`/`AFCI` recovers duplexes swallowed by megas |
+| Exhaust ↔ light NMS | Overlapping bath exhaust + false recessed → keep exhaust only |
 
-### Counts R5 (`--no-llm --no-bom`)
+### Counts (`--no-llm --no-bom`)
 
-| plan | light | fan | switch |
-|------|-------|-----|--------|
-| 1 | 10 | 1 | 12 |
-| 2 | 13 | 2 | 10 |
-| 3 | 17 | 2 | 11 |
-| 4 | 16 | 3 | 15 |
+| plan | light | fan | sw | rec | AFI orphans |
+|------|-------|-----|----|-----|-------------|
+| 1 | 10 | 1 | 12 | 26 | 0 |
+| 2 | 13 | 2 | 10 | 33 | 0 |
+| 3 | 13 | 2 | 12 | 33 | 0 (was 3 on Bed 2) |
+| 4 | 16 | 3 | 15 | 41 | 0 (was 2) |
 
-(R4 había dejado luces en 8/8/6/13.)
+Regression: plan 3 light minimum set to ≥13 after removing exhaust double-counts (was 15 with duplicates).
 
 ## Cómo probarlo
 
 ```bash
 uv run pytest engine/tests/symbols/ -q
 uv run takeoff analyze data/plans/escondido_plans.pdf --page 3 --out out/plan3.json --debug --no-llm --no-bom
-# overlays: out/debug/detections_p{1..4}.png
 ```
 
 ## Siguiente
 
-- Agente 1: bump patch + push R4–R5
-- Agente 7: re-eval
+- Agente 1: bump patch + push; engine freeze for Agente 2 paths
+- Agente 7: final eval
 
 ## Bloqueos
 
-- Push solo Agente 1.
+- Push only Agente 1.
 
 ## Decisions
 
-- Recessed = geometría determinista, no umbral de IoU de leyenda.
-- Wall vanity: score ≥0.55, o aspect≥1.9 con score≥0.30 (plan 1 bath).
-- Tall weak wall-tick + recessed ring → drop (plan 4 false); wide merge → recessed (plan 2 kitchen).
+- Plan 3 light floor ≥13 (deduped); switches floor still ≥11.
+- AFI text-anchor mirrors SD/EXT pattern when clustering swallows the glyph.
 
 ## Needs from Santiago
 
-- Agente 1 bump patch (mensaje enviado).
+- Confirm engine freeze; A1 bump + push.
 
 ## Explicación para Santiago
 
-En el round 4 se cortaron demasiadas luces (sobre todo planes 2 y 3). Ahora un downlight recessed se reconoce por forma: círculo de radio ~4 pt dentro de un cuadrado de ~8–12 pt, sin exigir un score alto de la leyenda. Seguimos excluyendo el hub J de los abanicos, gabinetes grises y basura fuera del edificio. El abanico de Bed 2 en el plan 3 vuelve a salir. Un test de regresión fija mínimos por plan para que no se vuelva a vaciar ni a duplicar en silencio.
+Último retoque antes del freeze: en el plan 3 faltaban tomacorrientes AFI en las paredes de Bed 2 porque rooms los marcaba como Exterior y los tiraba el filtro; ahora se conservan si tienen código de dispositivo, y si un blob enorme se come el símbolo, lo anclamos al texto AFI (igual en los 4 planos). En Bath 2 el exhaust y una “recessed” falsa ya no se solapan: gana el exhaust. Con esto el motor de símbolos queda congelado salvo que pidas otro cambio.
