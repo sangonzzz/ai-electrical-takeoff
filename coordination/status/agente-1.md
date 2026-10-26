@@ -2,26 +2,27 @@
 
 ## Estado
 
-Compose web: `contracts` montado en `/contracts:ro`. Mensaje a A6 para import lazy del fixture.
+**v0.5.0** tagged. Backend exports deps (`openpyxl`, `reportlab`) en pyproject.
 
 ## Hecho
 
-- `docker-compose.yml` web: `./contracts:/contracts:ro` (path desde `fixture.ts`)
-- Mensaje a Agente 6: dynamic import solo si `VITE_USE_FIXTURE=true`
-- Engine freeze **0.4.0** intacto
+- `PIPELINE_VERSION` → `0.5.0` (round 6 + LLM rules + wires v2, aprobado Santiago)
+- CHANGELOG + tag `v0.5.0`
+- `backend/pyproject.toml`: `openpyxl`, `reportlab` (pedido A5)
+- `uv lock` / sync
 
 ## Cómo probarlo
 
 ```bash
-docker compose config
-docker compose up -d web --force-recreate
-# Vite should resolve ../../../contracts/fixtures/sheet_result.sample.json
+uv run takeoff --version   # -> 0.5.0
+uv sync --all-packages --group dev
+uv run python -c "import openpyxl, reportlab; print('exports ok')"
 ```
 
 ## Siguiente
 
-- A6: lazy fixture import
-- Agente 7: Accuracy results en README
+- Rebuild backend image: `docker compose up -d --build api worker`
+- A6: botones de descarga export si aún faltan
 
 ## Bloqueos
 
@@ -29,7 +30,7 @@ docker compose up -d web --force-recreate
 
 ## Decisions
 
-Ninguna nueva.
+v0.5.0 es bump de motor aprobado; freeze sigue: más cambios de engine solo con OK de Santiago.
 
 ## Needs from Santiago
 
@@ -37,4 +38,4 @@ Ninguna nueva.
 
 ## Explicación para Santiago
 
-El front en Docker solo montaba la carpeta `web`, pero el modo fixture importa un JSON que vive en `contracts/` (tres niveles arriba). Por eso Vite fallaba. Ahora montamos `contracts` en `/contracts` solo lectura. También pedí a Agente 6 que ese import sea lazy, para que en producción (sin fixture) no dependa de esa carpeta.
+Subí el motor a **0.5.0** (ronda 6, reglas LLM y cables v2) para que el backend no reutilice análisis viejos de 0.4.0. También agregué `openpyxl` y `reportlab` al backend para los Excel/PDF de cotización que pidió Agente 5. Tag `v0.5.0` en GitHub.

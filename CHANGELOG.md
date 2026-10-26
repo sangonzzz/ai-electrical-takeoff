@@ -2,6 +2,16 @@
 
 Plain-language notes for Santiago. Newest first.
 
+## v0.5.0 — round 6 engine + LLM rules + wires v2
+
+Approved engine bump after further precision work:
+
+- **Round 6 engine:** additional detection / classify polish.
+- **LLM rules:** tighter legend / adjudication rules for ambiguous symbols.
+- **Wires v2:** improved dashed-run chaining and 3-way cable typing.
+
+Also: backend deps `openpyxl` + `reportlab` for Excel / PDF quote exports (Agente 5).
+
 ## v0.4.0 — engine freeze (precision rounds 3–5)
 
 Detection / BOM precision after v0.3.x:
