@@ -59,6 +59,14 @@ _LIGHT_DENSE_MAX_SIDE_PT = 28.0
 _LIGHT_MIN_SEGS = 10
 # Fan hub ``J`` circle is the fan, never a recessed light (R4).
 _FAN_LIGHT_SUPPRESS_PT = 12.0
+# Shape-forced lights must still match a light legend template (R4).
+_LIGHT_SHAPE_MIN_SCORE = 0.55
+# Peeled hallway rings are incomplete glyphs — slightly lower bar.
+_LIGHT_PEEL_MIN_SCORE = 0.40
+# Receptacle/appliance tokens on a "light" → cabinet/fixture geometry, not a can.
+_LIGHT_RECEPTACLE_CODES = frozenset(
+    {"240V", "GFI", "GFCI", "AFI", "AFCI", "MW", "DW", "H", "FC"}
+)
 
 # Mount height like +42" or +84
 _MOUNT_RE = re.compile(r"^\+?\s*(\d+)\s*\"?$")
@@ -637,6 +645,73 @@ def _is_circle_light_shape(cand: Candidate) -> bool:
     return aspect <= _LIGHT_ASPECT_MAX
 
 
+def _best_light_template_score(
+    ctx: PageContext,
+    cand: Candidate,
+    light_entries: list[LegendEntry],
+    templates: dict[str, Any],
+) -> float:
+    """Best dilated-IoU against any light legend glyph (no shape boost)."""
+    best = 0.0
+    for entry in light_entries:
+        tmpl = templates.get(entry.id)
+        if not isinstance(tmpl, LegendTemplate):
+            continue
+        score, _ = _match_score(ctx, cand, tmpl)
+        if score > best:
+            best = score
+    return best
+
+
+def _in_gray_architecture(ctx: PageContext, x: float, y: float) -> bool:
+    """True when (x,y) sits inside a cabinet / fixture / appliance gray fill.
+
+    Wall poché is a thin strip (min side ≤10 pt, high aspect) — those stay
+    eligible for wall lights. Larger gray blobs are millwork / plumbing.
+    """
+    for f in ctx.gray_fills:
+        w = f.x1 - f.x0
+        h = f.y1 - f.y0
+        if w * h < 120.0:
+            continue
+        # Thin wall poché / hatch lines.
+        if min(w, h) <= 10.0 and max(w, h) / max(min(w, h), 0.1) >= 2.5:
+            continue
+        if min(w, h) < 14.0:
+            continue
+        pad = 2.0
+        if f.x0 - pad <= x <= f.x1 + pad and f.y0 - pad <= y <= f.y1 + pad:
+            return True
+    return False
+
+
+def _light_has_receptacle_codes(codes: list[str]) -> bool:
+    """Appliance / outlet tokens mean the glyph is not a recessed can."""
+    up = {c.strip().upper() for c in codes}
+    return bool(up & _LIGHT_RECEPTACLE_CODES)
+
+
+def _may_force_light(
+    ctx: PageContext,
+    cand: Candidate,
+    *,
+    light_score: float,
+    codes: list[str],
+) -> bool:
+    """Gate circle / wall-light shape forcing (R4 kitchen/bath false cans).
+
+    Requires a real light-template match. Peeled hallway rings get a slightly
+    lower bar. Never fire inside gray architecture or on receptacle-coded ink.
+    """
+    if _in_gray_architecture(ctx, cand.center[0], cand.center[1]):
+        return False
+    if _light_has_receptacle_codes(codes) and light_score < 0.85:
+        return False
+    peeled = bool(cand.features.get("peeled_recessed"))
+    min_score = _LIGHT_PEEL_MIN_SCORE if peeled else _LIGHT_SHAPE_MIN_SCORE
+    return light_score >= min_score
+
+
 def _attic_boxes(
     ctx: PageContext,
     bounds: tuple[float, float, float, float] | None = None,
@@ -925,23 +1000,31 @@ def classify_candidates(
         assert best_entry.category is not None
         cat = best_entry.category
 
-        # Circle / circle-in-square → always a light (Fix 3). Dense (≥45 segs)
-        # wins over a weak receptacle/switch score; sparse wall receptacles stay.
+        # Circle / wall-light shape → light only with a strong light-template
+        # match (R4). Do not force inside gray cabinets/fixtures or on
+        # receptacle-coded appliance geometry.
         light_entries = [e for e in usable if e.category == Category.LIGHT]
+        early_codes = _codes_near_candidate(ctx, cand)
+        light_score = (
+            _best_light_template_score(ctx, cand, light_entries, templates)
+            if light_entries
+            else 0.0
+        )
+        can_force_light = bool(light_entries) and _may_force_light(
+            ctx, cand, light_score=light_score, codes=early_codes
+        )
         wall_light = _is_wall_light_shape(ctx, cand)
-        if wall_light and light_entries:
+        if wall_light and can_force_light:
             cat = Category.LIGHT
             best_entry = next(
                 (e for e in light_entries if e.subtype == "wall"),
                 light_entries[0],
             )
-            best_score = max(best_score, 0.6)
+            best_score = max(best_score, light_score, 0.6)
             shape_forced = True
-        elif _is_circle_light_shape(cand) and light_entries:
+        elif _is_circle_light_shape(cand) and can_force_light:
             dense = int(cand.features.get("n_segments", 0)) >= _LIGHT_DENSE_SEGS
             # Near-wall duplex outlets can look vaguely circular — keep those.
-            # Plain / circle-in-square cans (no duplex slots) are always lights,
-            # even on a wall (kitchen sink can — R3).
             wall_receptacle = (
                 cat == Category.RECEPTACLE
                 and _near_wall(wall_mask, cand.center[0], cand.center[1])
@@ -958,7 +1041,7 @@ def classify_candidates(
                     (e for e in light_entries if e.subtype == "recessed"),
                     light_entries[0],
                 )
-                best_score = max(best_score, 0.55)
+                best_score = max(best_score, light_score, 0.55)
                 shape_forced = True
         else:
             wall_light = False
@@ -981,13 +1064,13 @@ def classify_candidates(
             )
             if switch_iou < min_iou:
                 # Circle-in-square mis-scored as switch → light instead.
-                if _is_circle_light_shape(cand) and light_entries:
+                if _is_circle_light_shape(cand) and can_force_light:
                     cat = Category.LIGHT
                     best_entry = next(
                         (e for e in light_entries if e.subtype == "recessed"),
                         light_entries[0],
                     )
-                    best_score = max(best_score, 0.55)
+                    best_score = max(best_score, light_score, 0.55)
                     shape_forced = True
                 else:
                     continue
@@ -998,7 +1081,24 @@ def classify_candidates(
         if best_score < _REJECT_SCORE and cat != Category.LIGHT:
             continue
 
-        codes = _codes_near_candidate(ctx, cand)
+        # Template-matched light without shape force still needs a decent
+        # light score when the winner was not a light (should not happen) —
+        # and drop weak template-only lights that look like receptacles.
+        codes = early_codes
+        if (
+            cat == Category.LIGHT
+            and not shape_forced
+            and light_score < _LIGHT_SHAPE_MIN_SCORE
+            and not any(c.upper() in ("EXT", "WP", "VP") for c in codes)
+        ):
+            continue
+        if (
+            cat == Category.LIGHT
+            and _light_has_receptacle_codes(codes)
+            and light_score < 0.85
+            and not any(c.upper() in ("EXT", "VP") for c in codes)
+        ):
+            continue
         mount = _parse_mount_height(codes)
         subtype = _refine_subtype(
             cat,

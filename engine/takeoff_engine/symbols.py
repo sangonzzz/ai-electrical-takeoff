@@ -556,14 +556,16 @@ def _circle_rings_in_seg_ids(
 
     rings: list[tuple[float, float, float, float, list[int]]] = []
     for members in groups.values():
-        if not (10 <= len(members) <= 80):
+        # Real recessed cans ≈ 20–35 short arcs. Larger groups are cabinet /
+        # appliance / switch-board ink that only look circular (R4).
+        if not (12 <= len(members) <= 40):
             continue
         xs = [shorts[k][1] for k in members]
         ys = [shorts[k][2] for k in members]
         rw, rh = max(xs) - min(xs), max(ys) - min(ys)
-        if not (7.0 <= min(rw, rh) <= 16.0 and max(rw, rh) <= 18.0):
+        if not (8.0 <= min(rw, rh) <= 14.0 and max(rw, rh) <= 16.0):
             continue
-        if max(rw, rh) / max(min(rw, rh), 0.1) > 1.5:
+        if max(rw, rh) / max(min(rw, rh), 0.1) > 1.35:
             continue
         cx, cy = sum(xs) / len(xs), sum(ys) / len(ys)
         ring_ids = [shorts[k][0] for k in members]
