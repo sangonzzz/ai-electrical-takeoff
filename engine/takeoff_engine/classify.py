@@ -474,20 +474,37 @@ def _j_words(ctx: PageContext) -> list[tuple[float, float, Word]]:
     return out
 
 
-def _j_hub_ok(ctx: PageContext, cand: Candidate) -> bool:
-    """True if a small ``J`` sits on the fan hub (near center or in the middle third)."""
+def _fan_hub_j_point(
+    ctx: PageContext, cand: Candidate
+) -> tuple[float, float] | None:
+    """Page coordinates of the hub ``J`` for a fan candidate, if present.
+
+    Prefer a ``J`` near the geometric center; otherwise any ``J`` in the middle
+    third of the bbox (merged blade clusters drift the center — R3).
+    """
     cx, cy = cand.center
     x0, y0, x1, y1 = cand.bbox
     mid_x0 = x0 + 0.3 * (x1 - x0)
     mid_x1 = x0 + 0.7 * (x1 - x0)
     mid_y0 = y0 + 0.3 * (y1 - y0)
     mid_y1 = y0 + 0.7 * (y1 - y0)
+    best_near: tuple[float, float, float] | None = None
+    mid_hit: tuple[float, float] | None = None
     for wx, wy, _ in _j_words(ctx):
-        if math.hypot(wx - cx, wy - cy) <= _FAN_J_RADIUS_PT:
-            return True
-        if mid_x0 <= wx <= mid_x1 and mid_y0 <= wy <= mid_y1:
-            return True
-    return False
+        dist = math.hypot(wx - cx, wy - cy)
+        if dist <= _FAN_J_RADIUS_PT:
+            if best_near is None or dist < best_near[0]:
+                best_near = (dist, wx, wy)
+        elif mid_x0 <= wx <= mid_x1 and mid_y0 <= wy <= mid_y1:
+            mid_hit = (wx, wy)
+    if best_near is not None:
+        return best_near[1], best_near[2]
+    return mid_hit
+
+
+def _j_hub_ok(ctx: PageContext, cand: Candidate) -> bool:
+    """True if a small ``J`` sits on the fan hub (near center or in the middle third)."""
+    return _fan_hub_j_point(ctx, cand) is not None
 
 
 def _is_junction_circle(cand: Candidate) -> bool:
@@ -846,11 +863,13 @@ def classify_candidates(
             detections.append(smoke_hit)
             continue
 
-        # Ceiling fan: large near-square + "J" within 3 pt of center + blade mass.
+        # Ceiling fan: large near-square + "J" hub + blade mass.
+        # Marker center = the J hub circle, not the blade-cluster centroid (R3).
         if fan_entries and _is_ceiling_fan_candidate(ctx, cand):
             best_entry = fan_entries[0]
             codes = _codes_near_candidate(ctx, cand)
             mount = _parse_mount_height(codes)
+            hub = _fan_hub_j_point(ctx, cand) or cand.center
             detections.append(
                 Detection(
                     id=str(uuid.uuid4()),
@@ -859,7 +878,7 @@ def classify_candidates(
                     subtype="ceiling_fan",
                     codes=[c for c in codes if c.upper() != "J"],
                     mount_height_in=mount,
-                    center=Point(x=cand.center[0], y=cand.center[1]),
+                    center=Point(x=hub[0], y=hub[1]),
                     bbox=BBox(
                         x0=cand.bbox[0], y0=cand.bbox[1], x1=cand.bbox[2], y1=cand.bbox[3]
                     ),
@@ -871,7 +890,7 @@ def classify_candidates(
                         legend_entry_id=best_entry.id,
                         match_score=0.92,
                         text_tokens=codes,
-                        notes=["fan_j_and_blades"],
+                        notes=["fan_j_and_blades", "center_at_j_hub"],
                     ),
                 )
             )
