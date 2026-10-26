@@ -1583,10 +1583,18 @@ def classify_candidates(
         _halfhots_from_fills(ctx, candidates, detections, sheet_id, usable)
     )
 
+    # IN ATTIC ``$`` often merges into the panel X / wire arc (R6 fix 3).
+    detections.extend(
+        _switches_from_attic_bars(
+            ctx, attic_boxes, detections, sheet_id, usable, switch_tmpls
+        )
+    )
+
     detections = _suppress_lights_at_fan_hubs(detections)
     detections = _assign_switch_letters_by_alignment(ctx, detections)
     detections = _nms_detections(detections, dist_pt=8.0)
     detections = _nms_cross_category(detections)
+    detections = _drop_attic_wiring_dash_switches(detections, attic_boxes)
     detections = _attic_switch_cap(detections, attic_boxes)
     _nudge_attic_centers(detections, attic_boxes)
     return detections
@@ -1796,6 +1804,147 @@ def drop_outside_footprint(
     return out
 
 
+def _switches_from_attic_bars(
+    ctx: PageContext,
+    attic_boxes: list[tuple[float, float, float, float]],
+    detections: list[Detection],
+    sheet_id: str,
+    usable: list[LegendEntry],
+    switch_tmpls: list[LegendTemplate],
+) -> list[Detection]:
+    """Recover the ``$`` glued to attic-panel ink / wire arcs (R6 fix 3).
+
+    A real switch has a ~12–15 pt vertical bar; clustering often swallows it
+    into the panel X. Seed from the bar + nearby strokes, then IoU-gate.
+    """
+    if not attic_boxes or not switch_tmpls:
+        return []
+    entry = next((e for e in usable if e.category == Category.SWITCH), None)
+    existing = [
+        d
+        for d in detections
+        if d.category == Category.SWITCH
+        and _in_attic_box(d.center.x, d.center.y, attic_boxes)
+    ]
+    out: list[Detection] = []
+    for box in attic_boxes:
+        x0, y0, x1, y1 = box
+        for i, seg in enumerate(ctx.black_segments):
+            length = math.hypot(seg.x1 - seg.x0, seg.y1 - seg.y0)
+            if not (10.0 <= length <= 16.5):
+                continue
+            if abs(seg.x1 - seg.x0) > 1.2:
+                continue
+            mx = 0.5 * (seg.x0 + seg.x1)
+            my = 0.5 * (seg.y0 + seg.y1)
+            if not (x0 + 2.0 <= mx <= x1 - 2.0 and y0 + 2.0 <= my <= y1 + 2.0):
+                continue
+            # Collect S-curve / bar strokes around the stem.
+            seg_ids: list[int] = []
+            xs: list[float] = []
+            ys: list[float] = []
+            for j, s2 in enumerate(ctx.black_segments):
+                cx = 0.5 * (s2.x0 + s2.x1)
+                cy = 0.5 * (s2.y0 + s2.y1)
+                if abs(cx - mx) > 9.0 or abs(cy - my) > 11.0:
+                    continue
+                if math.hypot(s2.x1 - s2.x0, s2.y1 - s2.y0) > 18.0:
+                    continue
+                seg_ids.append(j)
+                xs.extend([s2.x0, s2.x1])
+                ys.extend([s2.y0, s2.y1])
+            if len(seg_ids) < 8:
+                continue
+            bb = (min(xs) - 0.5, min(ys) - 0.5, max(xs) + 0.5, max(ys) + 0.5)
+            bw, bh = bb[2] - bb[0], bb[3] - bb[1]
+            # Real ``$`` is roughly tall; reject lone vertical dashes.
+            if bw < 5.0 or bh < 10.0 or bh / max(bw, 0.1) > 4.0:
+                continue
+            cand = Candidate(
+                id=str(uuid.uuid4()),
+                bbox=bb,
+                center=(0.5 * (bb[0] + bb[2]), 0.5 * (bb[1] + bb[3])),
+                segment_ids=seg_ids,
+                fill_ids=[],
+                features={
+                    "n_segments": len(seg_ids),
+                    "n_fills": 0,
+                    "width": bw,
+                    "height": bh,
+                    "attic_bar_switch": True,
+                },
+            )
+            iou = _best_switch_iou(ctx, cand, switch_tmpls)
+            if iou < 0.30:
+                continue
+            cx, cy = cand.center
+            if any(math.hypot(cx - d.center.x, cy - d.center.y) < 10.0 for d in existing):
+                continue
+            if any(math.hypot(cx - d.center.x, cy - d.center.y) < 10.0 for d in out):
+                continue
+            codes = _codes_near_candidate(ctx, cand)
+            subtype = _refine_subtype(
+                Category.SWITCH,
+                entry.subtype if entry else "single_pole",
+                codes,
+                cand,
+                entry or usable[0],
+            )
+            out.append(
+                Detection(
+                    id=str(uuid.uuid4()),
+                    sheet_id=sheet_id,
+                    category=Category.SWITCH,
+                    subtype=subtype,
+                    codes=codes,
+                    mount_height_in=_parse_mount_height(codes),
+                    center=Point(x=cx, y=cy),
+                    bbox=BBox(x0=bb[0], y0=bb[1], x1=bb[2], y1=bb[3]),
+                    rotation_deg=0,
+                    confidence=min(0.9, 0.55 + iou),
+                    source="geometry",
+                    needs_review=False,
+                    evidence=Evidence(
+                        legend_entry_id=entry.id if entry else None,
+                        match_score=iou,
+                        text_tokens=codes,
+                        notes=["attic_bar_switch"],
+                    ),
+                )
+            )
+    return out
+
+
+def _drop_attic_wiring_dash_switches(
+    dets: list[Detection],
+    attic_boxes: list[tuple[float, float, float, float]],
+) -> list[Detection]:
+    """Drop thin vertical dashes mistaken for ``$`` on the attic panel (R6).
+
+    Plan-1 false hit sits just left of the light inside the gray box — a wire
+    tick, not an S-crossing-bar switch.
+    """
+    if not attic_boxes:
+        return dets
+    keep: list[Detection] = []
+    for d in dets:
+        if d.category != Category.SWITCH or not _in_attic_box(
+            d.center.x, d.center.y, attic_boxes
+        ):
+            keep.append(d)
+            continue
+        bw = d.bbox.x1 - d.bbox.x0
+        bh = d.bbox.y1 - d.bbox.y0
+        score = d.evidence.match_score if d.evidence else d.confidence
+        notes = d.evidence.notes if d.evidence else []
+        seeded = any("attic_bar_switch" in n for n in notes)
+        # Tall sliver + weak IoU → wiring dash (keep bar-seeded recoveries).
+        if (not seeded) and bw > 0 and bh / bw >= 2.5 and score < 0.40 and bw < 7.0:
+            continue
+        keep.append(d)
+    return keep
+
+
 def _attic_switch_cap(
     dets: list[Detection],
     attic_boxes: list[tuple[float, float, float, float]],
@@ -1811,12 +1960,15 @@ def _attic_switch_cap(
         ]
         if len(inside) <= 1:
             continue
-        # Prefer the switch well inside the panel over one on the outer pad.
+        # Prefer bar-seeded / higher IoU ``$`` over a left-side wiring dash.
         best = max(
             inside,
             key=lambda d: (
+                1
+                if d.evidence and any("attic_bar" in n for n in d.evidence.notes)
+                else 0,
+                d.evidence.match_score if d.evidence else d.confidence,
                 1 if _in_attic_box(d.center.x, d.center.y, [box], shrink=5.0) else 0,
-                d.confidence,
             ),
         )
         for d in inside:
