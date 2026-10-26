@@ -2,6 +2,18 @@
 
 Plain-language notes for Santiago. Newest first.
 
+## v0.4.0 — engine freeze (precision rounds 3–5)
+
+Detection / BOM precision after v0.3.x:
+
+- **Precision rounds 3–5:** further false-positive cuts and classify/rooms polish.
+- **Geometric recessed rule:** recessed lights keyed more on geometry, not only legend IoU.
+- **3-way cables:** `nm_14_3` wiring between three-way switch ends hardened.
+- **Per-plan regression guard:** eval / regression checks that catch plan-level count regressions.
+
+**Engine freeze:** from this tag, engine behavior changes only with Santiago’s approval
+(see `AGENTS.md` §14). Bumps still go through Agente 1 when approved.
+
 ## v0.3.1 — Docker web fix + engine patch after A2/A8
 
 - **Compose web:** `VITE_API_BASE_URL=http://localhost:8000` (was wrong `VITE_API_URL`).

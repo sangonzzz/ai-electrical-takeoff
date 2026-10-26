@@ -2,25 +2,25 @@
 
 ## Estado
 
-v0.3.1: compose web arreglado (VITE_API_BASE_URL + volúmenes node_modules); pipeline 0.3.1.
+Engine freeze en **v0.4.0**. Cambios de motor solo con aprobación de Santiago.
 
 ## Hecho
 
-- `docker-compose.yml` web: `VITE_API_BASE_URL`, anonymous `/app/node_modules` + `.pnpm-store`
-- `PIPELINE_VERSION` → `0.3.1` (A2/A8 behavior after 0.3.0)
-- CHANGELOG v0.3.1; `docker compose config` OK
+- `PIPELINE_VERSION` → `0.4.0` + tag
+- CHANGELOG: precision rounds 3–5, geometric recessed, 3-way cables, per-plan regression guard
+- AGENTS.md §14 + DECISIONS: freeze del engine
+- Mensaje to-all
 
 ## Cómo probarlo
 
 ```bash
-docker compose config
-uv run takeoff --version   # -> 0.3.1
-docker compose up -d web   # should stay up on Windows Docker Desktop
+uv run takeoff --version   # -> 0.4.0
+git show v0.4.0 --no-patch
 ```
 
 ## Siguiente
 
-- Confirmar con Santiago que el contenedor `web` ya no sale
+- Integración / demo / CI; no tocar engine salvo que Santiago lo pida
 - Pushear CI cuando haya scope `workflow`
 
 ## Bloqueos
@@ -29,12 +29,12 @@ docker compose up -d web   # should stay up on Windows Docker Desktop
 
 ## Decisions
 
-Ninguna nueva (sigue ENGINE=real; bump patch por cambios A2/A8).
+Engine freeze v0.4.0 (AGENTS.md §14).
 
 ## Needs from Santiago
 
-- Probar `docker compose up` y confirmar que `web` responde en :5173
+- (ninguno para este tag)
 
 ## Explicación para Santiago
 
-El contenedor del front se caía en Windows porque montábamos tu carpeta `web` completa, incluidos los `node_modules` de Windows, dentro de Linux. Ahora el contenedor instala sus propios módulos Linux en un volumen aparte. También corregí el nombre de la variable de la API (`VITE_API_BASE_URL`). Subí la versión del motor a `0.3.1` porque agentes 2 y 8 ya cambiaron el comportamiento después de `0.3.0`, así el backend no reutiliza análisis viejos.
+Marqué el motor en **0.4.0**: es la versión que incluye las rondas de precisión 3–5, la regla geométrica de luces empotradas, cables 14/3 entre 3 vías, y el guard de regresión por plano. A partir de aquí el código del engine (detección, cuartos, LLM, BOM, overlay) **no se cambia** sin tu OK; si un agente quiere tocar algo, me escribe y yo solo subo versión después de que apruebes. Así la demo y la idempotencia del backend no se mueven debajo de tus pies.
