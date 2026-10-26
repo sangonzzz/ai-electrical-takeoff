@@ -364,17 +364,15 @@ def _refine_subtype(
         if entry.subtype and entry.subtype in SUBTYPES["receptacle"]:
             # Code-gated subtypes need the plan token — legend IoU alone falsely
             # labeled a laundry-door dash as gfci_240v (R6 fix 5).
-            if entry.subtype == "gfci_240v" and "240V" not in type_codes:
-                return "duplex"
-            if entry.subtype in {
-                "gfci_microwave",
-                "gfci_dishwasher",
-                "range_hood",
-                "fan_coil_dedicated",
-            } and not (need_set := next(
-                (need for st, need, _ in _RECEPTACLE_PRIORITY if st == entry.subtype),
-                set(),
-            ) & type_codes):
+            gated = {
+                "gfci_240v": {"240V"},
+                "gfci_microwave": {"MW"},
+                "gfci_dishwasher": {"DW"},
+                "range_hood": {"H"},
+                "fan_coil_dedicated": {"FC"},
+            }
+            need = gated.get(entry.subtype)
+            if need is not None and not (need & type_codes):
                 return "duplex"
             return entry.subtype
         return "duplex"
@@ -1434,6 +1432,16 @@ def classify_candidates(
         # Never emit ceiling_fan without J+blades (template alone is not enough).
         if cat == Category.CEILING_FAN and not _is_ceiling_fan_candidate(ctx, cand):
             continue
+
+        # Weak uncoded receptacle = furniture/wiring dash (laundry door ~1096,276).
+        if cat == Category.RECEPTACLE:
+            type_codes = {
+                c.upper()
+                for c in codes
+                if not _is_mount_height_token(c)
+            }
+            if not type_codes and best_score < 0.55 and not shape_forced:
+                continue
 
         # Junction boxes are never template-only (R2 Fix 1) — see
         # ``_junctions_from_j_circles`` after fans are known.
