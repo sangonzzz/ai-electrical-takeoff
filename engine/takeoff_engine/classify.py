@@ -919,10 +919,14 @@ def classify_candidates(
             shape_forced = True
         elif _is_circle_light_shape(cand) and light_entries:
             dense = int(cand.features.get("n_segments", 0)) >= _LIGHT_DENSE_SEGS
+            # Near-wall duplex outlets can look vaguely circular — keep those.
+            # Plain / circle-in-square cans (no duplex slots) are always lights,
+            # even on a wall (kitchen sink can — R3).
             wall_receptacle = (
                 cat == Category.RECEPTACLE
                 and _near_wall(wall_mask, cand.center[0], cand.center[1])
                 and not dense
+                and _has_duplex_slots_at(ctx, cand.center[0], cand.center[1])
             )
             if wall_receptacle:
                 pass
