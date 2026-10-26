@@ -2,29 +2,28 @@
 
 ## Estado
 
-Docker api/worker usan imagen con `/opt/venv` (ya no `uv sync` sobre el `.venv` del host). Engine sigue en **0.4.0** (freeze).
+README + architecture finales (fase 2 paso 6). Engine freeze **0.4.0**. Docker imagen backend OK.
 
 ## Hecho
 
-- `backend/Dockerfile` + `docker-entrypoint-api.sh` (alembic solo en api)
-- Compose: api/worker → `takeoff-backend:local`; volúmenes solo `storage/` y `.cache/`
-- Worker: `arq app.worker.WorkerSettings`, `restart: unless-stopped` + healthcheck
-- `.dockerignore` excluye `.venv` / `node_modules` / etc.
-- Engine **no** tocado (freeze 0.4.0)
+- `README.md`: qué es, Docker, CLI/eval, Claude (sin coordenadas), conteos → DECISIONS, versionado, límites, placeholder Accuracy results
+- `docs/architecture.md`: Mermaid componentes + flujo upload→ARQ→engine→Postgres→UI→corrections
+- Docker api/worker con `/opt/venv` (commit previo)
+- Engine **no** tocado
 
 ## Cómo probarlo
 
 ```bash
-docker compose config
-docker compose up -d --build
+# docs
+# open README.md and docs/architecture.md
 docker compose ps
-# api :8000 /health · web :5173 · worker Up
+uv run takeoff --version   # 0.4.0
 ```
 
 ## Siguiente
 
-- Confirmar con Santiago que el `.venv` de Windows ya no se corrompe
-- Pushear CI cuando haya scope `workflow`
+- Agente 7 llena “Accuracy results” tras conteos a mano
+- CI workflow cuando haya scope `workflow`
 
 ## Bloqueos
 
@@ -32,12 +31,12 @@ docker compose ps
 
 ## Decisions
 
-Imagen compartida api/worker; venv solo en `/opt/venv` dentro de la imagen.
+Ninguna nueva en este paso (docs only).
 
 ## Needs from Santiago
 
-- `docker compose up -d --build` y confirmar 5 servicios Up
+- (ninguno)
 
 ## Explicación para Santiago
 
-Antes api y worker instalaban dependencias al arrancar en la misma carpeta `.venv` que usás en Windows, a la vez, y se pisaban. Ahora se **construye una imagen** una vez con el entorno Linux en `/opt/venv` dentro del contenedor; al arrancar solo migran la DB (api) y levantan uvicorn/arq en segundos. Solo montamos `storage/` y `.cache/` — nunca el repo completo encima del venv. El motor sigue congelado en 0.4.0.
+Dejé el README y la arquitectura listos para la entrevista/demo: qué hace el sistema, cómo se corre con Docker, cómo se usa el CLI y el eval, por qué Claude no da coordenadas, dónde están las reglas de conteo, cómo versionamos el motor (`0.4.0` congelado), y un espacio vacío “Accuracy results” para que Agente 7 pegue las métricas cuando tengas los conteos a mano. Los diagramas Mermaid muestran el camino completo: subís el PDF → cola ARQ → motor → Postgres → UI → log de correcciones.
