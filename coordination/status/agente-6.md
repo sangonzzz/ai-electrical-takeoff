@@ -2,36 +2,33 @@
 
 ## Estado
 
-UI redesign “precision blueprint review” shipped for the interview demo; screenshots checked.
+Home job-status poll fixed (no more Running→Queued forever); cards show real sheet_number/title.
 
 ## Hecho
 
-- Visual system: slate chrome, dark canvas + bright sheet, Inter + JetBrains Mono, 8px / 10px / 150ms
-- Home: hero, Load demo primary, 4 sheet cards with thumbnails + status, empty/loading states
-- Sheet header: plan tabs 1–4, pipeline badge, needs-review count, review/export, shortcuts
-- KPI strip (Fans…Detectors) clickable → highlight marks
-- Plan canvas: crisp marks + tooltip, pulse select, highlight dim, wire pills, floating toolbar, mini legend
-- Right panel: zebra takeoff + expandable subtypes, details (confidence bar, code chips), BOM sections, log timeline
-- Keyboard: V/A/F/Del/Ctrl+Z/? cheat sheet
-- Screenshots: `out/debug/ui-home.png`, `out/debug/ui-sheet.png` (verified in browser)
-- Earlier: pnpm pin 10.28.0, takeoff/CRUD/review wiring
+- Job poll: `getDocumentWithJobStatuses` refetches document + jobs; stop only on succeeded/failed
+- Status mapping in `lib/jobs.ts` (completed/success/… → succeeded; running aliases; etc.)
+- Upload (`document_id`/`job_id`) and detail (`id`/`current_run_id`) both normalize to `DocumentSummary`
+- Sheet cards: A1-111 + “ELECTRICAL PLAN - PLAN N” (never bare “P1”)
+- UI redesign “precision blueprint review” + screenshots (`out/debug/ui-*.png`)
+- pnpm pin 10.28.0, takeoff/CRUD/review wiring
 
 ## Cómo probarlo
 
 ```bash
 cd web
 pnpm install --frozen-lockfile
-pnpm dev
-# http://localhost:5173 → Load demo plans → Open Plan 1
-# Check KPI click, takeoff expand, hover marks, ? shortcuts
 pnpm exec tsc --noEmit
 pnpm exec vitest run
+# API mode (jobs succeed → cards stay Succeeded with titles):
+# VITE_USE_FIXTURE=false pnpm dev → Load demo → watch cards leave Queued
+# Fixture: VITE_USE_FIXTURE=true pnpm dev → cards already Succeeded with A1-111…
 ```
 
 ## Siguiente
 
+- Lazy fixture import (Agente 1 asked: dynamic `import()` when `VITE_USE_FIXTURE=true`)
 - Optional: real sheet thumbnails from `image.png` when API available
-- Compose `--frozen-lockfile` (asked Agente 1)
 
 ## Bloqueos
 
@@ -42,6 +39,7 @@ pnpm exec vitest run
 - Product display name in chrome: **Atreyus** (repo remains ai-electrical-takeoff)
 - KPI strip omits junction_box (still in takeoff table + legend)
 - Document id remembered in sessionStorage so home restores after sheet navigation
+- Never overwrite React Query document cache with raw GET detail (no status field) — always merge via jobs helpers
 
 ## Needs from Santiago
 
@@ -49,10 +47,10 @@ pnpm exec vitest run
 
 ## Explicación para Santiago
 
-Rediseñé la UI para la demo de entrevista: se ve como un producto de review de planos,
-no como un dashboard genérico. El plano va en una hoja clara sobre un fondo oscuro; los
-colores de categoría solo están en las marcas. Arriba tenés tabs Plan 1–4, el badge de
-versión y cuántos necesitan review; una franja de KPIs muestra los totales y al clickear
-ilumina esas marcas. A la derecha sigue el takeoff expandible, details con barra de
-confianza, BOM y el log. Atajos de teclado con “?”. Saqué capturas de home y sheet y
-las miré antes de cerrar.
+Había un bug en home: las cards pasaban a Running y después quedaban en Queued para
+siempre aunque el worker terminaba bien. La causa era que al refetch del documento se
+pisaba el cache con un payload sin `status` (y `current_run_id` en vez de `job_id`),
+así que todo volvía a “queued”. Ahora un solo poll pide documento + jobs, normaliza
+estados (completed → succeeded, etc.) y solo para cuando todos terminaron. Al terminar
+también llegan `sheet_number` y `title` reales (A1-111, ELECTRICAL PLAN - PLAN N).
+Tests de `lib/jobs` verdes; tsc + vitest OK.

@@ -20,8 +20,17 @@ radius 10 px, transitions ~150 ms. Light theme default.
 ## Screens
 
 1. **Home** — hero, primary “Load demo plans”, upload, 4 sheet cards (thumbnail + status).
+   Cards show pipeline `sheet_number` / `title` (e.g. A1-111, ELECTRICAL PLAN - PLAN 1),
+   not bare “P1”. Job polling uses `getDocumentWithJobStatuses`: refetch document +
+   normalize each job status; stop only when every sheet is `succeeded` or `failed`.
 2. **Sheet** — header (plan tabs, pipeline badge, needs-review count, review/export),
    KPI strip, dark-canvas plan with floating toolbar + mini legend, right panel tabs.
+
+## Job status mapping
+
+`web/src/lib/jobs.ts` maps API/legacy strings (`completed`, `success`, `in_progress`, …)
+onto `queued | running | succeeded | failed`. Upload responses use `document_id` /
+`job_id`; GET document uses `id` / `current_run_id` — both normalized to `DocumentSummary`.
 
 ## Plan canvas
 

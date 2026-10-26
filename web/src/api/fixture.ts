@@ -153,8 +153,7 @@ export function resetFixtureState(): void {
   notifyUndo();
 }
 
-export async function fixtureLoadDemo(): Promise<DocumentSummary> {
-  resetFixtureState();
+function fixtureDocumentSummary(): DocumentSummary {
   const sheets: SheetSummary[] = [0, 1, 2, 3].map((page_index) => ({
     sheet_id: page_index === 0 ? "sheet-plan1" : `sheet-plan${page_index + 1}`,
     page_index,
@@ -164,6 +163,17 @@ export async function fixtureLoadDemo(): Promise<DocumentSummary> {
     status: "succeeded" as const,
   }));
   return { document_id: DEMO_DOC_ID, sheets };
+}
+
+export async function fixtureLoadDemo(): Promise<DocumentSummary> {
+  resetFixtureState();
+  return fixtureDocumentSummary();
+}
+
+/** Read-only document snapshot — does not reset in-memory CRUD state. */
+export async function fixtureGetDocument(_documentId: string): Promise<DocumentSummary> {
+  void _documentId;
+  return fixtureDocumentSummary();
 }
 
 export async function fixtureGetJob(jobId: string): Promise<JobInfo> {

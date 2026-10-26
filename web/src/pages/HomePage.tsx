@@ -2,12 +2,18 @@ import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FileUp, FlaskConical, LayoutGrid } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { getDocument, getJob, isFixtureMode, loadDemoPlans, uploadDocument } from "@/api/client";
-import type { DocumentSummary, JobStatus } from "@/api/types";
+import {
+  getDocumentWithJobStatuses,
+  isFixtureMode,
+  loadDemoPlans,
+  uploadDocument,
+} from "@/api/client";
+import type { DocumentSummary } from "@/api/types";
 import { SheetCard } from "@/components/SheetCard";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { Skeleton } from "@/components/ui/Skeleton";
+import { documentHasPendingJobs } from "@/lib/jobs";
 
 const POLL_MS = 2000;
 
@@ -39,44 +45,21 @@ export function HomePage() {
     onError: (e: Error) => setError(e.message),
   });
 
+  /**
+   * Single poll loop: refetch document (sheet_number/title) + job statuses.
+   * Stops only when every sheet is succeeded or failed.
+   * (Previously a raw GET /documents overwrote the cache and wiped statuses
+   * back to "queued" because the detail payload has no status field.)
+   */
   const docQuery = useQuery({
     queryKey: ["document", documentId],
-    queryFn: () => getDocument(documentId!),
+    queryFn: () => getDocumentWithJobStatuses(documentId!),
     enabled: !!documentId,
     refetchInterval: (q) => {
-      const data = q.state.data as DocumentSummary | undefined;
-      if (!data) return false;
-      const pending = data.sheets.some(
-        (s) => s.status !== "succeeded" && s.status !== "failed",
-      );
-      return pending ? POLL_MS : false;
+      const data = q.state.data;
+      if (!data) return POLL_MS;
+      return documentHasPendingJobs(data) ? POLL_MS : false;
     },
-  });
-
-  useQuery({
-    queryKey: ["jobs", documentId],
-    enabled: !!documentId && !!docQuery.data && !isFixtureMode(),
-    queryFn: async () => {
-      const doc = docQuery.data!;
-      const updates = await Promise.all(
-        doc.sheets
-          .filter((s) => s.job_id)
-          .map(async (s) => {
-            const job = await getJob(s.job_id!);
-            return { sheet_id: s.sheet_id, status: job.status as JobStatus };
-          }),
-      );
-      const next: DocumentSummary = {
-        ...doc,
-        sheets: doc.sheets.map((s) => {
-          const u = updates.find((x) => x.sheet_id === s.sheet_id);
-          return u ? { ...s, status: u.status } : s;
-        }),
-      };
-      queryClient.setQueryData(["document", documentId], next);
-      return updates;
-    },
-    refetchInterval: POLL_MS,
   });
 
   const doc = docQuery.data;

@@ -34,19 +34,21 @@ function PlanThumb({ label }: { label: string }) {
 export function SheetCard({ sheet, documentId }: Props) {
   const status = sheet.status ?? "queued";
   const ready = status === "succeeded";
-  const label = sheet.sheet_number ?? `P${sheet.page_index + 1}`;
+  // Prefer pipeline sheet_number (A1-111); never show bare "P1".
+  const sheetNumber = sheet.sheet_number?.trim() || `Plan ${sheet.page_index + 1}`;
+  const title =
+    sheet.title?.trim() ||
+    (ready ? "Electrical plan" : status === "running" ? "Analyzing…" : "Queued…");
 
   const inner = (
     <article className="card flex h-full flex-col overflow-hidden p-2 transition hover:border-slate-300">
-      <PlanThumb label={label} />
+      <PlanThumb label={sheetNumber} />
       <div className="flex flex-1 flex-col gap-1 p-2 pt-3">
         <div className="text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
           Plan {sheet.page_index + 1}
         </div>
-        <h3 className="text-[15px] font-semibold text-[var(--ink)]">{label}</h3>
-        <p className="line-clamp-2 text-[12px] leading-snug text-[var(--muted)]">
-          {sheet.title ?? "Electrical plan"}
-        </p>
+        <h3 className="font-mono text-[15px] font-semibold text-[var(--ink)]">{sheetNumber}</h3>
+        <p className="line-clamp-2 text-[12px] leading-snug text-[var(--muted)]">{title}</p>
         <div className="mt-auto flex items-center justify-between pt-2">
           <StatusBadge status={status} />
           {ready && (

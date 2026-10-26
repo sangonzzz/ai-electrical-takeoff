@@ -1,8 +1,14 @@
 import type { Bom, Detection, SheetResult, Takeoff } from "@/types/contracts";
 import {
+  documentFromDetail,
+  documentFromUpload,
+  normalizeJobStatus,
+} from "@/lib/jobs";
+import {
   fixtureCreateDetection,
   fixtureDeleteDetection,
   fixtureExportGroundTruth,
+  fixtureGetDocument,
   fixtureGetJob,
   fixtureGetSheet,
   fixtureLoadDemo,
@@ -18,6 +24,30 @@ import type {
   SheetBundle,
   SheetDetailApi,
 } from "./types";
+
+/** Raw GET /api/documents/{id} body (Agente 5). */
+interface DocumentDetailApi {
+  id: string;
+  filename: string;
+  file_hash: string;
+  page_count: number;
+  created_at: string;
+  sheets: Array<{
+    sheet_id: string;
+    page_index: number;
+    sheet_number?: string | null;
+    title?: string | null;
+    current_run_id?: string | null;
+    job_id?: string | null;
+    status?: string | null;
+  }>;
+}
+
+/** Raw POST /api/documents 202 body. */
+interface DocumentUploadApi {
+  document_id: string;
+  sheets: Array<{ sheet_id: string; page_index: number; job_id: string }>;
+}
 
 export type DetectionMutationResult = {
   detection: Detection;
@@ -79,7 +109,8 @@ export function isFixtureMode(): boolean {
 
 export async function loadDemoPlans(): Promise<DocumentSummary> {
   if (useFixture) return fixtureLoadDemo();
-  return request<DocumentSummary>("/api/documents/demo", { method: "POST" });
+  const raw = await request<DocumentUploadApi>("/api/documents/demo", { method: "POST" });
+  return documentFromUpload(raw);
 }
 
 export async function uploadDocument(file: File): Promise<DocumentSummary> {
@@ -89,17 +120,56 @@ export async function uploadDocument(file: File): Promise<DocumentSummary> {
   }
   const form = new FormData();
   form.append("file", file);
-  return request<DocumentSummary>("/api/documents", { method: "POST", body: form });
+  const raw = await request<DocumentUploadApi>("/api/documents", {
+    method: "POST",
+    body: form,
+  });
+  return documentFromUpload(raw);
 }
 
 export async function getJob(jobId: string): Promise<JobInfo> {
   if (useFixture) return fixtureGetJob(jobId);
-  return request<JobInfo>(`/api/jobs/${jobId}`);
+  const raw = await request<JobInfo & { status: string }>(`/api/jobs/${jobId}`);
+  return { ...raw, status: normalizeJobStatus(raw.status) };
 }
 
+/**
+ * Fetch document metadata and normalize to DocumentSummary.
+ * Refetch after jobs succeed so sheet_number / title from the pipeline appear.
+ */
 export async function getDocument(documentId: string): Promise<DocumentSummary> {
-  if (useFixture) return fixtureLoadDemo();
-  return request<DocumentSummary>(`/api/documents/${documentId}`);
+  if (useFixture) return fixtureGetDocument(documentId);
+  const raw = await request<DocumentDetailApi>(`/api/documents/${documentId}`);
+  return documentFromDetail(raw);
+}
+
+/**
+ * Document + live job statuses in one round (used by home polling).
+ * Always re-reads the document so titles land when analysis finishes.
+ */
+export async function getDocumentWithJobStatuses(
+  documentId: string,
+): Promise<DocumentSummary> {
+  const doc = await getDocument(documentId);
+  const sheets = await Promise.all(
+    doc.sheets.map(async (sheet) => {
+      const jobId = sheet.job_id;
+      if (!jobId) {
+        return { ...sheet, status: sheet.status ?? ("queued" as const) };
+      }
+      try {
+        const job = await getJob(jobId);
+        return {
+          ...sheet,
+          job_id: job.job_id || jobId,
+          status: normalizeJobStatus(job.status),
+        };
+      } catch {
+        return { ...sheet, status: sheet.status ?? ("queued" as const) };
+      }
+    }),
+  );
+  return { ...doc, sheets };
 }
 
 export async function getSheet(sheetId: string): Promise<SheetBundle> {
