@@ -247,6 +247,10 @@ def analyze_sheet(
             )
             if assigned is not None:
                 detections = assigned
+            # R4: nothing outside the building except EXT/WP exterior items.
+            from takeoff_engine.classify import drop_outside_footprint
+
+            detections = drop_outside_footprint(detections, rooms)
     except Exception as exc:  # noqa: BLE001
         warnings.append(f"rooms module unavailable: {type(exc).__name__}: {exc}")
     timings["rooms"] = _ms(t0)

@@ -1240,6 +1240,33 @@ def _suppress_lights_at_fan_hubs(dets: list[Detection]) -> list[Detection]:
     return out
 
 
+def drop_outside_footprint(
+    dets: list[Detection],
+    rooms: list[Any],
+) -> list[Detection]:
+    """Keep only EXT/WP items outside the building footprint (R4).
+
+    Called after ``assign_rooms`` so ``room_id`` already points at Exterior for
+    porch/yard ink. Interior / attic detections are unchanged.
+    """
+    by_id = {r.id: r for r in rooms}
+    out: list[Detection] = []
+    for d in dets:
+        room = by_id.get(d.room_id) if d.room_id else None
+        if room is None or getattr(room, "kind", None) != "exterior":
+            out.append(d)
+            continue
+        codes_up = {c.strip().upper() for c in d.codes}
+        if "EXT" in codes_up or "WP" in codes_up:
+            out.append(d)
+            continue
+        if d.subtype in ("exterior_wall", "gfci_weatherproof"):
+            out.append(d)
+            continue
+        # Drop false recessed/wall ink in the sheet margin (e.g. plan-4 TL).
+    return out
+
+
 def _attic_switch_cap(
     dets: list[Detection],
     attic_boxes: list[tuple[float, float, float, float]],
