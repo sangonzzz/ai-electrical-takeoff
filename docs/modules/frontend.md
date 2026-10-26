@@ -4,10 +4,10 @@ Owner: Agente 6.
 
 ## What it does
 
-React app for reviewing and correcting electrical takeoffs on the plan. Visual
-direction: **precision blueprint review** — slate chrome, bright plan sheet on a
-dark canvas, SPEC category colors only on marks. Counts come from a TypeScript
-mirror of `compute_takeoff`; clicking a KPI or takeoff cell highlights those marks.
+React app for reviewing and correcting electrical takeoffs on the plan. Product
+name in the UI: **Electrical Takeoff**. Visual direction: precision blueprint
+review — slate chrome, bright plan sheet on a dark canvas, SPEC category colors
+only on marks. Counts come from a TypeScript mirror of `compute_takeoff`.
 
 ## Stack
 
@@ -19,32 +19,26 @@ radius 10 px, transitions ~150 ms. Light theme default.
 
 ## Screens
 
-1. **Home** — hero, primary “Load demo plans”, upload, 4 sheet cards (thumbnail + status).
-   Cards show pipeline `sheet_number` / `title` (e.g. A1-111, ELECTRICAL PLAN - PLAN 1),
-   not bare “P1”. Polls `GET /api/documents/{id}` every 2 s while any sheet is
-   `queued`/`running`; card status comes from `sheets[].status` (no separate jobs merge).
-   A card is openable when `status === succeeded` or when `current_run_id` is set
-   (and not still queued/running/failed).
-2. **Sheet** — header (plan tabs, pipeline badge, needs-review count, review/export),
-   KPI strip, dark-canvas plan with floating toolbar + mini legend, right panel tabs.
+1. **Home** — hero, “Load demo plans”, upload, sheet cards with `sheet_number` /
+   `title` and job status from `GET /api/documents/{id}` (poll every 2 s while
+   queued/running).
+2. **Sheet** — header (plan tabs, pipeline + short `file_hash`, Undo/Redo,
+   review/export), KPI strip, component palette, plan canvas, right panel.
 
-## Job status mapping
+## Editing
 
-`web/src/lib/jobs.ts` maps API/legacy strings onto `queued | running | succeeded | failed`.
-Upload (`document_id`/`job_id`) and GET document (`id`, per-sheet `job_id`/`status`/
-`current_run_id`) both normalize to `DocumentSummary`. Document sheet fields are the
-source of truth for home polling (Agente 5).
+- **Undo / Redo** — labeled header buttons; Ctrl+Z / Ctrl+Shift+Z (fixture stacks).
+- **Component palette** — drag subtypes onto the plan (ghost + “Drop on the plan”);
+  click-to-add still works in Add mode. Room auto-assigned on create.
+- **Details** — editable X/Y in PDF points (also drag marks on the plan).
+- Detection marks expose `data-testid="detection-mark"` for e2e.
 
 ## Plan canvas
 
 - SVG `viewBox` = electrical viewport (PDF points).
-- Marks: filled circle + letter, white outline, drop shadow; hover `<title>` tooltip;
-  selected = pulsing ring; highlight dims everything else.
-- Rooms: polygons; names on hover only.
-- Wires: pink curves + label pill `14/2 - 12.4 ft`.
-- Boxes: off by default; multi-gang labeled squares.
-- Floating toolbar: select / add / undo / fit / layers. Mini legend bottom-left.
-- Category filter (solo one type at a time).
+- Marks: filled circle + letter; selected pulse; highlight dims others.
+- Wires: paths always on; labels only on hover or when wire count ≤ 14.
+- Boxes off by default. Floating toolbar: select / add / fit / layers.
 
 ## Keyboard
 
@@ -55,13 +49,16 @@ source of truth for home polling (Agente 5).
 | F | Fit |
 | Del | Delete selected |
 | Ctrl+Z | Undo |
+| Ctrl+Shift+Z | Redo |
 | Esc | Clear / exit add |
 | ? | Cheat sheet |
 
-## Review API
+## Exports / review API
 
 - `POST /api/sheets/{id}/review-complete`
 - `GET /api/sheets/{id}/ground-truth.json`
+- `GET /api/sheets/{id}/export.xlsx` — Download Excel
+- `GET /api/sheets/{id}/quote.pdf` — Download quote PDF
 
 ## How to run
 
@@ -74,10 +71,9 @@ pnpm dev
 pnpm exec tsc --noEmit && pnpm exec vitest run
 ```
 
-Screenshots (local, gitignored under `out/debug/`): `ui-home.png`, `ui-sheet.png`.
-
 ## Known limits
 
 - Fixture BOM is a lightweight derivation of sample wires/boxes.
-- Live undo awaits a backend endpoint; fixture has a local stack.
+- Undo/redo stacks are fixture-local until the backend exposes history.
 - `web/src/types/contracts.ts` is owned by Agente 1.
+- Lazy fixture JSON import (Agente 1 request) still pending.
