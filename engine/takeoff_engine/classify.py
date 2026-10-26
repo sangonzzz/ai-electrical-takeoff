@@ -59,11 +59,19 @@ _LIGHT_DENSE_MAX_SIDE_PT = 28.0
 _LIGHT_MIN_SEGS = 10
 # Fan hub ``J`` circle is the fan, never a recessed light (R4).
 _FAN_LIGHT_SUPPRESS_PT = 12.0
-# Shape-forced lights must still match a light legend template (R4).
+# Wall-light shape still uses a soft legend floor (recessed is geometric — R5).
 _LIGHT_SHAPE_MIN_SCORE = 0.55
-# Peeled hallway rings are incomplete glyphs — slightly lower bar.
-_LIGHT_PEEL_MIN_SCORE = 0.40
-# Receptacle/appliance tokens on a "light" → cabinet/fixture geometry, not a can.
+# Recessed downlight: circle r≈3.5–4.5 pt inscribed in ~8 pt square (R5).
+_RECESSED_R_MIN = 3.3
+_RECESSED_R_MAX = 4.8
+_RECESSED_SQUARE_MIN = 7.0
+_RECESSED_SQUARE_MAX = 13.0
+_RECESSED_FRAME_LEN_MIN = 6.5
+_RECESSED_FRAME_LEN_MAX = 11.0
+_RECESSED_MIN_RING_SHORTS = 20
+# Viewport scan requires a fuller ring so kitchen AA noise does not spawn cans.
+_RECESSED_SCAN_MIN_RING = 48
+# Receptacle/appliance tokens on a weak non-geometric "light" → not a can.
 _LIGHT_RECEPTACLE_CODES = frozenset(
     {"240V", "GFI", "GFCI", "AFI", "AFCI", "MW", "DW", "H", "FC"}
 )
@@ -691,25 +699,258 @@ def _light_has_receptacle_codes(codes: list[str]) -> bool:
     return bool(up & _LIGHT_RECEPTACLE_CODES)
 
 
-def _may_force_light(
+def _j_at_point(ctx: PageContext, x: float, y: float, radius: float = 6.0) -> bool:
+    """True when a lone ``J`` sits at (x, y) — fan hub, not a recessed can."""
+    for word in ctx.words:
+        if word.text.strip().upper() != "J":
+            continue
+        wx = 0.5 * (word.bbox[0] + word.bbox[2])
+        wy = 0.5 * (word.bbox[1] + word.bbox[3])
+        if math.hypot(wx - x, wy - y) <= radius:
+            return True
+    return False
+
+
+def _recessed_downlight_center(
+    ctx: PageContext, cand: Candidate
+) -> tuple[float, float] | None:
+    """Center of a recessed downlight if the candidate matches the glyph (R5).
+
+    Deterministic geometry (not a legend-template score):
+    - circle of radius ≈ 3.5–4.5 pt
+    - inscribed in a square of about 8–12 pt
+    Compact 12×12 cans (plan 1/4) and denser merges that still contain the
+    square frame (plan 2/3 kitchen/living) both qualify. Fan hubs and gray
+    cabinets are rejected by the caller.
+    """
+    if int(cand.features.get("n_fills", 0)) > 0:
+        return None
+
+    shorts: list[tuple[float, float]] = []
+    frames: list[tuple[float, float]] = []
+    for i in cand.segment_ids:
+        s = ctx.black_segments[i]
+        length = math.hypot(s.x1 - s.x0, s.y1 - s.y0)
+        mx, my = 0.5 * (s.x0 + s.x1), 0.5 * (s.y0 + s.y1)
+        if length <= 5.5:
+            shorts.append((mx, my))
+        aa = abs(s.x1 - s.x0) <= 1.0 or abs(s.y1 - s.y0) <= 1.0
+        if (
+            aa
+            and _RECESSED_FRAME_LEN_MIN <= length <= _RECESSED_FRAME_LEN_MAX
+        ):
+            frames.append((mx, my))
+
+    if len(shorts) < _RECESSED_MIN_RING_SHORTS:
+        return None
+
+    # Prefer square-frame center when present (merged clusters drift).
+    framed = len(frames) >= 3
+    if framed:
+        cx = sum(p[0] for p in frames) / len(frames)
+        cy = sum(p[1] for p in frames) / len(frames)
+        r_hi = _RECESSED_R_MAX
+        min_ring = _RECESSED_MIN_RING_SHORTS
+    else:
+        cx, cy = cand.center
+        w = float(cand.features.get("width", 0.0))
+        h = float(cand.features.get("height", 0.0))
+        if not (
+            _RECESSED_SQUARE_MIN <= min(w, h) <= _RECESSED_SQUARE_MAX
+            and max(w, h) <= _RECESSED_SQUARE_MAX + 2.0
+        ):
+            return None
+        if max(w, h) / max(min(w, h), 0.1) > 1.35:
+            return None
+        r_hi = _RECESSED_R_MAX
+        min_ring = 12
+
+    ring_pts = [
+        (mx, my)
+        for mx, my in shorts
+        if _RECESSED_R_MIN <= math.hypot(mx - cx, my - cy) <= r_hi
+    ]
+    if len(ring_pts) < min_ring:
+        return None
+    ring_dists = [math.hypot(mx - cx, my - cy) for mx, my in ring_pts]
+    # Radius must actually sit in the recessed band (reject random blobs).
+    r_med = sorted(ring_dists)[len(ring_dists) // 2]
+    if not (_RECESSED_R_MIN <= r_med <= r_hi):
+        return None
+    # Ring span must be a near-square ~8–12 pt glyph (not a vanity tick cluster).
+    rx0 = min(p[0] for p in ring_pts)
+    rx1 = max(p[0] for p in ring_pts)
+    ry0 = min(p[1] for p in ring_pts)
+    ry1 = max(p[1] for p in ring_pts)
+    rw, rh = rx1 - rx0, ry1 - ry0
+    if not (
+        _RECESSED_SQUARE_MIN <= min(rw, rh) <= _RECESSED_SQUARE_MAX
+        and max(rw, rh) <= _RECESSED_SQUARE_MAX + 1.0
+    ):
+        return None
+    if max(rw, rh) / max(min(rw, rh), 0.1) > 1.35:
+        return None
+    # Mega appliance / fan clusters that merely contain a ring.
+    w = float(cand.features.get("width", 0.0))
+    h = float(cand.features.get("height", 0.0))
+    if (
+        not cand.features.get("peeled_recessed")
+        and (w * h > 1500.0 or max(w, h) > 55.0)
+    ):
+        return None
+    return (cx, cy)
+
+
+def _may_force_wall_light(
     ctx: PageContext,
     cand: Candidate,
     *,
     light_score: float,
     codes: list[str],
 ) -> bool:
-    """Gate circle / wall-light shape forcing (R4 kitchen/bath false cans).
-
-    Requires a real light-template match. Peeled hallway rings get a slightly
-    lower bar. Never fire inside gray architecture or on receptacle-coded ink.
-    """
+    """Wall vanity lights: shape + soft legend floor (R4/R5)."""
     if _in_gray_architecture(ctx, cand.center[0], cand.center[1]):
         return False
     if _light_has_receptacle_codes(codes) and light_score < 0.85:
         return False
-    peeled = bool(cand.features.get("peeled_recessed"))
-    min_score = _LIGHT_PEEL_MIN_SCORE if peeled else _LIGHT_SHAPE_MIN_SCORE
-    return light_score >= min_score
+    if light_score >= 0.55:
+        return True
+    # Plan-1 bath vanity is very elongated (tick) and scores ~0.35.
+    w = float(cand.features.get("width", 0.0))
+    h = float(cand.features.get("height", 0.0))
+    aspect = max(w, h) / max(min(w, h), 0.1)
+    return aspect >= 1.9 and light_score >= 0.30
+
+
+def _scan_recessed_downlight_centers(
+    ctx: PageContext,
+    bounds: tuple[float, float, float, float] | None,
+) -> list[tuple[float, float]]:
+    """Viewport-wide search for circle-in-square glyphs (R5).
+
+    Finds ~8–10 pt AA square frames with an inscribed ring (r≈3.5–4.5),
+    recovering cans that never formed their own candidate cluster.
+    """
+    if bounds is None:
+        return []
+    x0, y0, x1, y1 = bounds
+    frames: list[tuple[float, float]] = []
+    for s in ctx.black_segments:
+        mx, my = 0.5 * (s.x0 + s.x1), 0.5 * (s.y0 + s.y1)
+        if not (x0 <= mx <= x1 and y0 <= my <= y1):
+            continue
+        length = math.hypot(s.x1 - s.x0, s.y1 - s.y0)
+        aa = abs(s.x1 - s.x0) <= 1.0 or abs(s.y1 - s.y0) <= 1.0
+        if (
+            aa
+            and _RECESSED_FRAME_LEN_MIN <= length <= _RECESSED_FRAME_LEN_MAX
+        ):
+            frames.append((mx, my))
+    if len(frames) < 3:
+        return []
+
+    used = [False] * len(frames)
+    centers: list[tuple[float, float]] = []
+    for i, (fx, fy) in enumerate(frames):
+        if used[i]:
+            continue
+        group = [(fx, fy)]
+        used[i] = True
+        for j in range(i + 1, len(frames)):
+            if used[j]:
+                continue
+            if math.hypot(fx - frames[j][0], fy - frames[j][1]) < 12.0:
+                group.append(frames[j])
+                used[j] = True
+        if len(group) < 3:
+            continue
+        cx = sum(p[0] for p in group) / len(group)
+        cy = sum(p[1] for p in group) / len(group)
+        ring = 0
+        for s in ctx.black_segments:
+            length = math.hypot(s.x1 - s.x0, s.y1 - s.y0)
+            if length > 5.5:
+                continue
+            mx, my = 0.5 * (s.x0 + s.x1), 0.5 * (s.y0 + s.y1)
+            d = math.hypot(mx - cx, my - cy)
+            if _RECESSED_R_MIN <= d <= _RECESSED_R_MAX:
+                ring += 1
+        if ring < _RECESSED_SCAN_MIN_RING:
+            continue
+        # Proper square: at least one horizontal and one vertical frame stroke.
+        h_frames = 0
+        v_frames = 0
+        for s in ctx.black_segments:
+            length = math.hypot(s.x1 - s.x0, s.y1 - s.y0)
+            if not (
+                _RECESSED_FRAME_LEN_MIN <= length <= _RECESSED_FRAME_LEN_MAX
+            ):
+                continue
+            mx, my = 0.5 * (s.x0 + s.x1), 0.5 * (s.y0 + s.y1)
+            if math.hypot(mx - cx, my - cy) > 10.0:
+                continue
+            if abs(s.y1 - s.y0) <= 1.0:
+                h_frames += 1
+            elif abs(s.x1 - s.x0) <= 1.0:
+                v_frames += 1
+        if h_frames < 1 or v_frames < 1:
+            continue
+        if _in_gray_architecture(ctx, cx, cy) or _j_at_point(ctx, cx, cy):
+            continue
+        centers.append((cx, cy))
+
+    # Also recover short-stroke rings that lack a clean AA square frame
+    # (plan-2 attic can beside IN ATTIC).
+    shorts: list[tuple[float, float]] = []
+    for s in ctx.black_segments:
+        mx, my = 0.5 * (s.x0 + s.x1), 0.5 * (s.y0 + s.y1)
+        if not (x0 <= mx <= x1 and y0 <= my <= y1):
+            continue
+        if math.hypot(s.x1 - s.x0, s.y1 - s.y0) <= 5.5:
+            shorts.append((mx, my))
+    if len(shorts) >= 20:
+        parent = list(range(len(shorts)))
+
+        def find(a: int) -> int:
+            while parent[a] != a:
+                parent[a] = parent[parent[a]]
+                a = parent[a]
+            return a
+
+        for i in range(len(shorts)):
+            for j in range(i + 1, len(shorts)):
+                if math.hypot(
+                    shorts[i][0] - shorts[j][0], shorts[i][1] - shorts[j][1]
+                ) < 2.5:
+                    parent[find(j)] = find(i)
+        groups: dict[int, list[int]] = {}
+        for i in range(len(shorts)):
+            groups.setdefault(find(i), []).append(i)
+        for members in groups.values():
+            if not (20 <= len(members) <= 70):
+                continue
+            xs = [shorts[k][0] for k in members]
+            ys = [shorts[k][1] for k in members]
+            rw, rh = max(xs) - min(xs), max(ys) - min(ys)
+            if not (
+                _RECESSED_SQUARE_MIN <= min(rw, rh) <= _RECESSED_SQUARE_MAX
+                and max(rw, rh) <= _RECESSED_SQUARE_MAX + 1.0
+            ):
+                continue
+            if max(rw, rh) / max(min(rw, rh), 0.1) > 1.35:
+                continue
+            cx = sum(xs) / len(xs)
+            cy = sum(ys) / len(ys)
+            dists = [math.hypot(x - cx, y - cy) for x, y in zip(xs, ys)]
+            r_med = sorted(dists)[len(dists) // 2]
+            if not (_RECESSED_R_MIN <= r_med <= _RECESSED_R_MAX):
+                continue
+            if any(math.hypot(cx - ex, cy - ey) < 10.0 for ex, ey in centers):
+                continue
+            if _in_gray_architecture(ctx, cx, cy) or _j_at_point(ctx, cx, cy):
+                continue
+            centers.append((cx, cy))
+    return centers
 
 
 def _attic_boxes(
@@ -990,31 +1231,62 @@ def classify_candidates(
         second_entry = scores[1][2] if len(scores) > 1 else None
         shape_forced = False
 
+        light_entries = [e for e in usable if e.category == Category.LIGHT]
+        recessed_center = (
+            _recessed_downlight_center(ctx, cand) if light_entries else None
+        )
+        if recessed_center is not None:
+            rx, ry = recessed_center
+            if (
+                _in_gray_architecture(ctx, rx, ry)
+                or _j_at_point(ctx, rx, ry)
+                or (
+                    max(cw, ch) >= _FAN_MIN_SIDE_PT
+                    and _is_ceiling_fan_candidate(ctx, cand)
+                )
+            ):
+                recessed_center = None
+
         if (
             best_score < _REJECT_SCORE
             and not _is_circle_light_shape(cand)
             and not _is_wall_light_shape(ctx, cand)
+            and recessed_center is None
         ):
             continue
 
         assert best_entry.category is not None
         cat = best_entry.category
 
-        # Circle / wall-light shape → light only with a strong light-template
-        # match (R4). Do not force inside gray cabinets/fixtures or on
-        # receptacle-coded appliance geometry.
-        light_entries = [e for e in usable if e.category == Category.LIGHT]
+        # Recessed downlight = geometric circle-in-square (R5), not a template
+        # score. Wall vanity still needs a legend floor. Keep R4 exclusions:
+        # gray cabinets, fan-hub J.
         early_codes = _codes_near_candidate(ctx, cand)
         light_score = (
             _best_light_template_score(ctx, cand, light_entries, templates)
             if light_entries
             else 0.0
         )
-        can_force_light = bool(light_entries) and _may_force_light(
+        can_force_wall = bool(light_entries) and _may_force_wall_light(
             ctx, cand, light_score=light_score, codes=early_codes
         )
         wall_light = _is_wall_light_shape(ctx, cand)
-        if wall_light and can_force_light:
+        forced_center: tuple[float, float] | None = None
+        # Recessed vs wall-tick on the same cluster (R5):
+        # - strong wall legend match → wall vanity (Bath 2)
+        # - tall weak wall-tick → drop (plan-4 kitchen false)
+        # - wide merge with recessed ring → recessed (plan-2 kitchen cans)
+        if (
+            recessed_center is not None
+            and wall_light
+            and not can_force_wall
+        ):
+            bw = float(cand.features.get("width", 0.0))
+            bh = float(cand.features.get("height", 0.0))
+            if bh >= bw and max(bw, bh) / max(min(bw, bh), 0.1) >= 1.5:
+                recessed_center = None
+                wall_light = False
+        if wall_light and can_force_wall:
             cat = Category.LIGHT
             best_entry = next(
                 (e for e in light_entries if e.subtype == "wall"),
@@ -1022,9 +1294,8 @@ def classify_candidates(
             )
             best_score = max(best_score, light_score, 0.6)
             shape_forced = True
-        elif _is_circle_light_shape(cand) and can_force_light:
+        elif recessed_center is not None:
             dense = int(cand.features.get("n_segments", 0)) >= _LIGHT_DENSE_SEGS
-            # Near-wall duplex outlets can look vaguely circular — keep those.
             wall_receptacle = (
                 cat == Category.RECEPTACLE
                 and _near_wall(wall_mask, cand.center[0], cand.center[1])
@@ -1041,8 +1312,10 @@ def classify_candidates(
                     (e for e in light_entries if e.subtype == "recessed"),
                     light_entries[0],
                 )
-                best_score = max(best_score, light_score, 0.55)
+                best_score = max(best_score, 0.85)
                 shape_forced = True
+                forced_center = recessed_center
+                wall_light = False
         else:
             wall_light = False
 
@@ -1063,15 +1336,16 @@ def classify_candidates(
                 else _SWITCH_MIN_IOU
             )
             if switch_iou < min_iou:
-                # Circle-in-square mis-scored as switch → light instead.
-                if _is_circle_light_shape(cand) and can_force_light:
+                # Circle-in-square mis-scored as switch → recessed light.
+                if recessed_center is not None:
                     cat = Category.LIGHT
                     best_entry = next(
                         (e for e in light_entries if e.subtype == "recessed"),
                         light_entries[0],
                     )
-                    best_score = max(best_score, light_score, 0.55)
+                    best_score = max(best_score, 0.85)
                     shape_forced = True
+                    forced_center = recessed_center
                 else:
                     continue
             else:
@@ -1081,10 +1355,9 @@ def classify_candidates(
         if best_score < _REJECT_SCORE and cat != Category.LIGHT:
             continue
 
-        # Template-matched light without shape force still needs a decent
-        # light score when the winner was not a light (should not happen) —
-        # and drop weak template-only lights that look like receptacles.
         codes = early_codes
+        # Non-geometric template lights still need a legend floor; geometric
+        # recessed and EXT/VP are exempt. Receptacle-coded weak hits stay out.
         if (
             cat == Category.LIGHT
             and not shape_forced
@@ -1094,6 +1367,7 @@ def classify_candidates(
             continue
         if (
             cat == Category.LIGHT
+            and not shape_forced
             and _light_has_receptacle_codes(codes)
             and light_score < 0.85
             and not any(c.upper() in ("EXT", "VP") for c in codes)
@@ -1108,6 +1382,7 @@ def classify_candidates(
             best_entry,
             wall_light=wall_light if cat == Category.LIGHT else False,
         )
+        det_center = forced_center if forced_center is not None else cand.center
 
         # Exhaust fan requires a black fill (half-disc) — Fix 5 / R2 Fix 4.
         if cat == Category.EXHAUST_FAN:
@@ -1155,6 +1430,12 @@ def classify_candidates(
         )
         confidence = float(max(0.0, min(1.0, best_score)))
 
+        notes = [
+            f"second_best={second:.3f}",
+            f"cand_segs={cand.features.get('n_segments')}",
+        ]
+        if forced_center is not None:
+            notes.append("recessed_downlight_geometry")
         detections.append(
             Detection(
                 id=str(uuid.uuid4()),
@@ -1163,7 +1444,7 @@ def classify_candidates(
                 subtype=subtype,
                 codes=codes,
                 mount_height_in=mount,
-                center=Point(x=cand.center[0], y=cand.center[1]),
+                center=Point(x=det_center[0], y=det_center[1]),
                 bbox=BBox(x0=cand.bbox[0], y0=cand.bbox[1], x1=cand.bbox[2], y1=cand.bbox[3]),
                 rotation_deg=best_rot if best_rot in (0, 90, 180, 270) else 0,  # type: ignore[arg-type]
                 confidence=confidence,
@@ -1173,13 +1454,84 @@ def classify_candidates(
                     legend_entry_id=best_entry.id,
                     match_score=best_score,
                     text_tokens=codes,
-                    notes=[
-                        f"second_best={second:.3f}",
-                        f"cand_segs={cand.features.get('n_segments')}",
-                    ],
+                    notes=notes,
                 ),
             )
         )
+
+    # Recessed cans that never formed a candidate (merged into walls / wiring).
+    light_entry = next(
+        (e for e in usable if e.category == Category.LIGHT and e.subtype == "recessed"),
+        next((e for e in usable if e.category == Category.LIGHT), None),
+    )
+    if light_entry is not None:
+        existing_light_xy = [
+            (d.center.x, d.center.y)
+            for d in detections
+            if d.category == Category.LIGHT
+        ]
+        for cx, cy in _scan_recessed_downlight_centers(ctx, plan_bounds):
+            if any(math.hypot(cx - ex, cy - ey) < 10.0 for ex, ey in existing_light_xy):
+                continue
+            # Skip rings trapped inside oversized appliance / fan blobs.
+            host_mega = False
+            for cand in candidates:
+                if not (
+                    cand.bbox[0] - 2 <= cx <= cand.bbox[2] + 2
+                    and cand.bbox[1] - 2 <= cy <= cand.bbox[3] + 2
+                ):
+                    continue
+                bw = float(cand.features.get("width", 0.0))
+                bh = float(cand.features.get("height", 0.0))
+                if bw * bh > 1500.0 or max(bw, bh) > 55.0:
+                    host_mega = True
+                    break
+            if host_mega:
+                continue
+            # Weak wall-vanity blobs that look circular — do not re-add via scan.
+            weak_wall = False
+            for cand in candidates:
+                if math.hypot(cand.center[0] - cx, cand.center[1] - cy) > 12.0:
+                    continue
+                if not _is_wall_light_shape(ctx, cand):
+                    continue
+                ls = (
+                    _best_light_template_score(ctx, cand, light_entries, templates)
+                    if light_entries
+                    else 0.0
+                )
+                codes_w = _codes_near_candidate(ctx, cand)
+                if not _may_force_wall_light(
+                    ctx, cand, light_score=ls, codes=codes_w
+                ):
+                    weak_wall = True
+                    break
+            if weak_wall:
+                continue
+            codes = _codes_near_point(ctx, cx, cy, radius=14.0)
+            detections.append(
+                Detection(
+                    id=str(uuid.uuid4()),
+                    sheet_id=sheet_id,
+                    category=Category.LIGHT,
+                    subtype="recessed",
+                    codes=codes,
+                    mount_height_in=_parse_mount_height(codes),
+                    center=Point(x=cx, y=cy),
+                    bbox=BBox(x0=cx - 6.0, y0=cy - 6.0, x1=cx + 6.0, y1=cy + 6.0),
+                    rotation_deg=0,
+                    confidence=0.88,
+                    source="geometry",
+                    needs_review=False,
+                    evidence=Evidence(
+                        legend_entry_id=light_entry.id,
+                        match_score=0.88,
+                        text_tokens=codes,
+                        notes=["recessed_downlight_geometry", "viewport_scan"],
+                    ),
+                )
+            )
+            existing_light_xy.append((cx, cy))
 
     fan_boxes = [d.bbox for d in detections if d.category == Category.CEILING_FAN]
     detections.extend(
@@ -1246,8 +1598,10 @@ def drop_outside_footprint(
 ) -> list[Detection]:
     """Keep only EXT/WP items outside the building footprint (R4).
 
-    Called after ``assign_rooms`` so ``room_id`` already points at Exterior for
-    porch/yard ink. Interior / attic detections are unchanged.
+    Called after ``assign_rooms``. Never drops fans / detectors / exhaust —
+    rooms sometimes mis-labels bedroom fans as Exterior. Geometric recessed
+    cans are also kept (same mis-label). Sheet-margin false lights without
+    EXT/WP still go away.
     """
     by_id = {r.id: r for r in rooms}
     out: list[Detection] = []
@@ -1256,11 +1610,26 @@ def drop_outside_footprint(
         if room is None or getattr(room, "kind", None) != "exterior":
             out.append(d)
             continue
+        if d.category in (
+            Category.CEILING_FAN,
+            Category.DETECTOR,
+            Category.EXHAUST_FAN,
+            Category.JUNCTION_BOX,
+        ):
+            out.append(d)
+            continue
         codes_up = {c.strip().upper() for c in d.codes}
         if "EXT" in codes_up or "WP" in codes_up:
             out.append(d)
             continue
         if d.subtype in ("exterior_wall", "gfci_weatherproof"):
+            out.append(d)
+            continue
+        notes = list(d.evidence.notes) if d.evidence and d.evidence.notes else []
+        if (
+            d.category == Category.LIGHT
+            and "recessed_downlight_geometry" in notes
+        ):
             out.append(d)
             continue
         # Drop false recessed/wall ink in the sheet margin (e.g. plan-4 TL).
