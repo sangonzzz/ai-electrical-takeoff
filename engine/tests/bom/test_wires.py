@@ -36,6 +36,7 @@ def _det(
     x: float,
     y: float,
     sheet_id: str = "sheet-test",
+    codes: list[str] | None = None,
 ) -> Detection:
     return Detection(
         id=det_id,
@@ -47,6 +48,7 @@ def _det(
         confidence=0.9,
         source="geometry",
         evidence=Evidence(),
+        codes=list(codes or []),
     )
 
 
@@ -123,6 +125,36 @@ def test_three_way_pair_gets_nm_14_3() -> None:
     assert runs[0].cable_type == "nm_14_3"
     # Both switch ends: 2 * (4+1) = 10
     assert runs[0].vertical_allowance_ft == pytest.approx(10.0)
+
+
+def test_three_way_codes_3d_get_nm_14_3() -> None:
+    """Legend codes 3/3D count as three-way even when subtype is dimmer."""
+    # Long enough that gang clustering treats ends as distant (>40 pt).
+    segs = [
+        _dash(100, 200, 108, 200),
+        _dash(112, 200, 120, 200),
+        _dash(124, 200, 132, 200),
+        _dash(136, 200, 144, 200),
+        _dash(148, 200, 156, 200),
+        _dash(160, 200, 168, 200),
+        _dash(172, 200, 180, 200),
+    ]
+    dets = [
+        _det("sw1", Category.SWITCH, "dimmer", 100, 200, codes=["3D"]),
+        _det("sw2", Category.SWITCH, "single_pole", 180, 200, codes=["3D"]),
+    ]
+    ctx = _ctx_with_segments(segs)
+    vp = BBox(x0=50, y0=150, x1=220, y1=250)
+    runs = find_wire_runs(
+        ctx,
+        vp,
+        dets,
+        scale_pt_per_ft=18.0,
+        assumptions={"ceiling_height_ft": 8, "switch_height_in": 48, "slack_ft_per_end": 1},
+    )
+    nm143 = [r for r in runs if r.cable_type == "nm_14_3"]
+    assert len(nm143) >= 1
+    assert {nm143[0].from_detection_id, nm143[0].to_detection_id} == {"sw1", "sw2"}
 
 
 def test_no_snap_beyond_wire_snap_pt() -> None:
@@ -301,4 +333,33 @@ def test_plan1_has_many_runs_none_over_40ft() -> None:
         runs,
         result.detections,
         str(DEBUG_DIR / "wires_plan1.png"),
+    )
+
+
+@pytest.mark.skipif(not PLANS.is_file(), reason="plans PDF missing")
+def test_plan1_has_at_least_one_nm_14_3() -> None:
+    """Plan 1 has 3-way pairs (laundry/entry); traveler run must be nm_14_3."""
+    plan1 = REPO_ROOT / "out" / "plan1.json"
+    if not plan1.is_file():
+        pytest.skip("out/plan1.json missing — run analyze first")
+
+    from takeoff_engine.viewport import find_electrical_title, find_electrical_viewport, parse_scale
+
+    assumptions = load_assumptions(REPO_ROOT / "data" / "assumptions.yaml")
+    result = SheetResult.model_validate(json.loads(plan1.read_text(encoding="utf-8")))
+    ctx = load_page(PLANS, 0)
+    viewport, _ = find_electrical_viewport(ctx)
+    title_bbox, _ = find_electrical_title(ctx)
+    scale = float(parse_scale(ctx, title_bbox) or result.sheet.scale_pt_per_ft or DEFAULT_PT_PER_FT)
+
+    runs = find_wire_runs(
+        ctx,
+        result.sheet.viewport or viewport,
+        result.detections,
+        scale,
+        assumptions,
+    )
+    nm143 = [r for r in runs if r.cable_type == "nm_14_3"]
+    assert len(nm143) >= 1, (
+        f"expected ≥1 nm_14_3 on plan 1 (3-way traveler), got 0 of {len(runs)} runs"
     )

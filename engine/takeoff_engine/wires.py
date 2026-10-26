@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import math
 import uuid
+from collections import deque
 from typing import Any
 
 from takeoff_engine.config import WIRE_SNAP_PT
@@ -20,6 +21,7 @@ from takeoff_engine.models import BBox, Category, Detection, Point, WireRun
 from takeoff_engine.types import PageContext, Segment
 
 # Measured thresholds (see docs/modules/bom.md and data/assumptions.yaml).
+# Single-stroke dashes on these plans are typically 4–10 pt (median ~7.1).
 DASH_LEN_MIN_PT = 3.0
 DASH_LEN_MAX_PT = 12.0
 GAP_MIN_PT = 1.0
@@ -51,6 +53,16 @@ MAX_SNAP_STUB_PT = 18.0
 MAX_PLAN_LENGTH_FT = 40.0
 
 _THREE_WAY = frozenset({"three_way", "three_way_dimmer"})
+# Legend codes (Agente 2 often leaves subtype as dimmer/single_pole but codes=["3D"]).
+_THREE_WAY_CODES = frozenset({"3", "3D"})
+# Ignore co-located multi-gang 3D switches when searching traveler pairs.
+_THREE_WAY_PAIR_MIN_DIST_PT = 40.0
+# Traveler pass: curved dashes flatten to ~1.5–2 pt samples; need a looser window
+# than the main chain detector so distant 3-way gangs still connect (Plan 4).
+TRAVELER_DASH_LEN_MIN_PT = 1.5
+TRAVELER_DASH_LEN_MAX_PT = 14.0
+TRAVELER_GAP_MIN_PT = 0.5
+TRAVELER_GAP_MAX_PT = 10.0
 
 
 def _seg_len(s: Segment) -> float:
@@ -85,8 +97,14 @@ def _polyline_length_pt(points: list[Point]) -> float:
     return total
 
 
-def _collect_dash_candidates(ctx: PageContext, viewport: BBox) -> list[Segment]:
-    """Short black open strokes that look like wiring dashes (not ~2 pt symbol arcs)."""
+def _collect_dash_candidates(
+    ctx: PageContext,
+    viewport: BBox,
+    *,
+    len_min: float = DASH_LEN_MIN_PT,
+    len_max: float = DASH_LEN_MAX_PT,
+) -> list[Segment]:
+    """Short black open strokes that look like wiring dashes."""
     out: list[Segment] = []
     for s in ctx.black_segments:
         if not _seg_in_viewport(s, viewport):
@@ -94,7 +112,7 @@ def _collect_dash_candidates(ctx: PageContext, viewport: BBox) -> list[Segment]:
         if abs(s.width - STROKE_WIDTH_NOMINAL) > STROKE_WIDTH_TOL:
             continue
         L = _seg_len(s)
-        if DASH_LEN_MIN_PT <= L <= DASH_LEN_MAX_PT:
+        if len_min <= L <= len_max:
             out.append(s)
     return out
 
@@ -379,7 +397,13 @@ def _devices_for_chain(
 
 
 def _is_three_way(det: Detection) -> bool:
-    return det.category == Category.SWITCH and det.subtype in _THREE_WAY
+    """True for 3-way / 3-way-dimmer switches by subtype or legend code (3, 3D)."""
+    if det.category != Category.SWITCH:
+        return False
+    if det.subtype in _THREE_WAY:
+        return True
+    codes = {c.strip().upper() for c in det.codes}
+    return bool(codes & _THREE_WAY_CODES)
 
 
 def _cable_type(a: Detection, b: Detection) -> str:
@@ -551,6 +575,194 @@ def _subpolyline_between_devices(
     return _snap_points_to_devices(mid, from_det, to_det)
 
 
+def _dash_adjacency(
+    dashes: list[Segment],
+    *,
+    gap_min: float = GAP_MIN_PT,
+    gap_max: float = GAP_MAX_PT,
+) -> list[list[int]]:
+    """Undirected neighbors by endpoint gap in [gap_min, gap_max]."""
+    n = len(dashes)
+    adj: list[list[int]] = [[] for _ in range(n)]
+    for i in range(n):
+        si = dashes[i]
+        i_ends = ((si.x0, si.y0), (si.x1, si.y1))
+        for j in range(i + 1, n):
+            sj = dashes[j]
+            linked = False
+            for a in i_ends:
+                for b in ((sj.x0, sj.y0), (sj.x1, sj.y1)):
+                    gap = _dist(a, b)
+                    if gap_min <= gap <= gap_max:
+                        linked = True
+                        break
+                if linked:
+                    break
+            if linked:
+                adj[i].append(j)
+                adj[j].append(i)
+    return adj
+
+
+def _dashes_near_detection(
+    dashes: list[Segment], det: Detection, radius: float
+) -> list[int]:
+    out: list[int] = []
+    for i, s in enumerate(dashes):
+        for e in ((s.x0, s.y0), (s.x1, s.y1), ((s.x0 + s.x1) / 2, (s.y0 + s.y1) / 2)):
+            if math.hypot(det.center.x - e[0], det.center.y - e[1]) <= radius:
+                out.append(i)
+                break
+    return out
+
+
+def _polyline_from_dash_indices(dashes: list[Segment], indices: list[int]) -> list[Point]:
+    """Order a path of dash indices into a continuous polyline."""
+    if not indices:
+        return []
+    segs = [dashes[i] for i in indices]
+    return _ordered_polyline(segs)
+
+
+def _shortest_dash_path(
+    adj: list[list[int]], starts: list[int], goals: set[int]
+) -> list[int] | None:
+    """BFS from ``starts`` to any index in ``goals``; return index path or None."""
+    if not starts or not goals:
+        return None
+    q: deque[int] = deque()
+    parent: dict[int, int | None] = {}
+    for s in starts:
+        if s in parent:
+            continue
+        parent[s] = None
+        q.append(s)
+    hit: int | None = None
+    while q:
+        u = q.popleft()
+        if u in goals:
+            hit = u
+            break
+        for v in adj[u]:
+            if v in parent:
+                continue
+            parent[v] = u
+            q.append(v)
+    if hit is None:
+        return None
+    path: list[int] = []
+    cur: int | None = hit
+    while cur is not None:
+        path.append(cur)
+        cur = parent[cur]
+    path.reverse()
+    return path
+
+
+def _cluster_three_ways(threes: list[Detection]) -> list[list[Detection]]:
+    """Group co-located multi-gang 3-ways; one traveler per distant gang pair."""
+    remaining = list(threes)
+    gangs: list[list[Detection]] = []
+    while remaining:
+        seed = remaining.pop(0)
+        gang = [seed]
+        changed = True
+        while changed:
+            changed = False
+            still: list[Detection] = []
+            for d in remaining:
+                if any(
+                    math.hypot(d.center.x - g.center.x, d.center.y - g.center.y)
+                    < _THREE_WAY_PAIR_MIN_DIST_PT
+                    for g in gang
+                ):
+                    gang.append(d)
+                    changed = True
+                else:
+                    still.append(d)
+            remaining = still
+        gangs.append(gang)
+    return gangs
+
+
+def _three_way_traveler_runs(
+    dashes: list[Segment],
+    adj: list[list[int]],
+    active: list[Detection],
+    sheet_id: str,
+    scale_pt_per_ft: float,
+    assumptions: dict[str, Any],
+    seen_pairs: set[tuple[str, str]],
+) -> list[WireRun]:
+    """Find nm_14_3 runs between distant 3-way gangs linked by dashed ink.
+
+    Classification often stores 3D as dimmer/single_pole with codes=['3D']; we
+    still treat those as three-ways. Multi-gang boxes are clustered so each
+    traveler circuit emits one run (not every cross-product of switches).
+    """
+    threes = [d for d in active if _is_three_way(d)]
+    if len(threes) < 2:
+        return []
+
+    gangs = _cluster_three_ways(threes)
+    if len(gangs) < 2:
+        return []
+
+    runs: list[WireRun] = []
+    for i, gang_a in enumerate(gangs):
+        for gang_b in gangs[i + 1 :]:
+            # Closest pair of switches across the two gangs.
+            a, b = min(
+                ((xa, xb) for xa in gang_a for xb in gang_b),
+                key=lambda ab: math.hypot(
+                    ab[0].center.x - ab[1].center.x,
+                    ab[0].center.y - ab[1].center.y,
+                ),
+            )
+            pair = tuple(sorted((a.id, b.id)))
+            if pair in seen_pairs:
+                continue
+
+            starts = _dashes_near_detection(dashes, a, WIRE_END_ASSOCIATE_PT)
+            goals = set(_dashes_near_detection(dashes, b, WIRE_END_ASSOCIATE_PT))
+            path_idx = _shortest_dash_path(adj, starts, goals)
+            if not path_idx or len(path_idx) < 2:
+                continue
+
+            points = _polyline_from_dash_indices(dashes, path_idx)
+            poly = _snap_points_to_devices(points, a, b)
+            if len(poly) < 2:
+                continue
+            if _is_unsupported_straight_chord(poly, dashes):
+                continue
+
+            plan_pt = _polyline_length_pt(poly)
+            plan_ft = plan_pt / scale_pt_per_ft
+            if plan_ft > MAX_PLAN_LENGTH_FT or plan_ft < 0.5:
+                continue
+
+            seen_pairs.add(pair)
+            vert = _vertical_allowance_ft(a, assumptions) + _vertical_allowance_ft(
+                b, assumptions
+            )
+            runs.append(
+                WireRun(
+                    id=str(uuid.uuid4()),
+                    sheet_id=sheet_id or a.sheet_id,
+                    points=poly,
+                    from_detection_id=a.id,
+                    to_detection_id=b.id,
+                    cable_type="nm_14_3",
+                    plan_length_ft=round(plan_ft, 3),
+                    vertical_allowance_ft=round(vert, 3),
+                    total_length_ft=round(plan_ft + vert, 3),
+                    confidence=0.75,
+                    source="geometry",
+                )
+            )
+    return runs
+
+
 def find_wire_runs(
     ctx: PageContext,
     viewport: BBox,
@@ -560,13 +772,14 @@ def find_wire_runs(
 ) -> list[WireRun]:
     """Chain dashed black segments into device-to-device WireRun polylines.
 
-    Length = polyline length / scale_pt_per_ft. Cable is ``nm_14_3`` only when
-    both ends are 3-way switches; otherwise ``nm_14_2``. Vertical allowance uses
-    assumptions (ceiling height, switch AFF, slack); waste is applied later in
+    Length = polyline length / scale_pt_per_ft. Cable is ``nm_14_3`` when both
+    ends are 3-way switches (subtype *or* legend codes ``3`` / ``3D``); otherwise
+    ``nm_14_2``. Vertical allowance uses assumptions; waste is applied later in
     ``compute_bom``.
 
     Nearly-straight chords with little dash ink underneath are rejected (phantom
-    wall→attic guard). Curved dash-following runs are kept.
+    wall→attic guard). Curved dash-following runs are kept. A dedicated traveler
+    pass links distant 3-way pairs through the dash graph.
     """
     if scale_pt_per_ft <= 0:
         raise ValueError("scale_pt_per_ft must be positive")
@@ -574,6 +787,19 @@ def find_wire_runs(
     active = [d for d in detections if d.status == "active"]
     dashes = _collect_dash_candidates(ctx, viewport)
     chains = _chain_dashes(dashes)
+    # Traveler graph: include flattened ~1.5–2 pt curve samples (main chain window
+    # starts at 3 pt and misses Plan-4 hallway↔living travelers).
+    traveler_dashes = _collect_dash_candidates(
+        ctx,
+        viewport,
+        len_min=TRAVELER_DASH_LEN_MIN_PT,
+        len_max=TRAVELER_DASH_LEN_MAX_PT,
+    )
+    traveler_adj = _dash_adjacency(
+        traveler_dashes,
+        gap_min=TRAVELER_GAP_MIN_PT,
+        gap_max=TRAVELER_GAP_MAX_PT,
+    )
 
     sheet_id = active[0].sheet_id if active else (detections[0].sheet_id if detections else "")
     runs: list[WireRun] = []
@@ -635,6 +861,19 @@ def find_wire_runs(
                     source="geometry",
                 )
             )
+
+    # Traveler pass: distant 3-way pairs connected by dashed ink → nm_14_3.
+    runs.extend(
+        _three_way_traveler_runs(
+            traveler_dashes,
+            traveler_adj,
+            active,
+            sheet_id,
+            scale_pt_per_ft,
+            assumptions,
+            seen_pairs,
+        )
+    )
 
     return runs
 

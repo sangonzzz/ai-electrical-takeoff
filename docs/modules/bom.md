@@ -20,7 +20,7 @@ Inside `config.APPROX_VIEWPORTS[0]`, black open strokes (width ≈ 0.24) that fo
 | Gap (median, wiring-like pairs) | **3.8 pt** |
 | Gap (typical range) | **2–4.5 pt** |
 
-Detector window used in code: dash length **3–12 pt**, gap **1–6 pt** (margin around the measurement). Documented also in `data/assumptions.yaml`.
+Detector window used in code: dash length **3–12 pt**, gap **1–6 pt**. Traveler pass (3-way only) uses **1.5–14 pt** / gap **0.5–10 pt** so flattened curved dashes still connect. Documented also in `data/assumptions.yaml`.
 
 ## Wire algorithm
 
@@ -31,8 +31,9 @@ Detector window used in code: dash length **3–12 pt**, gap **1–6 pt** (margi
 5. Associate detections along the dashed polyline within `WIRE_PATH_ASSOCIATE_PT` (28 pt); if fewer than two, enrich with nearest devices to each endpoint within `WIRE_END_ASSOCIATE_PT` (32 pt). (`WIRE_SNAP_PT`=10 alone is too tight for real symbol centers.) Consecutive devices along a chain become hops; each hop keeps the **sub-polyline of dashes** (never invent a bare center-to-center chord).
 6. **Phantom chord gate:** reject only if the polyline is nearly straight (chord/length ≥ 0.90) **and** more than 30% of samples lack a nearby dash. Curved dash-following runs are kept.
 7. **Length:** polyline length / `scale_pt_per_ft` → `plan_length_ft`.
-8. **Cable type:** `nm_14_3` if both ends are `three_way` or `three_way_dimmer`; else `nm_14_2`.
-9. **Vertical allowance** (from assumptions): switch end → `(ceiling_height_ft − switch_height_in/12) + slack`; ceiling-ish end → `slack` only; wall receptacles/lights use mount height when known. Waste is **not** applied here — it is applied in `compute_bom`.
+8. **Cable type:** `nm_14_3` if both ends are 3-way switches — by subtype (`three_way` / `three_way_dimmer`) **or** legend codes `3` / `3D` (Agente 2 often leaves subtype as dimmer/single_pole). Else `nm_14_2`.
+9. **3-way traveler pass:** cluster co-located 3-ways into gangs (<40 pt); BFS on the dash graph between distant gangs; emit one `nm_14_3` per gang pair with a dash-backed path (laundry↔entry on Plan 1).
+10. **Vertical allowance** (from assumptions): switch end → `(ceiling_height_ft − switch_height_in/12) + slack`; ceiling-ish end → `slack` only; wall receptacles/lights use mount height when known. Waste is **not** applied here — it is applied in `compute_bom`.
 
 ### Routing assumption (honest limit)
 
