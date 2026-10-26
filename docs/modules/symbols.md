@@ -81,24 +81,26 @@ Order matters: remove non-symbol ink **before** clustering so dashes never join 
 | Wall vanity (R3) | Elongated (aspect≥1.5) + cross + tick, n≤90 → `wall` | Bath 2 mirror light |
 | Fan center (R3) | `Detection.center` = hub `J` point | Bed 1 fan marker was off-hub |
 | Fan hub ≠ light (R4.1) | Never peel / emit a light on a fan hub `J`; fan wins cross-NMS vs light | Plan 4 Bed 1/2/Opt3 false recessed |
-| Light template gate (R4.2) | Shape-force light only if light-legend IoU ≥0.55 (peeled ≥0.40); no force in gray architecture; receptacle codes (GFI/240V/…) block weak lights | Kitchen/bath cabinet & counter false cans |
-| Peel quality (R4.2) | Peel rings: 12–40 shorts, ~8–14 pt, aspect ≤1.35; skip fan parents | Stops appliance mega-blob peels |
-| Outside footprint (R4.3) | After `assign_rooms`, drop Exterior detections unless codes have `EXT`/`WP` (or exterior subtypes) | Plan 4 top-left false recessed |
+| Outside footprint (R4.3) | After `assign_rooms`, drop Exterior LIGHT/SWITCH/RECEPTACLE unless EXT/WP; never drop fans/detectors/exhaust | Plan 4 margin false recessed; plan 3 Bed 2 fan kept |
+| Recessed geometry (R5) | **Deterministic** circle r≈3.5–4.5 pt in ~8–12 pt square (frame center or compact bbox). Not a template-score gate. Skip gray cabinets, fan-hub `J`, mega hosts | Restores plan 2/3 kitchen/living cans after R4 over-cull |
+| Viewport ring scan (R5) | Frame clusters + short-stroke rings recover cans that never formed a candidate | Plan 2 attic can @ (917,302) |
 
 4. NMS same category 8 pt; then cross-category NMS for known collisions (fan > light).
 5. `needs_review` **only** when (a) top-two scores are close **and** different categories, or (b) weak match (&lt;0.30) with no type codes. Same-glyph receptacle/switch legend rows no longer flood review (target &lt;15%; measured ~5%).
-6. Regression: `engine/tests/symbols/test_category_count_regression.py` — plan 1 + plan 4 category bands (plan 4 lights 12–18).
+6. Regression: `engine/tests/symbols/test_category_count_regression.py` — all 4 plans (lights ≥9/13/15; plan 4 lights 13–17; fans 1/2/2/3; switches not below R5).
 
 ### Duplex vs exhaust half-fill
 
 Both use a black semicircle fill. Distinction: a **duplex** has exactly two parallel short interior slots; a **circle** outline leaves four edge chords — those are exhaust/IAQ, not half-hot.
 
-### Rough counts after R4 (`--no-llm --no-bom`)
+### Rough counts after R5 (`--no-llm --no-bom`)
 
 | plan | sw | fan | light | rec | exhaust | detector | JB | notes |
 |------|----|-----|-------|-----|---------|----------|----|-------|
-| 1 | ~12 | 1 | ~8 | ~24 | 2 | 2 | 0 | no light on fan hub |
-| 4 | ~15 | 3 | ~13 | ~38 | 2 | 5 | 0 | was 28 lights in R3; EXT kept; Bath 2 wall kept |
+| 1 | 12 | 1 | ~10 | ~24 | 2 | 2 | 0 | wall vanity + recessed geometry |
+| 2 | 10 | 2 | ~13 | ~33 | 3 | 3 | 0 | kitchen row + attic ring scan |
+| 3 | 11 | 2 | ~17 | ~26 | 4 | 4 | 0 | Bed 2 fan restored; living/dining cans |
+| 4 | 15 | 3 | ~16 | ~38 | 2 | 5 | 0 | no hub lights; EXT kept; Bath 2 wall |
 
 ## Pipeline (`analyze_sheet`)
 

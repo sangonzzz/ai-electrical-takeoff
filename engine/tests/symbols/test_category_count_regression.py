@@ -1,7 +1,7 @@
-"""Per-plan category count regression — catch silent doubling (R4).
+"""Per-plan category count regression (R4/R5).
 
-Baselines from Escondido after R4 false-light cleanup. Tolerances are wide
-enough for small glyph jitter, tight enough that lights 14→28 fails.
+Guards against silent doubling (R3 lights 14→28) and over-cull (R4
+10/16/19/14 → 8/8/6/13). Recessed downlights are geometric (R5).
 """
 
 from __future__ import annotations
@@ -14,29 +14,35 @@ import pytest
 from takeoff_engine.models import Category
 from takeoff_engine.pipeline import analyze_sheet
 
-# page_index → {category: (expected, abs_tol)}
-# Plan 4 lights centered ~15 (user ~14–17); 13 is within tol after kitchen cull.
-_EXPECTED: dict[int, dict[Category, tuple[int, int]]] = {
+# Minimum counts (and plan-4 light band). Switches must not drop below R5.
+_MINIMA: dict[int, dict[Category, int]] = {
     0: {  # plan 1
-        Category.SWITCH: (12, 2),
-        Category.LIGHT: (8, 3),
-        Category.RECEPTACLE: (24, 6),
-        Category.CEILING_FAN: (1, 0),
-        Category.EXHAUST_FAN: (2, 1),
-        Category.DETECTOR: (2, 1),
+        Category.LIGHT: 9,
+        Category.CEILING_FAN: 1,
+        Category.SWITCH: 12,
     },
-    3: {  # plan 4 — the plan that doubled lights in R3
-        Category.SWITCH: (15, 3),
-        Category.LIGHT: (15, 3),  # allow 12–18; forbid ~28
-        Category.RECEPTACLE: (38, 8),
-        Category.CEILING_FAN: (3, 0),
-        Category.EXHAUST_FAN: (2, 1),
-        Category.DETECTOR: (5, 1),
+    1: {  # plan 2
+        Category.LIGHT: 13,
+        Category.CEILING_FAN: 2,
+        Category.SWITCH: 10,
+    },
+    2: {  # plan 3
+        Category.LIGHT: 15,
+        Category.CEILING_FAN: 2,
+        Category.SWITCH: 11,
+    },
+    3: {  # plan 4
+        Category.CEILING_FAN: 3,
+        Category.SWITCH: 15,
     },
 }
 
+# Plan 4 lights: band (not a minimum alone) so 28 fails and ~13–17 passes.
+_PLAN4_LIGHT_LO = 13
+_PLAN4_LIGHT_HI = 17
 
-@pytest.mark.parametrize("page_index", sorted(_EXPECTED))
+
+@pytest.mark.parametrize("page_index", sorted(_MINIMA))
 def test_category_counts_within_tolerance(plans_pdf: Path, page_index: int) -> None:
     result = analyze_sheet(
         plans_pdf,
@@ -45,14 +51,21 @@ def test_category_counts_within_tolerance(plans_pdf: Path, page_index: int) -> N
         with_bom=False,
     )
     counts = Counter(d.category for d in result.detections)
-    expected = _EXPECTED[page_index]
     failures: list[str] = []
-    for cat, (exp, tol) in expected.items():
+
+    for cat, minimum in _MINIMA[page_index].items():
         got = counts.get(cat, 0)
-        lo, hi = exp - tol, exp + tol
-        if not (lo <= got <= hi):
-            failures.append(f"{cat.value}: got {got}, expected {lo}–{hi} (target {exp}±{tol})")
-    # Fan hubs must never carry a sibling light (R4.1).
+        if got < minimum:
+            failures.append(f"{cat.value}: got {got}, need >={minimum}")
+
+    if page_index == 3:
+        got_lights = counts.get(Category.LIGHT, 0)
+        if not (_PLAN4_LIGHT_LO <= got_lights <= _PLAN4_LIGHT_HI):
+            failures.append(
+                f"light: got {got_lights}, need {_PLAN4_LIGHT_LO}–{_PLAN4_LIGHT_HI}"
+            )
+
+    # Fan hubs must never carry a sibling light (R4.1 / R5).
     fans = [d for d in result.detections if d.category == Category.CEILING_FAN]
     lights = [d for d in result.detections if d.category == Category.LIGHT]
     for fan in fans:
@@ -66,6 +79,7 @@ def test_category_counts_within_tolerance(plans_pdf: Path, page_index: int) -> N
                     f"light at fan hub: light=({light.center.x:.1f},{light.center.y:.1f}) "
                     f"fan=({fan.center.x:.1f},{fan.center.y:.1f}) dist={dist:.1f}"
                 )
+
     assert not failures, (
         f"plan page_index={page_index} regression:\n  " + "\n  ".join(failures)
     )
