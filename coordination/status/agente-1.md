@@ -2,25 +2,28 @@
 
 ## Estado
 
-Engine freeze en **v0.4.0**. Cambios de motor solo con aprobación de Santiago.
+Docker api/worker usan imagen con `/opt/venv` (ya no `uv sync` sobre el `.venv` del host). Engine sigue en **0.4.0** (freeze).
 
 ## Hecho
 
-- `PIPELINE_VERSION` → `0.4.0` + tag
-- CHANGELOG: precision rounds 3–5, geometric recessed, 3-way cables, per-plan regression guard
-- AGENTS.md §14 + DECISIONS: freeze del engine
-- Mensaje to-all
+- `backend/Dockerfile` + `docker-entrypoint-api.sh` (alembic solo en api)
+- Compose: api/worker → `takeoff-backend:local`; volúmenes solo `storage/` y `.cache/`
+- Worker: `arq app.worker.WorkerSettings`, `restart: unless-stopped` + healthcheck
+- `.dockerignore` excluye `.venv` / `node_modules` / etc.
+- Engine **no** tocado (freeze 0.4.0)
 
 ## Cómo probarlo
 
 ```bash
-uv run takeoff --version   # -> 0.4.0
-git show v0.4.0 --no-patch
+docker compose config
+docker compose up -d --build
+docker compose ps
+# api :8000 /health · web :5173 · worker Up
 ```
 
 ## Siguiente
 
-- Integración / demo / CI; no tocar engine salvo que Santiago lo pida
+- Confirmar con Santiago que el `.venv` de Windows ya no se corrompe
 - Pushear CI cuando haya scope `workflow`
 
 ## Bloqueos
@@ -29,12 +32,12 @@ git show v0.4.0 --no-patch
 
 ## Decisions
 
-Engine freeze v0.4.0 (AGENTS.md §14).
+Imagen compartida api/worker; venv solo en `/opt/venv` dentro de la imagen.
 
 ## Needs from Santiago
 
-- (ninguno para este tag)
+- `docker compose up -d --build` y confirmar 5 servicios Up
 
 ## Explicación para Santiago
 
-Marqué el motor en **0.4.0**: es la versión que incluye las rondas de precisión 3–5, la regla geométrica de luces empotradas, cables 14/3 entre 3 vías, y el guard de regresión por plano. A partir de aquí el código del engine (detección, cuartos, LLM, BOM, overlay) **no se cambia** sin tu OK; si un agente quiere tocar algo, me escribe y yo solo subo versión después de que apruebes. Así la demo y la idempotencia del backend no se mueven debajo de tus pies.
+Antes api y worker instalaban dependencias al arrancar en la misma carpeta `.venv` que usás en Windows, a la vez, y se pisaban. Ahora se **construye una imagen** una vez con el entorno Linux en `/opt/venv` dentro del contenedor; al arrancar solo migran la DB (api) y levantan uvicorn/arq en segundos. Solo montamos `storage/` y `.cache/` — nunca el repo completo encima del venv. El motor sigue congelado en 0.4.0.
