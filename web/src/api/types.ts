@@ -42,6 +42,13 @@ export interface ReviewCompleteResponse {
   human_reviewed: boolean;
 }
 
+/** POST /api/sheets/{id}/reanalyze → 202 */
+export interface ReanalyzeResponse {
+  sheet_id: string;
+  job_id: string;
+  status: string;
+}
+
 export interface SheetSummary {
   sheet_id: string;
   page_index: number;

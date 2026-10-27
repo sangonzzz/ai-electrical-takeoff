@@ -22,10 +22,13 @@ import type {
   CorrectionEvent,
   DocumentSummary,
   JobInfo,
+  ReanalyzeResponse,
   ReviewCompleteResponse,
   SheetBundle,
   SheetDetailApi,
 } from "./types";
+
+export type { ReanalyzeResponse };
 
 /** Raw GET /api/documents/{id} body (Agente 5). */
 interface DocumentDetailApi {
@@ -271,6 +274,35 @@ export async function markSheetReviewed(
   return request<ReviewCompleteResponse>(`/api/sheets/${sheetId}/review-complete`, {
     method: "POST",
   });
+}
+
+/**
+ * POST /api/sheets/{id}/reanalyze — enqueue a fresh analysis run (keeps old runs).
+ * Polls the job until succeeded/failed, then returns.
+ */
+export async function reanalyzeSheet(sheetId: string): Promise<ReanalyzeResponse> {
+  if (useFixture) {
+    const { resetFixtureState } = await import("./fixture");
+    resetFixtureState();
+    return { sheet_id: sheetId, job_id: "job-fixture-reanalyze", status: "succeeded" };
+  }
+  const started = await request<ReanalyzeResponse>(`/api/sheets/${sheetId}/reanalyze`, {
+    method: "POST",
+  });
+  const deadline = Date.now() + 5 * 60_000;
+  let status = normalizeJobStatus(started.status);
+  while (status === "queued" || status === "running") {
+    if (Date.now() > deadline) {
+      throw new Error("Re-analysis timed out — check job status and reload.");
+    }
+    await new Promise((r) => setTimeout(r, 1500));
+    const job = await getJob(started.job_id);
+    status = job.status;
+    if (status === "failed") {
+      throw new Error(job.error ?? "Re-analysis failed");
+    }
+  }
+  return { ...started, status };
 }
 
 /**

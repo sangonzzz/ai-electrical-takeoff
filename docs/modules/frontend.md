@@ -23,7 +23,8 @@ radius 10 px, transitions ~150 ms. Light theme default.
    `title` and job status from `GET /api/documents/{id}` (poll every 2 s while
    queued/running).
 2. **Sheet** — header (plan tabs, pipeline + short `file_hash`, Undo/Redo,
-   review/export), KPI strip, component palette, plan canvas, right panel.
+   review/export, **Re-run fresh analysis**), KPI strip, component palette,
+   plan canvas, right panel.
 
 ## Editing
 
@@ -40,10 +41,13 @@ radius 10 px, transitions ~150 ms. Light theme default.
 
 - SVG `viewBox` = electrical viewport (PDF points).
 - Marks: filled circle + letter; selected pulse; highlight dims others.
+- Rooms: subtle dashed outlines; open-plan shared edges as thinner “auto boundary”
+  dashes with hover label (detected client-side from shared polygon edges).
 - Wires: **off by default**, beta badge + tooltip about dashed-line tracing limits;
   when on, labels only on hover or when wire count ≤ 14.
 - Boxes off by default. Floating toolbar: select / add / fit / layers.
 - BOM cable section labeled “Cable (estimated)” with per-line estimated badge.
+- **Re-run fresh analysis** → confirm → `POST /api/sheets/{id}/reanalyze`, poll job, reload.
 
 ## Keyboard
 

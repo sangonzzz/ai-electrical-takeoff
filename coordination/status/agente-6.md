@@ -2,21 +2,22 @@
 
 ## Estado
 
-Wires layer off by default (beta + tooltip); BOM cable lines marked estimated.
+Room auto-boundaries styled intentionally; Re-run fresh analysis with confirm + reload.
 
 ## Hecho
 
-- Wires layer default **off**; small **beta** badge; tooltip on dashed-line tracing limits
-- BOM: section “Cable (estimated)” + per-line `estimated` badge
-- Earlier: client Undo/Redo stack, palette DnD, X/Y, Excel/quote, Electrical Takeoff rename
+- Rooms layer: subtle dashed outlines; shared open-plan edges as thin “auto boundary” (hover label)
+- `POST /api/sheets/{id}/reanalyze` via header action + confirmation; polls job; invalidates sheet/BOM
+- Earlier: wires beta off, BOM estimated, client Undo/Redo, palette DnD, Excel/quote
 
 ## Cómo probarlo
 
 ```bash
 cd web
-pnpm exec tsc --noEmit
+pnpm exec tsc --noEmit && pnpm exec vitest run
 pnpm dev
-# Sheet: Wires toggle shows beta; hover for tooltip; BOM cable rows say estimated
+# Toggle Rooms: dashed outlines; hover shared Living/Kitchen edge → "auto boundary"
+# Header → Re-run fresh analysis → confirm → waits for job → sheet reloads
 ```
 
 ## Siguiente
@@ -29,8 +30,8 @@ pnpm dev
 
 ## Decisions
 
-- Wires off by default so reviewers don’t quote unreviewed cable traces
-- Product display name: Electrical Takeoff
+- Auto boundaries detected client-side (shared polygon edges within 2.5 pt), no schema change
+- Reanalyze polls up to 5 minutes then errors with a reload hint
 
 ## Needs from Santiago
 
@@ -38,6 +39,8 @@ pnpm dev
 
 ## Explicación para Santiago
 
-La capa de cables arranca apagada, con un badge “beta” y un tooltip que explica que
-se trazan desde las líneas punteadas y que a veces agarran millwork/gabinetes — hay
-que revisar antes de cotizar. En el BOM las líneas de cable dicen “estimated”.
+Los límites de habitación ahora se ven como líneas punteadas suaves. Cuando el motor
+parte un open-plan (Living/Kitchen) sin pared real, esa línea se dibuja más fina y al
+pasar el mouse dice “auto boundary”, para que no parezca un trazo suelto. También hay
+un botón “Re-run fresh analysis” con confirmación que llama al reanalyze de la API y
+recarga la hoja cuando el job termina.

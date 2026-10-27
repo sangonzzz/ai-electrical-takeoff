@@ -173,6 +173,14 @@ export function SheetPage() {
               old ? { ...old, humanReviewed: true } : old,
           );
         }}
+        onReanalyzed={async () => {
+          await Promise.all([
+            queryClient.invalidateQueries({ queryKey: sheetQueryKey(sheetId) }),
+            queryClient.invalidateQueries({ queryKey: ["bom", sheetId] }),
+            queryClient.invalidateQueries({ queryKey: ["corrections", sheetId] }),
+            queryClient.invalidateQueries({ queryKey: ["document", documentId] }),
+          ]);
+        }}
         onOpenShortcuts={() => setShortcutsOpen(true)}
       />
 

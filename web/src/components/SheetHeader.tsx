@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { AlertTriangle, ArrowLeft, HelpCircle, Redo2, Undo2 } from "lucide-react";
 import type { SheetSummary } from "@/api/types";
 import { StatusBadge } from "./ui/StatusBadge";
+import { ReanalyzeButton } from "./ReanalyzeButton";
 import { ReviewActions } from "./ReviewActions";
 
 interface Props {
@@ -17,6 +18,7 @@ interface Props {
   onUndo: () => void;
   onRedo: () => void;
   onReviewed: () => void;
+  onReanalyzed: () => void | Promise<void>;
   onOpenShortcuts: () => void;
 }
 
@@ -33,6 +35,7 @@ export function SheetHeader({
   onUndo,
   onRedo,
   onReviewed,
+  onReanalyzed,
   onOpenShortcuts,
 }: Props) {
   const hashShort = fileHash?.slice(0, 8) ?? null;
@@ -137,6 +140,7 @@ export function SheetHeader({
             humanReviewed={humanReviewed}
             onReviewed={onReviewed}
           />
+          <ReanalyzeButton sheetId={sheetId} onComplete={onReanalyzed} />
           <button
             type="button"
             className="btn btn-ghost !p-2"
