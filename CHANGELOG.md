@@ -2,9 +2,25 @@
 
 Plain-language notes for Santiago. Newest first.
 
+## v0.6.5 — pocket rule + prices + cable-edit response (frozen)
+
+Engine patch + related app fixes:
+
+- **Unlabeled pocket rule (tightened):** deep footprint hole (≥8 pt inside outline),
+  area ≥ **9 sq ft** @ 18 pt/ft; keynote → `Mech. Closet (TAG)` only if tag bbox is
+  fully inside the pocket; smaller deep holes merge into nearest labeled room
+  (not Exterior). Removes Plan 1 false `Unlabeled space 1` / `Mech. Closet (B32)`.
+- **Prices:** Home Depot–verified SKUs in `data/price_list.yaml`; BOM by subtype;
+  Fixtures (allowance) section.
+- **Cable-edit response fix:** PATCH move / wire CRUD return fresh boxes + BOM
+  (same as a subsequent GET; no stale identity-map collections).
+
+**Engine frozen after this tag** (`AGENTS.md` §14). Golden refresh may still need
+Santiago OK if non-room deltas remain (Agente 7).
+
 ## App 0.7.0: editable cables and boxes
 
-Application release (git tag **`v0.7.0`**). **`PIPELINE_VERSION` stays `0.6.4`**
+Application release (git tag **`v0.7.0`**). At ship time **`PIPELINE_VERSION` was `0.6.4`**
 (analysis / golden unchanged).
 
 - **Edit cables** in the UI (toggle): select runs, change 14/2↔14/3, create A→B,
@@ -14,7 +30,7 @@ Application release (git tag **`v0.7.0`**). **`PIPELINE_VERSION` stays `0.6.4`**
 - **Golden** lock at `eval/golden/v0.6.4/` + isolated e2e (`takeoff_e2e` / `:5174`)
   for demo-flow and cable-edit.
 
-Engine freeze at **v0.6.4** still applies for detection/rooms/LLM/BOM tracing.
+Engine freeze at **v0.6.4** applied until the v0.6.5 pocket-rule bump.
 
 ## v0.6.4 — B14 closet / unlabeled interior rooms (frozen)
 
@@ -24,8 +40,7 @@ not Exterior.
 - **B14 closet rule:** keynote (e.g. `B14`) in/near the pocket → `Mech. Closet (B14)`.
 - Else → `Unlabeled space N` (reading order). Exterior = outside footprint only.
 
-**Engine frozen after this tag:** no further detection/rooms/LLM/BOM/overlay changes
-without Santiago’s approval (`AGENTS.md` §14).
+Engine was frozen after this tag until Santiago approved the v0.6.5 pocket tighten.
 
 ## v0.6.3 — wires restore + patches (frozen)
 

@@ -14,9 +14,9 @@ Demo plans: City of Escondido PAADU public-domain set —
 | Architecture (diagrams) | [`docs/architecture.md`](docs/architecture.md) |
 | Counting rules | [`coordination/DECISIONS.md`](coordination/DECISIONS.md) |
 | Agent ownership | [`AGENTS.md`](AGENTS.md) |
-| Releases | [`CHANGELOG.md`](CHANGELOG.md) · app tag `v0.7.0` · engine `v0.6.4`, … |
+| Releases | [`CHANGELOG.md`](CHANGELOG.md) · app tag `v0.7.0` · engine `v0.6.5`, … |
 
-Current app: **`v0.7.0`** (editable cables/boxes). Engine: **`PIPELINE_VERSION` = `0.6.4` (frozen)**. Engine behavior changes need Santiago’s approval (`AGENTS.md` §14).
+Current app: **`v0.7.0`** (editable cables/boxes). Engine: **`PIPELINE_VERSION` = `0.6.5` (frozen)**. Engine behavior changes need Santiago’s approval (`AGENTS.md` §14).
 
 ---
 
@@ -163,13 +163,13 @@ Highlights:
 |---------|--------|------|
 | `PIPELINE_VERSION` / `__version__` | `engine/takeoff_engine/__init__.py` only | Semver; CLI, `SheetResult`, backend idempotency |
 | Idempotency key | `(file_hash, page_index, pipeline_version)` | Re-upload reuses a succeeded run only for the same version |
-| Git tags | `v0.1.0` … `v0.6.4` (engine) · `v0.7.0` (app) | See `CHANGELOG.md` |
-| Engine freeze | **v0.6.4** | Behavior changes only with Santiago’s approval (`AGENTS.md` §14) |
+| Git tags | `v0.1.0` … `v0.6.5` (engine) · `v0.7.0` (app) | See `CHANGELOG.md` |
+| Engine freeze | **v0.6.5** | Behavior changes only with Santiago’s approval (`AGENTS.md` §14) |
 
 Bump at least the **patch** (or minor) when engine behavior changes (after approval).
 
 ```bash
-uv run takeoff --version   # e.g. 0.6.4
+uv run takeoff --version   # e.g. 0.6.5
 ```
 
 

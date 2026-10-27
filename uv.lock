@@ -1831,7 +1831,7 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "takeoff-engine"
-version = "0.6.4"
+version = "0.6.5"
 source = { editable = "engine" }
 dependencies = [
     { name = "anthropic" },

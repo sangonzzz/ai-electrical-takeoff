@@ -43,13 +43,14 @@ When several codes apply: `240V` > `MW` / `DW` / `H` / `FC` > `WP` > half-hot >
    (SPEC §1 updated to match). Keep all and number `CL 1`….
 3. Exterior room has an empty polygon; assignment = outside building footprint.
 4. Viewport comes from `find_electrical_viewport` (Agente 2), not `APPROX_VIEWPORTS`.
-5. **Unlabeled enclosed interior spaces (B14 closet rule):** An enclosed free
-   region inside the building footprint with no room label is its own interior
-   room — never Exterior. If a keynote tag (e.g. `B14`) is inside or within
-   ~14 pt of the region → `display_name = "Mech. Closet (B14)"`
-   (`name = "MECH. CLOSET (B14)"`). Else → `display_name = "Unlabeled space N"`
-   (N = 1, 2, … reading order). Motivation: Plan 1 water-heater closet (B14)
-   had no bold room label and was wrongly assigned to Exterior.
+5. **Unlabeled enclosed interior spaces (pocket rule, tightened in v0.6.5):**
+   A free region becomes its own interior room only if it is a **deep** hole of
+   the rooms∪walls footprint (≥ **8 pt** inside the outline) and area ≥ **9 sq ft**
+   at 18 pt/ft — never Exterior. Smaller deep holes merge into the nearest
+   labeled room. Keynote → `display_name = "Mech. Closet (TAG)"` only if the
+   **tag bbox lies fully inside** the pocket; else → `Unlabeled space N`
+   (reading order). Motivation: Plan 1 WH closet (B14) had no bold label; the
+   tighten removes false pockets (e.g. Plan 1 `Unlabeled space 1`, `Mech. Closet (B32)`).
 
 ## LLM (Agente 4)
 
@@ -113,5 +114,5 @@ When several codes apply: `240V` > `MW` / `DW` / `H` / `FC` > `WP` > half-hot >
   `page_index`. Do not squash or rewrite git history; Cursor co-author trailers OK.
 - **Single `PIPELINE_VERSION`** in `engine/takeoff_engine/__init__.py` only; bump on any
   engine behavior change. `ENGINE=real` is the compose/.env default (`fake` for tests).
-- **Engine freeze:** current frozen tag **v0.6.4**. No engine behavior changes without
+- **Engine freeze:** current frozen tag **v0.6.5**. No engine behavior changes without
   Santiago’s approval (AGENTS.md §14).
