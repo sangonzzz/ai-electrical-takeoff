@@ -6,6 +6,7 @@ via DATABASE_URL and get a migrated schema without manual steps.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 from pathlib import Path
@@ -84,6 +85,12 @@ def run_alembic_upgrade() -> None:
 
 
 async def bootstrap_database(database_url: str) -> None:
-    """Create DB if needed, then migrate schema to head."""
+    """Create DB if needed, then migrate schema to head.
+
+    Alembic ``env.py`` uses ``asyncio.run`` for async migrations. Calling
+    ``command.upgrade`` from FastAPI lifespan (already inside a running loop)
+    leaves ``run_async_migrations`` un-awaited. Run the sync upgrade in a
+    worker thread so ``asyncio.run`` is safe.
+    """
     await ensure_database(database_url)
-    run_alembic_upgrade()
+    await asyncio.to_thread(run_alembic_upgrade)
