@@ -2,31 +2,30 @@
 
 ## Estado
 
-Wires **v2** shipped: full-curve growth, bbox ends, fixture splits, `nm_14_3` travelers. Awaiting Agente 1 version bump.
+Wires **v2.1**: dash-gap only (no symbol outlines / fan blades); plan 1 ≈19 runs; `nm_14_3` travelers restored where ≥2 gangs exist.
 
 ## Hecho
 
-- Rebuilt `find_wire_runs` (v2):
-  1. Collect dashes (1.5–14 pt)
-  2. Greedy curve growth: gap ≤ typical_max×2 (9 pt; ~12 if aligned) + tangent continuity
-  3. Tip → nearest **bbox boundary** (prefer 3-way / switch)
-  4. Mid-path fixture splits; farthest distant 3-way pair on a curve → `nm_14_3`
-  5. No dashless runs (uncovered gate)
-- Debug PNGs with teal dash underlay + labeled pink/green runs
-- Tests, `docs/modules/bom.md`, `assumptions.yaml` updated
-- Message to Agente 1 (Santiago-approved engine change)
+- Reject continuous glyph strokes (gap < 1.2 pt); require dash gap pattern
+- Exclude ink in receptacle/detector/exhaust bboxes (+2 pt) and fan blade disks
+- Drop closed loops; require different end devices; plan length ≤ 40 ft
+- Traveler BFS + on-curve max-separation 3-way pair → `nm_14_3`
+- Tests: plan 1 count band, no >40 ft total, no same-end; all-plans validity
+- Debug PNGs: `out/debug/wires_plan{1..4}.png`
+- Asked Agente 1 to bump `PIPELINE_VERSION` (Santiago-approved)
 
-## Run counts (v2)
+## Run counts (v2.1)
 
 | Plan | runs | nm_14_2 (n / ft) | nm_14_3 (n / ft) |
 |------|------|------------------|------------------|
-| 1    | 42   | 41 / 549.9       | 1 / 34.4         |
-| 2    | 48   | 48 / 598.5       | 0 / 0.0*         |
-| 3    | 58   | 58 / 848.2       | 0 / 0.0          |
-| 4    | 75   | 74 / 1059.4      | 1 / 36.1         |
-| **Σ**| **223** | **/ 3055.9**  | **/ 70.5**       |
+| 1    | 19   | 18 / 222.9       | 1 / 33.2         |
+| 2    | 23   | 23 / 265.2       | 0 / 0.0*         |
+| 3    | 48   | 44 / 638.8       | 4 / 128.4        |
+| 4    | 53   | 51 / 677.5       | 2 / 65.5         |
 
-\*Plan 2: only co-located 3Ds (same gang) — no traveler on the drawing.
+\*Plan 2 detections have only **one** 3-way — cannot emit a traveler pair (needs Agente 2).
+
+Plan 1: 0 fan-blade runs, 0 same-end loops, max total 33.2 ft.
 
 ## Cómo probarlo
 
@@ -35,27 +34,25 @@ Wires **v2** shipped: full-curve growth, bbox ends, fixture splits, `nm_14_3` tr
 .venv/Scripts/python engine/tests/bom/render_debug.py
 ```
 
-PNGs: `out/debug/wires_plan{1..4}.png`
-
 ## Siguiente
 
-- Reviewer feedback on PNG coverage
+- Plan 2 second 3-way detection (Agente 2) if Santiago wants nm_14_3 there
 - Unverified prices
 
 ## Bloqueos
 
-- Agente 1: bump `PIPELINE_VERSION` (freeze §14; Santiago approved wires v2)
+- Agente 1 version bump
 
 ## Decisions
 
-- Gap ×2 from typical-max 4.5 → 9.0; aligned tips to ~12
-- Mid-path split 8 pt; 3-ways use tip radius (22) so mid-curve travelers register
-- Traveler = max-separation 3-way pair on a curve (≥25 pt), not first/last path order
+- Gap < 1.2 = continuous glyph (never wire); dash gaps start at 1.2
+- Outline bbox exclude: fan / receptacle / detector / exhaust only (not lights/switches — those punch traveler paths)
+- Fan blade disk: 0.65 × max(bbox side) + 12 pt
 
 ## Needs from Santiago
 
-None for wires. Prices still `verified: false` in places.
+None for this fix. Optional: confirm plan 2 should have two 3-ways in detections.
 
 ## Explicación para Santiago
 
-Reescribí detección de cables (v2). Ahora armo **curvas completas** uniendo rayitas dashed (distancia entre puntas ≤ gap×2 y misma dirección), corto en cada aparato que toca la curva, y el extremo se pega al **borde del símbolo**. Si en una curva hay dos 3-way lejos (laundry↔entrada), esa corrida es `nm_14_3`. Los PNG en `out/debug/` muestran las rayitas de fondo y encima cada corrida con tipo y pies.
+Los cables ya no siguen el dibujo del ventilador ni los circulitos de los tomacorrientes. Solo cuento rayitas **discontinuas** (con hueco de verdad entre ellas); lo que está pegado (contorno de símbolo) se ignora. También saco la tinta dentro de ventiladores / tomas / detectores / extractores. En el Plan 1 quedan ~19 corridas, sin bucles raros, y el traveler 3-way vuelve como `nm_14_3`. El Plan 2 solo tiene un 3-way detectado, así que ahí no hay par para 14/3.

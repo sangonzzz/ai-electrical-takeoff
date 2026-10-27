@@ -20,20 +20,18 @@ Inside `config.APPROX_VIEWPORTS[0]`, black open strokes (width ≈ 0.24) that fo
 | Gap (median, wiring-like pairs) | **3.8 pt** |
 | Gap (typical range) | **2–4.5 pt** |
 
-Detector window (v2): dash length **1.5–14 pt** (includes Bezier-flattened curve samples), gap **≤ typical_max × 2 = 9.0 pt** (aligned tips up to ~12 pt). Documented also in `data/assumptions.yaml`.
+Detector (v2.1): dash length **1.5–14 pt**, **gap pattern** required (`gap ∈ [1.2, 9]` — continuous glyph joints with gap < 1.2 are never wire). Documented in `data/assumptions.yaml`.
 
-## Wire algorithm (v2)
+## Wire algorithm (v2.1)
 
-1. **Collect** short black segments in the viewport (stroke width ≈ 0.24, length in window).
-2. **Link into full curves** by greedy bidirectional growth: at each tip, pick the unused dash whose near end is within `GAP_MAX` (= measured gap × 2) and whose tangent continues the tip direction (`cos ≥ DIR_COS_MIN`). Prefer high-alignment continuations so fan-blade branches lose. Prefer low-degree starts (true curve ends). Drop tiny components (<3 dashes and <16 pt ink).
-3. **Ends at bbox boundary:** each curve tip attaches to the device whose **bbox boundary** (not center) is nearest, within `DEVICE_BBOX_ASSOCIATE_PT` (22 pt). Snap tip onto that boundary only for short stubs.
-4. **One run per curve segment:** wiring-node devices whose bbox is within `DEVICE_PATH_ASSOCIATE_PT` (8 pt) of the polyline are ordered along the path; consecutive pairs become runs. A fixture mid-curve **splits** the curve. Each hop keeps the dash sub-polyline — never a bare center chord.
-5. **No dashless runs:** reject if uncovered sample fraction > 35% (and nearly-straight empty chords).
-6. **Length:** polyline length / `scale_pt_per_ft` → `plan_length_ft`.
-7. **Cable type:** `nm_14_3` if both ends are 3-way — subtype (`three_way` / `three_way_dimmer`) **or** legend codes `3` / `3D`. Else `nm_14_2`.
-8. **Vertical allowance** (from assumptions): switch end → `(ceiling_height_ft − switch_height_in/12) + slack`; ceiling-ish end → `slack` only. Waste is applied later in `compute_bom`.
+1. **Collect dashed strokes only:** measured length + at least one neighbor in the dash-gap window. Drop ink inside receptacle/detector/exhaust bboxes (+2 pt) and ceiling-fan blade disks. Continuous symbol outlines never become candidates.
+2. **Link into open curves** (greedy tip growth, gap × 2 + tangent). Drop closed loops (tips nearly meet).
+3. **Ends at bbox boundary** of the nearest device; mid-path fixtures split the curve.
+4. **Runs** require different devices, mostly dash-covered ink, plan length ≤ 40 ft.
+5. **`nm_14_3`:** farthest distant 3-way pair on a curve, plus a traveler BFS between 3-way gangs.
+6. **Vertical allowance** from assumptions; waste in `compute_bom`.
 
-Debug PNGs (`out/debug/wires_plan{N}.png`) draw candidate dashes in light teal and each run in pink (`nm_14_2`) / green (`nm_14_3`) labeled `{cable_type} {total_ft}ft`.
+Debug PNGs: teal dash underlay + pink/green runs labeled `{cable_type} {total_ft}ft`.
 
 ### Routing assumption (honest limit)
 

@@ -21,30 +21,31 @@ from takeoff_engine.types import PageContext, Segment
 
 # Measured thresholds (see docs/modules/bom.md and data/assumptions.yaml).
 GAP_MEDIAN_PT = 3.8
-GAP_TYPICAL_MAX_PT = 4.5  # upper end of measured wiring-like gaps
-# Include Bezier-flattened curve samples (~1.5 pt) so long arcs stay one curve.
+GAP_TYPICAL_MAX_PT = 4.5
+# Length window: measured dashes 4–10 pt, plus ~1.5–3 pt Bezier-flattened samples
+# on real curves. Continuous glyph joints are rejected by the gap-pattern filter.
 DASH_LEN_MIN_PT = 1.5
 DASH_LEN_MAX_PT = 14.0
-GAP_MIN_PT = 0.5
-# Spec: allow gaps up to measured dash gap × 2 (use typical-max so arcs still link).
+# Below this endpoint gap = continuous glyph stroke (never wire). Dash gaps start here.
+GAP_PATTERN_MIN_PT = 1.2
+GAP_MIN_PT = GAP_PATTERN_MIN_PT
+# Link up to measured gap × 2.
 GAP_MAX_PT = GAP_TYPICAL_MAX_PT * 2.0  # 9.0
-# Aligned tips may bridge a bit farther (flattened samples leave uneven gaps).
-GAP_MAX_ALIGNED_PT = GAP_MAX_PT * 1.35  # ~12.15 when cos is high
-# Hard reject for tip→next tangent (allow room corners; prefer aligned).
+GAP_MAX_ALIGNED_PT = GAP_MAX_PT * 1.25  # ~11.25 when cos is high
 DIR_COS_MIN = -0.35
 DIR_COS_PREFER = 0.35
 
 STROKE_WIDTH_NOMINAL = 0.24
 STROKE_WIDTH_TOL = 0.08
 
-# Curve tip → nearest device bbox boundary.
-DEVICE_BBOX_ASSOCIATE_PT = 22.0
-# Mid-path split: tighter so wall devices near a flyover do not shatter the curve.
-DEVICE_PATH_ASSOCIATE_PT = 8.0
-# Snap curve tip onto bbox boundary only for short stubs (avoid empty chords).
-MAX_SNAP_STUB_PT = 20.0
+# Exclude primitives inside detection bboxes (and fan blade disks).
+BBOX_EXCLUDE_INFLATE_PT = 2.0
+FAN_BLADE_RADIUS_PAD_PT = 12.0
 
-# Categories that may split a curve mid-path (wiring nodes). Tips may be any device.
+DEVICE_BBOX_ASSOCIATE_PT = 22.0
+DEVICE_PATH_ASSOCIATE_PT = 8.0
+MAX_SNAP_STUB_PT = 18.0
+
 _SPLIT_CATEGORIES = frozenset(
     {
         Category.SWITCH,
@@ -59,18 +60,19 @@ _SPLIT_CATEGORIES = frozenset(
 
 COVER_RADIUS_PT = 4.0
 COVER_SAMPLE_SPACING_PT = 2.0
-MAX_UNCOVERED_FRACTION = 0.35
-MIN_STRAIGHTNESS_FOR_COVERAGE_REJECT = 0.92
+MAX_UNCOVERED_FRACTION = 0.30
+MIN_STRAIGHTNESS_FOR_COVERAGE_REJECT = 0.90
 
-# Drop tiny symbol-arc components.
 MIN_CURVE_DASHES = 3
-MIN_CURVE_INK_PT = 16.0
-MAX_PLAN_LENGTH_FT = 50.0
+MIN_CURVE_INK_PT = 18.0
+MAX_PLAN_LENGTH_FT = 40.0
+# Closed loop: tips of the polyline almost meet.
+LOOP_TIP_CLOSE_PT = 12.0
 
 _THREE_WAY = frozenset({"three_way", "three_way_dimmer"})
 _THREE_WAY_CODES = frozenset({"3", "3D"})
-# Multi-gang 3D centers are ~10 pt apart; travelers are much farther.
 _THREE_WAY_TRAVELER_MIN_DIST_PT = 25.0
+_THREE_WAY_GANG_DIST_PT = 40.0
 
 
 def _seg_len(s: Segment) -> float:
@@ -99,14 +101,52 @@ def _polyline_length_pt(points: list[Point]) -> float:
     return total
 
 
-def _collect_dash_candidates(
+def _inflate_bbox(b: BBox, pad: float) -> BBox:
+    return BBox(x0=b.x0 - pad, y0=b.y0 - pad, x1=b.x1 + pad, y1=b.y1 + pad)
+
+
+def _point_in_bbox(x: float, y: float, b: BBox) -> bool:
+    return b.x0 <= x <= b.x1 and b.y0 <= y <= b.y1
+
+
+def _seg_inside_symbol(s: Segment, b: BBox) -> bool:
+    """True if the stroke is symbol ink (midpoint inside, or both ends inside).
+
+    A wiring dash that merely *terminates* at a device may have one tip inside
+    the inflated bbox — keep those. Outline loops sit fully inside.
+    """
+    mx, my = (s.x0 + s.x1) / 2.0, (s.y0 + s.y1) / 2.0
+    if _point_in_bbox(mx, my, b):
+        return True
+    return _point_in_bbox(s.x0, s.y0, b) and _point_in_bbox(s.x1, s.y1, b)
+
+
+def _fan_blade_disks(detections: list[Detection]) -> list[tuple[float, float, float]]:
+    """(cx, cy, radius) disks covering ceiling-fan blade clusters."""
+    disks: list[tuple[float, float, float]] = []
+    for d in detections:
+        if d.status != "active" or d.category != Category.CEILING_FAN:
+            continue
+        w = d.bbox.x1 - d.bbox.x0
+        h = d.bbox.y1 - d.bbox.y0
+        r = 0.65 * max(w, h) + FAN_BLADE_RADIUS_PAD_PT
+        disks.append((d.center.x, d.center.y, r))
+    return disks
+
+
+def _seg_in_disk(s: Segment, cx: float, cy: float, r: float) -> bool:
+    """Fan-blade filter: midpoint inside the blade disk (tips-only wires kept)."""
+    mx, my = (s.x0 + s.x1) / 2.0, (s.y0 + s.y1) / 2.0
+    return math.hypot(mx - cx, my - cy) <= r
+
+
+def _raw_length_candidates(
     ctx: PageContext,
     viewport: BBox,
     *,
     len_min: float = DASH_LEN_MIN_PT,
     len_max: float = DASH_LEN_MAX_PT,
 ) -> list[Segment]:
-    """Short black open strokes that look like wiring dashes."""
     out: list[Segment] = []
     for s in ctx.black_segments:
         if not _seg_in_viewport(s, viewport):
@@ -117,6 +157,87 @@ def _collect_dash_candidates(
         if len_min <= L <= len_max:
             out.append(s)
     return out
+
+
+# Symbol categories whose *outlines* were being traced as wires (fan blades,
+# receptacle/SD/exhaust loops). Switches and lights are wiring endpoints/nodes —
+# excluding their bboxes punches holes in real dashed runs (incl. 3-way travelers).
+_SYMBOL_OUTLINE_CATEGORIES = frozenset(
+    {
+        Category.CEILING_FAN,
+        Category.RECEPTACLE,
+        Category.DETECTOR,
+        Category.EXHAUST_FAN,
+    }
+)
+
+
+def _exclude_symbol_ink(
+    segs: list[Segment], detections: list[Detection]
+) -> list[Segment]:
+    """Drop primitives inside outline-symbol bboxes (+2 pt) or fan blade disks."""
+    boxes = [
+        _inflate_bbox(d.bbox, BBOX_EXCLUDE_INFLATE_PT)
+        for d in detections
+        if d.status == "active" and d.category in _SYMBOL_OUTLINE_CATEGORIES
+    ]
+    disks = _fan_blade_disks(detections)
+    kept: list[Segment] = []
+    for s in segs:
+        if any(_seg_inside_symbol(s, b) for b in boxes):
+            continue
+        if any(_seg_in_disk(s, cx, cy, r) for cx, cy, r in disks):
+            continue
+        kept.append(s)
+    return kept
+
+
+def _filter_dash_gap_pattern(segs: list[Segment]) -> list[Segment]:
+    """Keep only strokes that participate in a real dash gap (not continuous glyphs).
+
+    A wiring dash must have at least one other candidate whose endpoint lies in
+    ``[GAP_PATTERN_MIN, GAP_MAX]``. Near-touching joints (gap < 1.2) are continuous
+    symbol outlines (fan blades, receptacle loops) and never count as wire.
+    """
+    n = len(segs)
+    if n == 0:
+        return []
+    tips: list[tuple[int, float, float]] = []
+    for i, s in enumerate(segs):
+        tips.append((i, s.x0, s.y0))
+        tips.append((i, s.x1, s.y1))
+
+    has_dash_gap = [False] * n
+    for a in range(len(tips)):
+        ia, ax, ay = tips[a]
+        for b in range(a + 1, len(tips)):
+            ib, bx, by = tips[b]
+            if ia == ib:
+                continue
+            gap = math.hypot(ax - bx, ay - by)
+            if GAP_PATTERN_MIN_PT <= gap <= GAP_MAX_PT:
+                has_dash_gap[ia] = True
+                has_dash_gap[ib] = True
+    return [s for i, s in enumerate(segs) if has_dash_gap[i]]
+
+
+def _collect_dash_candidates(
+    ctx: PageContext,
+    viewport: BBox,
+    detections: list[Detection] | None = None,
+    *,
+    len_min: float = DASH_LEN_MIN_PT,
+    len_max: float = DASH_LEN_MAX_PT,
+) -> list[Segment]:
+    """Collect wiring dashes only: measured length + gap pattern, outside symbols.
+
+    Continuous strokes (fan blades, receptacle/SD/exhaust outlines) are excluded:
+    they either sit inside detection/fan regions or only touch with gap < 1.2 pt.
+    """
+    raw = _raw_length_candidates(ctx, viewport, len_min=len_min, len_max=len_max)
+    if detections:
+        raw = _exclude_symbol_ink(raw, detections)
+    return _filter_dash_gap_pattern(raw)
 
 
 def _ends(s: Segment) -> tuple[tuple[float, float], tuple[float, float]]:
@@ -163,7 +284,8 @@ def _build_endpoint_index(
             if ia == ib:
                 continue
             gap = math.hypot(ax - bx, ay - by)
-            if gap <= GAP_MAX_ALIGNED_PT:
+            # Never index continuous joints (gap < pattern min) — those are glyphs.
+            if GAP_PATTERN_MIN_PT <= gap <= GAP_MAX_ALIGNED_PT:
                 nbrs[ia].append((ib, eb, gap))
                 nbrs[ib].append((ia, tips[a][1], gap))
     return nbrs
@@ -185,13 +307,14 @@ def _best_continuation(
         seen.add(j)
         near, _far, ddir = _orient_away_from(dashes[j], tip)
         gap2 = _dist(tip, near)
+        if gap2 < GAP_PATTERN_MIN_PT:
+            continue  # continuous stroke joint — not a dash gap
         cos = tip_dir[0] * ddir[0] + tip_dir[1] * ddir[1]
         if cos < DIR_COS_MIN:
             continue
         gap_lim = GAP_MAX_ALIGNED_PT if cos >= DIR_COS_PREFER else GAP_MAX_PT
         if gap2 > gap_lim:
             continue
-        # Lower score is better: alignment dominates so fan-blade branches lose.
         score = gap2 - 5.0 * cos
         candidates.append((score, cos, j))
     if not candidates:
@@ -266,6 +389,18 @@ def _grow_from(
     return path
 
 
+def _is_closed_loop(points: list[Point]) -> bool:
+    """True when polyline tips nearly meet (symbol outline loop)."""
+    if len(points) < 3:
+        return False
+    tip_dist = math.hypot(points[-1].x - points[0].x, points[-1].y - points[0].y)
+    if tip_dist > LOOP_TIP_CLOSE_PT:
+        return False
+    length = _polyline_length_pt(points)
+    # Loop: path is long relative to tip separation.
+    return length > 3.0 * max(tip_dist, 1.0)
+
+
 def _link_dash_curves(dashes: list[Segment]) -> list[list[Segment]]:
     """Link dashes into full curves via gap + tangent continuity (greedy growth)."""
     n = len(dashes)
@@ -273,7 +408,6 @@ def _link_dash_curves(dashes: list[Segment]) -> list[list[Segment]]:
         return []
     nbrs = _build_endpoint_index(dashes)
     degree = [len({j for j, _, _ in nbrs[i]}) for i in range(n)]
-    # Start at low-degree dashes (true curve ends) so growth follows the stroke.
     order = sorted(range(n), key=lambda i: (degree[i], i))
     unused = set(range(n))
     curves: list[list[Segment]] = []
@@ -284,7 +418,11 @@ def _link_dash_curves(dashes: list[Segment]) -> list[list[Segment]]:
         ink = sum(_seg_len(dashes[i]) for i in idxs)
         if len(idxs) < MIN_CURVE_DASHES and ink < MIN_CURVE_INK_PT:
             continue
-        curves.append([dashes[i] for i in idxs])
+        chain = [dashes[i] for i in idxs]
+        points = _ordered_polyline(chain)
+        if _is_closed_loop(points):
+            continue
+        curves.append(chain)
     return curves
 
 
@@ -654,6 +792,162 @@ def _is_unsupported_straight_chord(points: list[Point], dashes: list[Segment]) -
     return _uncovered_fraction(points, dashes) > MAX_UNCOVERED_FRACTION
 
 
+def _cluster_three_ways(threes: list[Detection]) -> list[list[Detection]]:
+    remaining = list(threes)
+    gangs: list[list[Detection]] = []
+    while remaining:
+        seed = remaining.pop(0)
+        gang = [seed]
+        changed = True
+        while changed:
+            changed = False
+            still: list[Detection] = []
+            for d in remaining:
+                if any(
+                    math.hypot(d.center.x - g.center.x, d.center.y - g.center.y)
+                    < _THREE_WAY_GANG_DIST_PT
+                    for g in gang
+                ):
+                    gang.append(d)
+                    changed = True
+                else:
+                    still.append(d)
+            remaining = still
+        gangs.append(gang)
+    return gangs
+
+
+def _dashes_near_bbox(
+    dashes: list[Segment], det: Detection, radius: float
+) -> list[int]:
+    out: list[int] = []
+    for i, s in enumerate(dashes):
+        for e in ((s.x0, s.y0), (s.x1, s.y1), ((s.x0 + s.x1) / 2, (s.y0 + s.y1) / 2)):
+            if _dist_to_bbox_boundary(e[0], e[1], det.bbox) <= radius:
+                out.append(i)
+                break
+    return out
+
+
+def _shortest_dash_path(
+    adj: list[list[int]], starts: list[int], goals: set[int]
+) -> list[int] | None:
+    from collections import deque
+
+    if not starts or not goals:
+        return None
+    parent: dict[int, int | None] = {}
+    q: deque[int] = deque()
+    for s in starts:
+        if s in parent:
+            continue
+        parent[s] = None
+        q.append(s)
+    hit: int | None = None
+    while q:
+        u = q.popleft()
+        if u in goals:
+            hit = u
+            break
+        for v in adj[u]:
+            if v in parent:
+                continue
+            parent[v] = u
+            q.append(v)
+    if hit is None:
+        return None
+    path: list[int] = []
+    cur: int | None = hit
+    while cur is not None:
+        path.append(cur)
+        cur = parent[cur]
+    path.reverse()
+    return path
+
+
+def _three_way_traveler_runs(
+    dashes: list[Segment],
+    active: list[Detection],
+    sheet_id: str,
+    scale_pt_per_ft: float,
+    assumptions: dict[str, Any],
+    seen_pairs: set[tuple[str, str]],
+) -> list[WireRun]:
+    """Emit nm_14_3 between distant 3-way gangs linked by the dash graph."""
+    threes = [d for d in active if _is_three_way(d)]
+    gangs = _cluster_three_ways(threes)
+    if len(gangs) < 2 or not dashes:
+        return []
+
+    # Adjacency using dash-gap window only.
+    n = len(dashes)
+    adj: list[list[int]] = [[] for _ in range(n)]
+    for i in range(n):
+        si = dashes[i]
+        for j in range(i + 1, n):
+            sj = dashes[j]
+            linked = False
+            for a in ((si.x0, si.y0), (si.x1, si.y1)):
+                for b in ((sj.x0, sj.y0), (sj.x1, sj.y1)):
+                    gap = _dist(a, b)
+                    if GAP_PATTERN_MIN_PT <= gap <= GAP_MAX_ALIGNED_PT:
+                        linked = True
+                        break
+                if linked:
+                    break
+            if linked:
+                adj[i].append(j)
+                adj[j].append(i)
+
+    runs: list[WireRun] = []
+    for i, gang_a in enumerate(gangs):
+        for gang_b in gangs[i + 1 :]:
+            a, b = min(
+                ((xa, xb) for xa in gang_a for xb in gang_b),
+                key=lambda ab: math.hypot(
+                    ab[0].center.x - ab[1].center.x,
+                    ab[0].center.y - ab[1].center.y,
+                ),
+            )
+            pair = tuple(sorted((a.id, b.id)))
+            if pair in seen_pairs:
+                continue
+            starts = _dashes_near_bbox(dashes, a, DEVICE_BBOX_ASSOCIATE_PT)
+            goals = set(_dashes_near_bbox(dashes, b, DEVICE_BBOX_ASSOCIATE_PT))
+            path_idx = _shortest_dash_path(adj, starts, goals)
+            if not path_idx or len(path_idx) < 2:
+                continue
+            points = _ordered_polyline([dashes[k] for k in path_idx])
+            poly = _snap_ends_to_bbox(points, a, b)
+            if len(poly) < 2 or _is_closed_loop(poly):
+                continue
+            if _uncovered_fraction(poly, dashes) > MAX_UNCOVERED_FRACTION:
+                continue
+            plan_ft = _polyline_length_pt(poly) / scale_pt_per_ft
+            if plan_ft > MAX_PLAN_LENGTH_FT or plan_ft < 0.5:
+                continue
+            seen_pairs.add(pair)
+            vert = _vertical_allowance_ft(a, assumptions) + _vertical_allowance_ft(
+                b, assumptions
+            )
+            runs.append(
+                WireRun(
+                    id=str(uuid.uuid4()),
+                    sheet_id=sheet_id or a.sheet_id,
+                    points=poly,
+                    from_detection_id=a.id,
+                    to_detection_id=b.id,
+                    cable_type="nm_14_3",
+                    plan_length_ft=round(plan_ft, 3),
+                    vertical_allowance_ft=round(vert, 3),
+                    total_length_ft=round(plan_ft + vert, 3),
+                    confidence=0.78,
+                    source="geometry",
+                )
+            )
+    return runs
+
+
 def find_wire_runs(
     ctx: PageContext,
     viewport: BBox,
@@ -661,20 +955,20 @@ def find_wire_runs(
     scale_pt_per_ft: float,
     assumptions: dict[str, Any],
 ) -> list[WireRun]:
-    """Grow dashed curves into device-to-device WireRun polylines (v2).
+    """Grow dashed curves into device-to-device WireRun polylines (v2.1).
 
-    1. Collect short black dash segments in the viewport.
-    2. Link into full curves (endpoint gap ≤ gap_median×2 + tangent continuity).
-    3. Each curve end attaches to the device whose **bbox boundary** is nearest.
-    4. One run per curve segment between consecutive devices; mid-path fixtures
-       split the curve. ``nm_14_3`` when both ends are 3-way (subtype or codes
-       ``3``/``3D``); else ``nm_14_2``.
+    1. Collect **dashed** strokes only (measured length + gap pattern); exclude
+       ink inside detection bboxes (+2 pt) and fan blade clusters.
+    2. Link into open curves (never continuous glyph joints; drop closed loops).
+    3. Tips attach to nearest device **bbox boundary**; mid fixtures split.
+    4. Runs require different devices and mostly dash-covered ink.
+    5. ``nm_14_3`` for distant 3-way pairs (on-curve or dedicated traveler BFS).
     """
     if scale_pt_per_ft <= 0:
         raise ValueError("scale_pt_per_ft must be positive")
 
     active = [d for d in detections if d.status == "active"]
-    dashes = _collect_dash_candidates(ctx, viewport)
+    dashes = _collect_dash_candidates(ctx, viewport, active)
     curves = _link_dash_curves(dashes)
 
     sheet_id = (
@@ -687,22 +981,30 @@ def find_wire_runs(
 
     for chain in curves:
         points = _ordered_polyline(chain)
-        if len(points) < 2:
+        if len(points) < 2 or _is_closed_loop(points):
             continue
 
         along = _devices_along_curve(points, active)
         if len(along) < 2:
             continue
 
-        def _emit(from_det: Detection, to_det: Detection, cable: str) -> None:
+        def _emit(
+            from_det: Detection,
+            to_det: Detection,
+            cable: str,
+            *,
+            along_local: list[Detection] = along,
+        ) -> None:
+            if from_det.id == to_det.id:
+                return
             pair = tuple(sorted((from_det.id, to_det.id)))
             if pair in seen_pairs:
                 return
-            if len(along) > 2 or cable == "nm_14_3":
+            if len(along_local) > 2 or cable == "nm_14_3":
                 poly = _subpolyline_between_devices(points, from_det, to_det)
             else:
                 poly = _snap_ends_to_bbox(points, from_det, to_det)
-            if len(poly) < 2:
+            if len(poly) < 2 or _is_closed_loop(poly):
                 return
             if _is_unsupported_straight_chord(poly, dashes):
                 return
@@ -735,9 +1037,6 @@ def find_wire_runs(
                 )
             )
 
-        # Traveler: farthest distant 3-way pair on this curve → nm_14_3.
-        # Curves often start and end at the same gang with the other 3-way mid-path,
-        # so first/last in path order is wrong — take max center separation.
         threes_along = [d for d in along if _is_three_way(d)]
         best_traveler: tuple[float, Detection, Detection] | None = None
         for i, a in enumerate(threes_along):
@@ -754,6 +1053,11 @@ def find_wire_runs(
             from_det, to_det = along[i], along[i + 1]
             _emit(from_det, to_det, _cable_type(from_det, to_det))
 
+    runs.extend(
+        _three_way_traveler_runs(
+            dashes, active, sheet_id, scale_pt_per_ft, assumptions, seen_pairs
+        )
+    )
     return runs
 
 
@@ -830,6 +1134,8 @@ __all__ = [
     "DEVICE_BBOX_ASSOCIATE_PT",
     "GAP_MAX_PT",
     "GAP_MEDIAN_PT",
+    "GAP_PATTERN_MIN_PT",
+    "MAX_PLAN_LENGTH_FT",
     "MAX_UNCOVERED_FRACTION",
     "find_wire_runs",
     "render_wire_debug_png",
