@@ -1,4 +1,5 @@
 import type { DragEvent, MouseEvent, ReactNode } from "react";
+import type { WireRunPatchBody } from "@/api/types";
 import { PALETTE_MIME, parsePaletteDrag } from "@/lib/palette";
 import { WIRE_COLOR } from "@/lib/colors";
 import type { Category, Point, SheetResult } from "@/types/contracts";
@@ -25,6 +26,7 @@ interface Props {
   onSelect: (id: string) => void;
   onSelectWire?: (id: string) => void;
   onSelectBox?: (id: string) => void;
+  onPatchWire?: (id: string, patch: WireRunPatchBody) => void;
   onDragStart: (id: string, e: MouseEvent) => void;
   onPaletteDrop?: (category: Category, subtype: string, x: number, y: number) => void;
   onPaletteDragOverChange?: (over: boolean) => void;
@@ -60,6 +62,7 @@ export function PlanOverlay({
   onSelect,
   onSelectWire,
   onSelectBox,
+  onPatchWire,
   onDragStart,
   onPaletteDrop,
   onPaletteDragOverChange,
@@ -69,6 +72,10 @@ export function PlanOverlay({
   const width = viewport.x1 - viewport.x0;
   const height = viewport.y1 - viewport.y0;
   const viewBox = `${viewport.x0} ${viewport.y0} ${width} ${height}`;
+  const ptPerFt =
+    typeof result.sheet.scale_pt_per_ft === "number" && result.sheet.scale_pt_per_ft > 0
+      ? result.sheet.scale_pt_per_ft
+      : 18;
 
   function handleClick(e: MouseEvent<SVGSVGElement>) {
     const local = clientToPdf(e.currentTarget, e.clientX, e.clientY);
@@ -139,9 +146,12 @@ export function PlanOverlay({
       {layers.wires && (
         <WireLayer
           wires={result.wire_runs ?? []}
+          detections={result.detections}
           selectedWireId={selectedWireId}
           editable={editCables}
+          ptPerFt={ptPerFt}
           onSelect={onSelectWire}
+          onPatchWire={onPatchWire}
         />
       )}
       {wirePreview && (

@@ -5,6 +5,7 @@ import {
   CATEGORY_LABEL,
   NEEDS_REVIEW_COLOR,
   WIRE_COLOR,
+  WIRE_COLOR_14_3,
 } from "@/lib/colors";
 
 export function ColorLegend() {
@@ -28,7 +29,14 @@ export function ColorLegend() {
         ))}
         <li className="flex items-center gap-1.5 text-[12px] text-[var(--ink)]">
           <span className="inline-block h-0.5 w-3 shrink-0" style={{ background: WIRE_COLOR }} />
-          Wires
+          14/2
+        </li>
+        <li className="flex items-center gap-1.5 text-[12px] text-[var(--ink)]">
+          <span
+            className="inline-block h-0.5 w-3 shrink-0"
+            style={{ background: WIRE_COLOR_14_3 }}
+          />
+          14/3
         </li>
         <li className="flex items-center gap-1.5 text-[12px] text-[var(--ink)]">
           <span

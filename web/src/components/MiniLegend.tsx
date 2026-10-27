@@ -5,6 +5,7 @@ import {
   CATEGORY_SHORT,
   NEEDS_REVIEW_COLOR,
   WIRE_COLOR,
+  WIRE_COLOR_14_3,
 } from "@/lib/colors";
 
 export function MiniLegend() {
@@ -28,7 +29,11 @@ export function MiniLegend() {
         ))}
         <li className="flex items-center gap-1.5 text-[11px] text-[var(--ink)]">
           <span className="inline-block h-0.5 w-3" style={{ background: WIRE_COLOR }} />
-          Wires
+          14/2
+        </li>
+        <li className="flex items-center gap-1.5 text-[11px] text-[var(--ink)]">
+          <span className="inline-block h-0.5 w-3" style={{ background: WIRE_COLOR_14_3 }} />
+          14/3
         </li>
         <li className="flex items-center gap-1.5 text-[11px] text-[var(--ink)]">
           <span

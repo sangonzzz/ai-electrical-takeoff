@@ -8,18 +8,28 @@ interface Props {
   loading?: boolean;
 }
 
-type Section = "devices" | "boxes" | "cable" | "other";
+type Section = "fixtures" | "devices" | "boxes" | "cable" | "other";
 
+/** Mirrors engine `group_bom_lines` / Agente 8 fixture SKUs. */
 function sectionOf(line: BomLine): Section {
   const k = line.item_key.toLowerCase();
   if (k.includes("nm_") || k.includes("cable") || line.unit === "ft") return "cable";
   if (k.includes("box") || k.includes("plate") || k.includes("gang")) return "boxes";
-  if (k.includes("fan") || k.includes("light") || k.includes("switch") || k.includes("recept"))
-    return "devices";
+  if (
+    k === "device_ceiling_fan" ||
+    k === "device_exhaust_fan" ||
+    k === "device_detector" ||
+    k.startsWith("device_light_")
+  ) {
+    return "fixtures";
+  }
+  if (k.includes("switch") || k.includes("recept") || k.includes("junction")) return "devices";
+  if (k.includes("fan") || k.includes("light") || k.includes("detector")) return "fixtures";
   return "other";
 }
 
 const SECTION_LABEL: Record<Section, string> = {
+  fixtures: "Fixtures (allowance)",
   devices: "Devices",
   boxes: "Boxes & plates",
   cable: "Cable (estimated)",
@@ -49,7 +59,7 @@ export function BomPanel({ bom, loading }: Props) {
     );
   }
 
-  const groups = (["devices", "boxes", "cable", "other"] as Section[])
+  const groups = (["fixtures", "devices", "boxes", "cable", "other"] as Section[])
     .map((s) => ({
       section: s,
       lines: bom.lines.filter((l) => sectionOf(l) === s),

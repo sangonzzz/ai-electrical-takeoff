@@ -14,9 +14,16 @@ export const CATEGORY_COLORS: Record<Category, string> = {
   junction_box: "#6B7280",
 };
 
+/** Default / 14-2 NM-B runs (pink). Prefer `wireColorForType` when type is known. */
 export const WIRE_COLOR = "#DB2777";
+/** 14-3 traveler runs. */
+export const WIRE_COLOR_14_3 = "#16A34A";
 export const BOX_COLOR = "#111827";
 export const NEEDS_REVIEW_COLOR = "#EA580C";
+
+export function wireColorForType(cableType: "nm_14_2" | "nm_14_3" | string): string {
+  return cableType === "nm_14_3" ? WIRE_COLOR_14_3 : WIRE_COLOR;
+}
 
 /** Short letter drawn inside each detection mark when no icon is used. */
 export const CATEGORY_LETTER: Record<Category, string> = {

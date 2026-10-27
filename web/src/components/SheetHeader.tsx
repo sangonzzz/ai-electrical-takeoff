@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
-import { AlertTriangle, ArrowLeft, HelpCircle, Redo2, Undo2 } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Cable, HelpCircle, Redo2, Undo2 } from "lucide-react";
 import type { SheetSummary } from "@/api/types";
+import { useUiStore } from "@/store/uiStore";
 import { StatusBadge } from "./ui/StatusBadge";
 import { ReanalyzeButton } from "./ReanalyzeButton";
 import { ReviewActions } from "./ReviewActions";
@@ -38,6 +39,11 @@ export function SheetHeader({
   onReanalyzed,
   onOpenShortcuts,
 }: Props) {
+  const editCables = useUiStore((s) => s.editCables);
+  const setEditCables = useUiStore((s) => s.setEditCables);
+  const setMode = useUiStore((s) => s.setMode);
+  const setWireCreateFromId = useUiStore((s) => s.setWireCreateFromId);
+  const selectWire = useUiStore((s) => s.selectWire);
   const hashShort = fileHash?.slice(0, 8) ?? null;
   return (
     <header className="border-b border-[var(--border)] bg-[var(--surface)] px-3 py-2 shadow-[var(--shadow-sm)]">
@@ -133,6 +139,26 @@ export function SheetHeader({
             >
               <Redo2 size={14} />
               Redo
+            </button>
+            <button
+              type="button"
+              className={`btn !py-1.5 text-[12px] ${
+                editCables ? "btn-primary" : "btn-secondary"
+              }`}
+              aria-pressed={editCables}
+              title="Edit cable runs on the plan"
+              onClick={() => {
+                const next = !editCables;
+                setEditCables(next);
+                if (!next) {
+                  setMode("select");
+                  setWireCreateFromId(null);
+                  selectWire(null);
+                }
+              }}
+            >
+              <Cable size={14} />
+              Edit cables
             </button>
           </div>
           <ReviewActions

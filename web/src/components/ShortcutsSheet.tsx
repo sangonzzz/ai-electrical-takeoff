@@ -4,10 +4,11 @@ const ROWS: { keys: string; action: string }[] = [
   { keys: "V", action: "Select mode" },
   { keys: "A", action: "Add mode" },
   { keys: "F", action: "Fit plan to canvas" },
-  { keys: "Del", action: "Delete selected mark" },
+  { keys: "Del", action: "Delete selected mark or cable" },
   { keys: "Ctrl+Z", action: "Undo last change" },
   { keys: "Ctrl+Shift+Z", action: "Redo last change" },
-  { keys: "Esc", action: "Clear selection / exit add" },
+  { keys: "Esc", action: "Clear selection / exit add or New cable" },
+  { keys: "Alt+click", action: "Remove cable vertex (Edit cables)" },
   { keys: "?", action: "Toggle this cheat sheet" },
 ];
 

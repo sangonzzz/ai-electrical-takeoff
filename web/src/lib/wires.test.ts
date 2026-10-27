@@ -1,11 +1,15 @@
 import { describe, expect, it } from "vitest";
+import { wireColorForType } from "./colors";
 import {
+  insertVertexAtClick,
+  nearestDetection,
   planLengthFt,
+  removeVertexAt,
   straightRunPoints,
   totalLengthFt,
   wiresAfterDetectionMove,
 } from "./wires";
-import type { WireRun } from "@/types/contracts";
+import type { Detection, WireRun } from "@/types/contracts";
 
 describe("wires helpers", () => {
   it("computes plan and total length", () => {
@@ -42,5 +46,53 @@ describe("wires helpers", () => {
       { x: 1, y: 2 },
       { x: 3, y: 4 },
     ]);
+  });
+
+  it("colors 14/2 pink and 14/3 green", () => {
+    expect(wireColorForType("nm_14_2")).toBe("#DB2777");
+    expect(wireColorForType("nm_14_3")).toBe("#16A34A");
+  });
+
+  it("inserts a vertex on a segment", () => {
+    const next = insertVertexAtClick(
+      [
+        { x: 0, y: 0 },
+        { x: 100, y: 0 },
+      ],
+      { x: 50, y: 2 },
+      10,
+    );
+    expect(next).toHaveLength(3);
+    expect(next![1].x).toBeCloseTo(50, 0);
+  });
+
+  it("removes a middle vertex but keeps at least two points", () => {
+    const pts = [
+      { x: 0, y: 0 },
+      { x: 10, y: 0 },
+      { x: 20, y: 0 },
+    ];
+    expect(removeVertexAt(pts, 1)).toEqual([
+      { x: 0, y: 0 },
+      { x: 20, y: 0 },
+    ]);
+    expect(removeVertexAt(pts.slice(0, 2), 0)).toBeNull();
+  });
+
+  it("finds nearest detection within snap radius", () => {
+    const dets = [
+      {
+        id: "a",
+        status: "active",
+        center: { x: 0, y: 0 },
+      },
+      {
+        id: "b",
+        status: "active",
+        center: { x: 100, y: 0 },
+      },
+    ] as Detection[];
+    expect(nearestDetection(dets, { x: 5, y: 0 }, 20)?.id).toBe("a");
+    expect(nearestDetection(dets, { x: 50, y: 0 }, 20)).toBeNull();
   });
 });

@@ -12,6 +12,7 @@ import {
   TransformWrapper,
   type ReactZoomPanPinchContentRef,
 } from "react-zoom-pan-pinch";
+import type { WireRunPatchBody } from "@/api/types";
 import type { Category, Point, SheetResult } from "@/types/contracts";
 import { useUiStore } from "@/store/uiStore";
 import { CategoryFilter } from "./CategoryFilter";
@@ -33,6 +34,7 @@ interface Props {
   onDragEnd: (id: string, x: number, y: number) => void;
   /** Second click in New cable mode (from already picked). */
   onWireCreatePair?: (fromId: string, toId: string) => void;
+  onPatchWire?: (id: string, patch: WireRunPatchBody) => void;
 }
 
 function fitPlanToCanvas(
@@ -60,7 +62,16 @@ function fitPlanToCanvas(
 }
 
 export const PlanViewer = forwardRef<PlanViewerHandle, Props>(function PlanViewer(
-  { result, imageUrl, onAddAt, onPaletteDrop, onDragMove, onDragEnd, onWireCreatePair },
+  {
+    result,
+    imageUrl,
+    onAddAt,
+    onPaletteDrop,
+    onDragMove,
+    onDragEnd,
+    onWireCreatePair,
+    onPatchWire,
+  },
   ref,
 ) {
   const mode = useUiStore((s) => s.mode);
@@ -70,6 +81,7 @@ export const PlanViewer = forwardRef<PlanViewerHandle, Props>(function PlanViewe
   const selectedWireId = useUiStore((s) => s.selectedWireId);
   const selectedBoxId = useUiStore((s) => s.selectedBoxId);
   const editCables = useUiStore((s) => s.editCables);
+  const setEditCables = useUiStore((s) => s.setEditCables);
   const wireCreateFromId = useUiStore((s) => s.wireCreateFromId);
   const setWireCreateFromId = useUiStore((s) => s.setWireCreateFromId);
   const highlight = useUiStore((s) => s.highlight);
@@ -256,8 +268,10 @@ export const PlanViewer = forwardRef<PlanViewerHandle, Props>(function PlanViewe
             ? "Click the second device · Esc to cancel"
             : "Click the first device · Esc to cancel"
           : editCables
-            ? "Edit cables on — select a pink run or New cable"
-            : "Scroll zoom · drag pan · drag components from the palette";
+            ? "Edit cables on — drag handles to reshape · double-click to add a bend · Alt+click to remove"
+            : layers.wires
+              ? "Select a cable to edit, or New cable to add one"
+              : "Scroll zoom · drag pan · drag components from the palette";
 
   return (
     <div className="card relative flex h-full min-h-0 flex-col overflow-hidden">
@@ -301,8 +315,16 @@ export const PlanViewer = forwardRef<PlanViewerHandle, Props>(function PlanViewe
                   wirePreview={wirePreview}
                   onBackgroundClick={onBackgroundClick}
                   onSelect={onSelectDetection}
-                  onSelectWire={editCables ? selectWire : undefined}
+                  onSelectWire={
+                    layers.wires
+                      ? (id) => {
+                          if (!editCables) setEditCables(true);
+                          selectWire(id);
+                        }
+                      : undefined
+                  }
                   onSelectBox={onSelectBoxMark}
+                  onPatchWire={editCables ? onPatchWire : undefined}
                   onDragStart={onDragStart}
                   onPaletteDrop={onPaletteDrop}
                   onPaletteDragOverChange={setOverPlan}

@@ -270,6 +270,7 @@ export function SheetPage() {
               setMode("select");
               setWireCreateFromId(null);
             }}
+            onPatchWire={(id, patch) => patchWireRun(id, patch)}
           />
           <RightPanel
             rooms={result.rooms}
