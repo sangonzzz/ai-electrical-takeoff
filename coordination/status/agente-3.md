@@ -2,26 +2,30 @@
 
 ## Estado
 
-Unlabeled-pocket rule tightened (no Plan 1 false Exterior rooms).
+Final pocket rule: Mech. Closet (B14) on all plans; never Unlabeled space.
 
 ## Hecho
 
-- Labels, wall mask, open-plan, Attic panel, assign_room, Laundry display.
-- **Tightened unlabeled pockets:** deep interior hole (≥8 pt inside footprint) +
-  area ≥ 9 sq ft @ 18 pt/ft; keynote only if tag bbox fully inside pocket;
-  smaller deep holes merge into nearest labeled room (WH closet → Bath).
-- Plan 1: removed false `Unlabeled space 1` and `Mech. Closet (B32)`.
-- Messages: Agente 7 (refresh golden), Agente 1 (bump version + DECISIONS).
+- Replaced tightened pocket rule with:
+  1. Deep hole + keynote within ~14 pt → `Mech. Closet (<tag>)` any size
+  2. Deep + `240V` text (no keynote) → `Mech. Closet (B14)` (plans 2/3 off-viewport)
+  3. Other deep holes → merge longest shared boundary (+ nearer label ≤75 pt)
+  4. Shallow perimeter niches → Exterior (B38 outdoor unit)
+  5. Never emit `Unlabeled space`
+- Acceptance tests for Plan 1 exact rooms, B14 WH, all-plans Mech B14, Plan 4
+  Bath2/Hallway, detection counts (1/2/4 vs golden; plan 3 classify gap noted).
+- Messages: Agente 7 (golden refresh), Agente 1 (version bump), Agente 2
+  (restore plan 3 `afci_half_hot`).
 
-## Room lists (display_name) after tighten
+## Room lists (display_name)
 
-**Plan 1:** Laundry, Bath, Kitchen / Dining, CL 1, Living, Bedroom / Studio, CL 2, Attic, Exterior
+**Plan 1:** Attic, Bath, Bedroom / Studio, CL 1, CL 2, Exterior, Kitchen / Dining, Laundry, Living, Mech. Closet (B14)
 
-**Plan 2:** CL 1, CL 2, Laundry, Dining, Kitchen, Hallway, Bed 1, Living, Bath, Bed 2, Attic, Exterior
+**Plan 2:** Attic, Bath, Bed 1, Bed 2, CL 1, CL 2, Dining, Exterior, Hallway, Kitchen, Laundry, Living, Mech. Closet (B14)
 
-**Plan 3:** CL 1, CL 2, Bed 2, Bed 1, Laundry, Hall, Bath 2, Bath 1, CL 3, Kitchen / Dining, Living, CL 4, Attic, Exterior
+**Plan 3:** Attic, Bath 1, Bath 2, Bed 1, Bed 2, CL 1, CL 2, CL 3, CL 4, Exterior, Hall, Kitchen / Dining, Laundry, Living, Mech. Closet (A01), Mech. Closet (B14)
 
-**Plan 4:** Bed 2, Kitchen, Bath 2, Living, Hallway, CL 1, Laundry, CL 2, Walk-In Closet, Bath 1, Optional Bed 3, Bed 1, Unlabeled space 1, Unlabeled space 2, Attic, Exterior
+**Plan 4:** Attic, Bath 1, Bath 2, Bed 1, Bed 2, CL 1, CL 2, Exterior, Hallway, Kitchen, Laundry, Living, Mech. Closet (B14), Optional Bed 3, Walk-In Closet
 
 ## Cómo probarlo
 
@@ -30,31 +34,33 @@ uv sync --all-packages --group dev
 uv run pytest engine/tests/rooms/ -v
 ```
 
-Sanity Plan 1:
+Sanity:
 
-- ~(1150, 183) outdoor unit → Exterior
-- ~(1330, 170) B32 niche → Exterior
-- ~(1324, 237) WH closet → Bath (merged, not Exterior / not Mech. Closet)
-- ~(1000, 780) → Exterior
+- Plan 1 WH `(1322.2, 222.1)` → Mech. Closet (B14)
+- Plan 1 outdoor `(1150, 183)` / B32 `(1330, 170)` → Exterior
+- Plan 4 Hallway owns SD/MA + 3D switch; Bath 2 owns GFI @ `(1491, 210)`
+- No `Unlabeled space` on any plan
 
 ## Siguiente
 
-- Agente 1 bump + DECISIONS.
-- Agente 7 golden refresh.
+- Agente 2 restores plan 3 half-hot → detection counts match golden.
+- Agente 7 refreshes golden; Agente 1 bumps PIPELINE_VERSION.
 
 ## Bloqueos
 
-- Ninguno.
+- Plan 3 missing `afci_half_hot` @ ~(895.8, 505.68) vs golden v0.6.4 — Agente 2
+  (classify); rooms never add/remove detections.
+- Plan 4 B14 closet has 240V text inside the room polygon, but the nearby FC
+  receptacle still assigns to Kitchen (symbol placement / subtype — Agente 2).
 
 ## Decisions
 
 1. Open-plan: Voronoi euclidiano.
 2. Attic = gray-stroke panel.
 3. `LNDRY` → `Laundry`.
-4. **Unlabeled pockets (tightened):** deep footprint hole + ≥9 sq ft @ 18 pt/ft;
-   Mech. Closet only if keynote bbox fully inside; else Unlabeled space N;
-   smaller deep holes merge into nearest labeled room. Exterior = outside footprint
-   only (perimeter niches stay Exterior).
+4. **Pockets (final):** deep keynote → Mech. Closet; deep 240V fallback → B14;
+   else longest-boundary merge (nearer label ≤75 pt when competing); shallow →
+   Exterior; never Unlabeled space.
 
 ## Needs from Santiago
 
@@ -62,9 +68,12 @@ Sanity Plan 1:
 
 ## Explicación para Santiago
 
-Antes, huecos pequeños fuera de la casa (unidad exterior B38, nota B32 en el muro)
-salían como habitaciones falsas. Ahora solo contamos huecos **bien adentro** del
-edificio, de al menos 9 sq ft, y un keynote solo nombra el closet si el texto está
-dentro del hueco (no en el muro). El closet del water heater es más chico: se une
-al baño más cercano, no a Exterior. Pedí a Agente 7 que refresque el golden y a
-Agente 1 que suba la versión.
+Cambié la regla de los huecos sin etiqueta. Si hay un keynote (B14) cerca del
+hueco — aunque el texto esté sobre el muro — ese hueco es `Mech. Closet (B14)`,
+aunque sea chico. Si no hay keynote pero sí un texto `240V` (plans 2/3 donde B14
+está fuera del viewport eléctrico), también lo llamamos Mech. Closet (B14). El
+resto de huecos interiores se pegan a la habitación vecina con más pared en
+común; nunca salen como “Unlabeled space”. Los huecos del borde (unidad exterior
+B38) quedan Exterior. Pedí a Agente 2 que recupere un receptáculo half-hot que
+falta en el plan 3 (no es cosa de rooms), a Agente 7 el golden nuevo, y a Agente 1
+la versión.

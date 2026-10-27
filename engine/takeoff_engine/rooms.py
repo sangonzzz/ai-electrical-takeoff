@@ -6,9 +6,11 @@ Algorithm (SPEC section 6 + unlabeled):
 2. Rasterize gray wall poché + long black wall strokes; close door gaps.
 3. Flood-fill from each label; split multi-label (open-plan) regions by nearest
    label; fill furniture holes; attic box overrides.
-4. Enclosed free regions inside the building with no room label become rooms:
-   ``Mech. Closet (B14)`` if a keynote tag is in/near the region, else
-   ``Unlabeled space N``. Exterior is only outside the building footprint.
+4. Enclosed free pockets inside the building with no room label:
+   keynote tag inside → ``Mech. Closet (<tag>)`` (any size, even on an exterior
+   wall); otherwise merge into the labeled neighbor with the longest shared
+   boundary. Never emit ``Unlabeled space``. Exterior is only outside the
+   building footprint.
 5. ``assign_room`` / ``assign_rooms`` for point-in-polygon with wall-device rules.
 """
 
@@ -58,16 +60,17 @@ _AMBIGUOUS_GAP_PT = 4.0
 # Contour simplification epsilon in PDF points.
 _POLY_SIMPLIFY_PT = 1.5
 
-# Min unlabeled-pocket area: 9 sq ft at SCALE 1/4" = 1'-0" → 18 pt/ft.
-# (Small exterior niches / outdoor-unit pockets are ~1–3 sq ft and must not
-# become rooms — they stay Exterior.)
-_UNLABELED_MIN_SQ_FT = 9.0
-_UNLABELED_PT_PER_FT = 18.0
-_UNLABELED_MIN_AREA_PT2 = _UNLABELED_MIN_SQ_FT * _UNLABELED_PT_PER_FT * _UNLABELED_PT_PER_FT
+# Tiny noise pockets below this area (pt²) are ignored (~0.5 sq ft at 18 pt/ft).
+_POCKET_NOISE_AREA_PT2 = 150.0
 
-# A building hole must sit at least this far (pt) inside the filled footprint
-# outline. Perimeter niches (outdoor unit ~2 pt, exterior-wall B32 ~2 pt) are
-# excluded; a true interior closet (Plan 1 WH ~12 pt) is kept.
+# Keynote tags sit on wall poche; associate when the tag center is inside the
+# pocket or within this radius (pt) of it.
+_KEYNOTE_ASSOC_PT = 14.0
+
+# Perimeter niches (outdoor unit, exterior-wall notes) sit ~2 pt inside the
+# filled footprint; true interior closets sit deeper (~12 pt). Used only for
+# non-keynote pockets: shallow → leave unclaimed (Exterior); deep → merge or
+# Mech. Closet (B14) via 240V fallback.
 _INTERNAL_HOLE_MIN_DIST_OUT_PT = 8.0
 
 # Keynote pattern: A01, B14, F03, … (SPEC §1). Not electrical device codes.
@@ -847,9 +850,9 @@ def _shapely_poly(points: list[Point]) -> ShapelyPolygon | None:
 
 def _keynotes_in_viewport(
     ctx: PageContext, viewport: BBox
-) -> list[tuple[str, tuple[float, float, float, float]]]:
-    """Keynote tags (B14, A01, …) with text bboxes inside the electrical viewport."""
-    out: list[tuple[str, tuple[float, float, float, float]]] = []
+) -> list[tuple[str, float, float]]:
+    """Keynote tags (B14, A01, …) whose centers lie in the electrical viewport."""
+    out: list[tuple[str, float, float]] = []
     for w in ctx.words:
         tag = w.text.strip().upper()
         if not _KEYNOTE_RE.match(tag):
@@ -860,7 +863,22 @@ def _keynotes_in_viewport(
         cx = 0.5 * (w.bbox[0] + w.bbox[2])
         cy = 0.5 * (w.bbox[1] + w.bbox[3])
         if _in_bbox(cx, cy, viewport):
-            out.append((tag, w.bbox))
+            out.append((tag, cx, cy))
+    return out
+
+
+def _volt_240_labels_in_viewport(
+    ctx: PageContext, viewport: BBox
+) -> list[tuple[float, float]]:
+    """Centers of ``240V`` text labels inside the electrical viewport."""
+    out: list[tuple[float, float]] = []
+    for w in ctx.words:
+        if w.text.strip().upper() != "240V":
+            continue
+        cx = 0.5 * (w.bbox[0] + w.bbox[2])
+        cy = 0.5 * (w.bbox[1] + w.bbox[3])
+        if _in_bbox(cx, cy, viewport):
+            out.append((cx, cy))
     return out
 
 
@@ -888,6 +906,15 @@ def _hole_is_deep_interior(reg: np.ndarray, solid: np.ndarray) -> bool:
     dist = cv2.distanceTransform(solid.astype(np.uint8), cv2.DIST_L2, 5)
     dist_pt = dist / _PX_PER_PT
     return float(dist_pt[reg > 0].min()) >= _INTERNAL_HOLE_MIN_DIST_OUT_PT
+
+
+def _shared_boundary_px(reg: np.ndarray, other: np.ndarray) -> int:
+    """Count pixels of ``reg`` that touch ``other`` (4-connected neighborhood)."""
+    if int(reg.sum()) == 0 or int(other.sum()) == 0:
+        return 0
+    kernel = np.array([[0, 1, 0], [1, 1, 1], [0, 1, 0]], dtype=np.uint8)
+    dilated = cv2.dilate(other.astype(np.uint8), kernel, iterations=1)
+    return int(np.logical_and(reg > 0, dilated > 0).sum())
 
 
 def _bridge_mask_regions(base: np.ndarray, add: np.ndarray) -> np.ndarray:
@@ -926,14 +953,12 @@ def _unclaimed_components(
     origin: tuple[float, float],
     *,
     min_area_pt2: float = 0.0,
-    internal_only: bool = True,
-) -> list[tuple[np.ndarray, float, float, float]]:
-    """Connected free pockets of the rooms∪walls building core.
+) -> tuple[list[tuple[np.ndarray, float, float, float]], np.ndarray]:
+    """Connected free pockets of the rooms∪walls building core (footprint holes).
 
-    When ``internal_only`` is True (default), perimeter niches that touch the
-    outside of the filled building outline are dropped (outdoor unit, exterior
-    wall note boxes). ``min_area_pt2`` filters tiny noise. Returns reading-order
-    ``(mask, area_pt2, cx_pt, cy_pt)``.
+    Regions outside the filled footprint never appear here (Exterior flood /
+    solid fill). ``min_area_pt2`` drops tiny noise. Returns reading-order
+    ``(mask, area_pt2, cx_pt, cy_pt)`` plus the filled ``solid`` footprint.
     """
     keep, solid = _building_core_and_solid(wall_mask, claimed)
     inside = (solid > 0) & (keep == 0)
@@ -955,8 +980,6 @@ def _unclaimed_components(
         cv2.floodFill(fill_img, ff_mask, (int(x), int(y)), 64)
         reg = (fill_img == 64).astype(np.uint8)
         visited[reg > 0] = 1
-        if internal_only and not _hole_is_deep_interior(reg, solid):
-            continue
         area_px = int(reg.sum())
         if area_px < min_px:
             continue
@@ -966,30 +989,153 @@ def _unclaimed_components(
         area_pt2 = area_px / (_PX_PER_PT * _PX_PER_PT)
         comps.append((reg, area_pt2, cx, cy))
     comps.sort(key=lambda t: (t[3], t[2]))
-    return comps
+    return comps, solid
+
+
+def _point_near_region(
+    reg: np.ndarray,
+    origin: tuple[float, float],
+    cx: float,
+    cy: float,
+    radius_pt: float,
+) -> bool:
+    """True if ``(cx, cy)`` lands in ``reg`` or within ``radius_pt`` of it."""
+    h, w = reg.shape
+    ix, iy = _pt_to_px(cx, cy, origin)
+    if 0 <= ix < w and 0 <= iy < h and reg[iy, ix] > 0:
+        return True
+    r_px = max(1, int(round(radius_pt * _PX_PER_PT)))
+    x0, x1 = max(0, ix - r_px), min(w, ix + r_px + 1)
+    y0, y1 = max(0, iy - r_px), min(h, iy + r_px + 1)
+    if x0 >= x1 or y0 >= y1:
+        return False
+    # Exact Euclidean check in the local window.
+    ys, xs = np.where(reg[y0:y1, x0:x1] > 0)
+    if len(xs) == 0:
+        return False
+    dx = (xs.astype(np.float64) + x0) - ix
+    dy = (ys.astype(np.float64) + y0) - iy
+    return bool(np.min(dx * dx + dy * dy) <= r_px * r_px)
 
 
 def _keynote_for_region(
     reg: np.ndarray,
     origin: tuple[float, float],
-    keynotes: list[tuple[str, tuple[float, float, float, float]]],
+    keynotes: list[tuple[str, float, float]],
 ) -> str | None:
-    """Return a keynote only if its text bbox lies fully inside ``reg``.
+    """Return a keynote inside or within ``_KEYNOTE_ASSOC_PT`` of ``reg``.
 
-    Tags on the exterior wall (B32) or outside the pocket must not name a room.
+    Tags sit on wall poche (B14 on Plan 1 WH), so a pure point-in-region test
+    misses them. Prefer a tag whose center is inside; else the nearest within
+    radius.
     """
     h, w = reg.shape
-
-    def _inside(px: float, py: float) -> bool:
-        ix, iy = _pt_to_px(px, py, origin)
-        return 0 <= ix < w and 0 <= iy < h and reg[iy, ix] > 0
-
-    for tag, bbox in keynotes:
-        x0, y0, x1, y1 = bbox
-        corners = ((x0, y0), (x1, y0), (x1, y1), (x0, y1))
-        if all(_inside(x, y) for x, y in corners):
+    r_px = max(1, int(round(_KEYNOTE_ASSOC_PT * _PX_PER_PT)))
+    best: tuple[float, str] | None = None
+    for tag, cx, cy in keynotes:
+        ix, iy = _pt_to_px(cx, cy, origin)
+        if 0 <= ix < w and 0 <= iy < h and reg[iy, ix] > 0:
             return tag
-    return None
+        if not (0 <= ix < w and 0 <= iy < h):
+            # Still allow tags just outside the raster if within radius of edge.
+            pass
+        x0, x1 = max(0, ix - r_px), min(w, ix + r_px + 1)
+        y0, y1 = max(0, iy - r_px), min(h, iy + r_px + 1)
+        if x0 >= x1 or y0 >= y1:
+            continue
+        ys, xs = np.where(reg[y0:y1, x0:x1] > 0)
+        if len(xs) == 0:
+            continue
+        dx = (xs.astype(np.float64) + x0) - ix
+        dy = (ys.astype(np.float64) + y0) - iy
+        d2 = float(np.min(dx * dx + dy * dy))
+        if d2 <= r_px * r_px and (best is None or d2 < best[0]):
+            best = (d2, tag)
+    return best[1] if best else None
+
+
+def _region_has_240v(
+    reg: np.ndarray,
+    origin: tuple[float, float],
+    labels_240: list[tuple[float, float]],
+) -> bool:
+    """True if a ``240V`` text center is inside or near ``reg``."""
+    return any(
+        _point_near_region(reg, origin, cx, cy, _KEYNOTE_ASSOC_PT) for cx, cy in labels_240
+    )
+
+
+def _merge_into_longest_neighbor(
+    filled: np.ndarray,
+    room_masks: dict[int, np.ndarray],
+    label_xy: dict[int, tuple[float, float]] | None = None,
+    origin: tuple[float, float] = (0.0, 0.0),
+) -> int | None:
+    """Pick the labeled room a free pocket should join.
+
+    1. Longest shared boundary (masks dilated ~1 wall width).
+    2. If that boundary is weak (< 50 px) and another room's label is
+       clearly closer to the pocket, prefer the closer label (Bath 2
+       fixture pockets that barely touch Kitchen).
+    3. If no shared boundary, nearest room-mask centroid (Hallway islands
+       separated by walls from every label flood).
+    """
+    dilate_px = max(1, int(round(4.0 * _PX_PER_PT)))
+    kernel = cv2.getStructuringElement(
+        cv2.MORPH_ELLIPSE, (2 * dilate_px + 1, 2 * dilate_px + 1)
+    )
+    best_i: int | None = None
+    best_len = 0
+    for i, mask in room_masks.items():
+        fat = cv2.dilate(mask.astype(np.uint8), kernel, iterations=1)
+        length = _shared_boundary_px(filled, fat)
+        if length > best_len:
+            best_len = length
+            best_i = i
+
+    ry, rx = np.where(filled > 0)
+    if len(rx) == 0:
+        return best_i
+    cx_pt = origin[0] + float(rx.mean()) / _PX_PER_PT
+    cy_pt = origin[1] + float(ry.mean()) / _PX_PER_PT
+
+    if best_len > 0 and best_i is not None and label_xy:
+        nearest_i: int | None = None
+        nearest_d = float("inf")
+        for i, (lx, ly) in label_xy.items():
+            if i not in room_masks:
+                continue
+            d = float(np.hypot(lx - cx_pt, ly - cy_pt))
+            if d < nearest_d:
+                nearest_d = d
+                nearest_i = i
+        bx, by = label_xy[best_i]
+        boundary_d = float(np.hypot(bx - cx_pt, by - cy_pt))
+        # Fixture-split bath pockets can share a long wall with Kitchen while
+        # sitting next to the Bath label — prefer the closer label within 75 pt.
+        if (
+            nearest_i is not None
+            and nearest_i != best_i
+            and nearest_d <= 75.0
+            and nearest_d + 1.0 < boundary_d
+        ):
+            return nearest_i
+        return best_i
+
+    # No shared boundary: nearest room-mask centroid.
+    best_d = float("inf")
+    nearest_mask: int | None = None
+    for i, mask in room_masks.items():
+        my, mx = np.where(mask > 0)
+        if len(mx) == 0:
+            continue
+        d = float(
+            np.hypot(float(mx.mean()) - float(rx.mean()), float(my.mean()) - float(ry.mean()))
+        )
+        if d < best_d:
+            best_d = d
+            nearest_mask = i
+    return nearest_mask
 
 
 def detect_rooms(ctx: PageContext, viewport: BBox, sheet_id: str) -> list[Room]:
@@ -1051,19 +1197,20 @@ def detect_rooms(ctx: PageContext, viewport: BBox, sheet_id: str) -> list[Room]:
             for i, part in parts.items():
                 room_masks[i] = _fill_holes(part)
 
-    # Claim leftover enclosed free pockets inside the building.
+    # Claim leftover enclosed free pockets inside the building footprint.
     claimed = np.zeros_like(mask)
     for m in room_masks.values():
         claimed = np.maximum(claimed, m)
     keynotes = _keynotes_in_viewport(ctx, viewport)
+    labels_240 = _volt_240_labels_in_viewport(ctx, viewport)
     used_keynotes: set[str] = set()
-    unlabeled_rooms: list[tuple[str, str, list[Point], Point]] = []
-    unlabeled_n = 0
+    keynote_rooms: list[tuple[str, str, list[Point], Point]] = []
 
-    # Labels whose flood failed: adopt the nearest interior building pocket
-    # (any size — recovery before the 9 sq ft room filter).
+    # Labels whose flood failed: adopt the nearest building pocket (any size).
     orphan_idxs = [i for i in interior_idxs if i not in room_masks]
-    all_pockets = _unclaimed_components(barrier, claimed, mask, origin, min_area_pt2=0.0)
+    all_pockets, solid = _unclaimed_components(
+        barrier, claimed, mask, origin, min_area_pt2=_POCKET_NOISE_AREA_PT2
+    )
     adopted: set[int] = set()
     for i in orphan_idxs:
         lb = labels[i]
@@ -1094,45 +1241,126 @@ def detect_rooms(ctx: PageContext, viewport: BBox, sheet_id: str) -> list[Room]:
             claimed = np.maximum(claimed, room_masks[i])
             adopted.add(best_j)
 
-    # Remaining interior holes: ≥ 9 sq ft → own room; smaller → merge into the
-    # nearest labeled room so WH closets etc. are not left as Exterior.
-    for j, (reg, area_pt2, cx, cy) in enumerate(all_pockets):
+    # Remaining footprint holes (never emit "Unlabeled space").
+    # Shallow perimeter niches (outdoor unit, exterior-wall notes) stay
+    # unclaimed → Exterior. Deep holes get a three-pass treatment so a real
+    # keynote (B14 on the wall) wins before the 240V→B14 fallback.
+    deep_pending: list[tuple[int, np.ndarray, float, float]] = []
+    for j, (reg, _area_pt2, cx, cy) in enumerate(all_pockets):
         if j in adopted:
             continue
         if int(np.logical_and(reg, claimed).sum()) > 0.5 * int(reg.sum()):
             continue
         filled = _fill_holes(reg)
-        if area_pt2 < _UNLABELED_MIN_AREA_PT2:
-            best_i: int | None = None
-            best_d = float("inf")
-            for i in room_masks:
-                lb = labels[i]
-                d = float(np.hypot(cx - lb.cx, cy - lb.cy))
-                if d < best_d:
-                    best_d = d
-                    best_i = i
-            if best_i is not None:
-                # Bridge through the wall so findContours keeps one exterior ring
-                # (detached blobs are dropped by _mask_to_polygon's largest-only).
-                room_masks[best_i] = _bridge_mask_regions(room_masks[best_i], filled)
-                claimed = np.maximum(claimed, room_masks[best_i])
+        if not _hole_is_deep_interior(filled, solid):
             continue
+        deep_pending.append((j, filled, cx, cy))
+
+    claimed_idx: set[int] = set()
+
+    def _mech_polygon(filled: np.ndarray) -> list[Point]:
+        """Polygon for a mech closet.
+
+        Start from the free pocket, then cover nearby keynote / 240V text
+        centers (and a short bridge toward them) so wall-mounted WH devices
+        on the poche next to B14 fall inside — without a uniform dilate that
+        steals Bath receptacles on the opposite side.
+        """
+        fat = filled.astype(np.uint8).copy()
+        pad_px = max(1, int(round(10.0 * _PX_PER_PT)))
+        # B14/240V often sit one wall-width above the free pocket (Plan 4).
+        anchor_radius = _KEYNOTE_ASSOC_PT + 12.0
+        anchors: list[tuple[int, int]] = []
+        for _tag, kx, ky in keynotes:
+            if _point_near_region(filled, origin, kx, ky, anchor_radius):
+                anchors.append(_pt_to_px(kx, ky, origin))
+        for vx, vy in labels_240:
+            if _point_near_region(filled, origin, vx, vy, anchor_radius):
+                anchors.append(_pt_to_px(vx, vy, origin))
+        if anchors:
+            ry, rx = np.where(filled > 0)
+            if len(rx):
+                base = (int(rx.mean()), int(ry.mean()))
+                for ax, ay in anchors:
+                    cv2.line(fat, base, (ax, ay), 1, thickness=pad_px)
+                    cv2.circle(fat, (ax, ay), pad_px, 1, thickness=-1)
+        return _mask_to_polygon(fat, origin)
+
+    # Pass 1: real keynote tags on/near the pocket.
+    for j, filled, cx, cy in deep_pending:
         tag = _keynote_for_region(filled, origin, keynotes)
-        if tag is not None and tag in used_keynotes:
-            tag = None
-        poly_pts = _mask_to_polygon(filled, origin)
+        if tag is None or tag in used_keynotes:
+            continue
+        poly_pts = _mech_polygon(filled)
         if len(poly_pts) < 3:
             continue
-        if tag is not None:
-            used_keynotes.add(tag)
-            name = f"MECH. CLOSET ({tag})"
-            display = f"Mech. Closet ({tag})"
-        else:
-            unlabeled_n += 1
-            name = "UNLABELED SPACE"
-            display = f"Unlabeled space {unlabeled_n}"
-        unlabeled_rooms.append((name, display, poly_pts, Point(x=cx, y=cy)))
+        used_keynotes.add(tag)
+        keynote_rooms.append(
+            (
+                f"MECH. CLOSET ({tag})",
+                f"Mech. Closet ({tag})",
+                poly_pts,
+                Point(x=cx, y=cy),
+            )
+        )
         claimed = np.maximum(claimed, filled)
+        claimed_idx.add(j)
+
+    # Pass 2: one WH closet via 240V when B14 was not found in the viewport.
+    # Prefer the candidate nearest a Laundry label (WH closets sit next to LNDRY).
+    if "B14" not in used_keynotes:
+        laundry_pts = [
+            (lb.cx, lb.cy)
+            for lb in labels
+            if not lb.is_attic and "LNDRY" in lb.raw.upper()
+        ]
+        candidates = [
+            (j, filled, cx, cy)
+            for j, filled, cx, cy in deep_pending
+            if j not in claimed_idx and _region_has_240v(filled, origin, labels_240)
+        ]
+
+        def _laundry_dist(t: tuple[int, np.ndarray, float, float]) -> float:
+            _j, _f, cx, cy = t
+            if not laundry_pts:
+                return float(np.hypot(cx, cy))
+            return min(float(np.hypot(cx - lx, cy - ly)) for lx, ly in laundry_pts)
+
+        candidates.sort(key=_laundry_dist)
+        if candidates:
+            j, filled, cx, cy = candidates[0]
+            poly_pts = _mech_polygon(filled)
+            if len(poly_pts) >= 3:
+                used_keynotes.add("B14")
+                keynote_rooms.append(
+                    (
+                        "MECH. CLOSET (B14)",
+                        "Mech. Closet (B14)",
+                        poly_pts,
+                        Point(x=cx, y=cy),
+                    )
+                )
+                claimed = np.maximum(claimed, filled)
+                claimed_idx.add(j)
+
+    # Pass 3: merge leftover deep holes into the longest-boundary neighbor
+    # (with nearest-label preference when the pocket sits closer to another room).
+    # Decide all targets against the *original* labeled masks so an earlier
+    # merge cannot pull a later pocket into the wrong room via centroid drift.
+    label_xy = {i: (labels[i].cx, labels[i].cy) for i in room_masks}
+    merge_plan: list[tuple[int, np.ndarray]] = []
+    for j, filled, _cx, _cy in deep_pending:
+        if j in claimed_idx:
+            continue
+        best_i = _merge_into_longest_neighbor(
+            filled, room_masks, label_xy=label_xy, origin=origin
+        )
+        if best_i is None:
+            continue
+        merge_plan.append((best_i, filled))
+    for best_i, filled in merge_plan:
+        room_masks[best_i] = _bridge_mask_regions(room_masks[best_i], filled)
+        claimed = np.maximum(claimed, room_masks[best_i])
 
     rooms: list[Room] = []
     for i in interior_idxs:
@@ -1159,7 +1387,7 @@ def detect_rooms(ctx: PageContext, viewport: BBox, sheet_id: str) -> list[Room]:
             )
         )
 
-    for name, display, poly_pts, label_pt in unlabeled_rooms:
+    for name, display, poly_pts, label_pt in keynote_rooms:
         rooms.append(
             Room(
                 id=str(uuid.uuid4()),

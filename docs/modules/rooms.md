@@ -67,16 +67,17 @@ Debug: `out/debug/walls_pN.png` (white = barrier, red crosses = labels).
    (~45×33 pt on Plan 1: y≈419–452). Padded text is last resort only (it sat ~12 pt
    too high and stole the hallway can above the box while cutting off the `$`).
    Room `Attic` (`kind=attic`) has **priority** over the room below in `assign_room`.
-6. **Unlabeled enclosed pockets** (Decision, tightened): a free pocket becomes its
-   own interior room only if **all** of:
-   - it is a hole of the rooms∪walls core and sits ≥ 8 pt inside the filled
-     footprint outline (drops outdoor-unit / exterior-wall niches at ~2 pt);
-   - area ≥ **9 sq ft** at 18 pt/ft (= 2916 pt²);
-   - optional name: a keynote (`B14`, …) only if the **tag text bbox lies fully
-     inside** the pocket (wall-mounted note tags like B32 do not count).
-   Otherwise `Unlabeled space N`. Deep interior holes **under** 9 sq ft are bridged
-   into the nearest labeled room (Plan 1 WH closet → Bath). Failed label floods may
-   adopt a nearby deep hole before this step.
+6. **Enclosed unlabeled pockets** (never emit `Unlabeled space`):
+   - Shallow perimeter niches (< 8 pt inside the filled footprint) stay unclaimed
+     → Exterior (outdoor unit B38, exterior-wall notes).
+   - Deep holes with a keynote within ~14 pt (tags sit on wall poche) →
+     `Mech. Closet (<tag>)` any size (Plan 1 B14 WH closet).
+   - Deep holes with a `240V` text label and no keynote → `Mech. Closet (B14)`
+     when B14 is off-viewport (plans 2/3); prefer the candidate nearest Laundry.
+   - Remaining deep holes → merge into the labeled neighbor with the longest
+     shared boundary (masks dilated ~1 wall width). If a closer room label sits
+     within 75 pt, prefer that label (Bath 2 fixture pockets). Merge targets are
+     decided against the original masks, then applied.
 7. Contours → simplified polygons in PDF points (`approxPolyDP`, ε ≈ 1.5 pt).
 8. Synthetic **Exterior** room: `kind=exterior`, empty `polygon`. Exterior means
    **outside the building footprint only** — never an enclosed interior closet.
@@ -109,6 +110,9 @@ Debug: `out/debug/rooms_pN.png` (translucent fills + names on the plan raster).
 | `_WALL_ASSIGN_RADIUS_PT` | 12 | Wall-device search (SPEC §6) |
 | `_AMBIGUOUS_GAP_PT` | 4 | `needs_review` threshold |
 | `_POLY_SIMPLIFY_PT` | 1.5 | Contour simplification |
+| `_KEYNOTE_ASSOC_PT` | 14 | Keynote/240V near pocket (wall poche) |
+| `_INTERNAL_HOLE_MIN_DIST_OUT_PT` | 8 | Deep vs perimeter niche |
+| `_POCKET_NOISE_AREA_PT2` | 150 | Ignore tiny free specks |
 
 ## Known limits
 

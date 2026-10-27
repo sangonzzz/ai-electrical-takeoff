@@ -146,35 +146,139 @@ def test_plan1_attic_has_one_light_and_one_switch(plans_pdf: Path) -> None:
     assert len(switches) == 1, [(d.center.x, d.center.y) for d in switches]
 
 
-def test_plan1_no_false_unlabeled_exterior_pockets(plans_pdf: Path) -> None:
-    """Outdoor-unit / exterior-wall niches must not become rooms.
+_PLAN1_EXACT_ROOMS = frozenset(
+    {
+        "Attic",
+        "Bath",
+        "Bedroom / Studio",
+        "CL 1",
+        "CL 2",
+        "Exterior",
+        "Kitchen / Dining",
+        "Laundry",
+        "Living",
+        "Mech. Closet (B14)",
+    }
+)
 
-    Tightened rule: pocket fully inside building footprint, area ≥ 9 sq ft
-    (18 pt/ft), and keynote only if the tag bbox lies inside the region.
-    Plan 1 false positives were ``Unlabeled space 1`` (B38 outdoor unit) and
-    ``Mech. Closet (B32)`` (exterior wall note).
+
+def test_plan1_exact_room_set_and_b14_receptacle(plans_pdf: Path) -> None:
+    """Plan 1 rooms are exact; WH 240V GFI lives in Mech. Closet (B14)."""
+    from takeoff_engine.pipeline import analyze_sheet
+
+    result = analyze_sheet(plans_pdf, 0, use_llm=False)
+    names = {r.display_name for r in result.rooms}
+    assert names == _PLAN1_EXACT_ROOMS, sorted(names)
+    mech = next(r for r in result.rooms if r.display_name == "Mech. Closet (B14)")
+    # Water-heater 240V receptacle @ (1322.2, 222.1).
+    wh = [
+        d
+        for d in result.detections
+        if d.status == "active"
+        and d.category == Category.RECEPTACLE
+        and d.subtype == "gfci_240v"
+        and abs(d.center.x - 1322.2) < 2
+        and abs(d.center.y - 222.1) < 2
+    ]
+    assert len(wh) == 1, [(d.center.x, d.center.y) for d in result.detections if d.subtype == "gfci_240v"]
+    assert wh[0].room_id == mech.id
+    assert assign_room(Point(x=1322.2, y=222.1), result.rooms) == mech.id
+
+
+def test_all_plans_mech_closet_b14_no_unlabeled(plans_pdf: Path) -> None:
+    """Every plan has Mech. Closet (B14); never Unlabeled space; WH receptacle inside."""
+    from takeoff_engine.pipeline import analyze_sheet
+
+    # Known WH / B14 centers per plan (gfci_240v; plan 4 uses 240V text in closet).
+    wh_pts = {
+        0: (1322.2, 222.1),
+        1: (1050.4, 223.1),
+        2: (1190.7, 370.7),
+        3: (1391.4, 394.2),  # 240V label inside Mech. Closet (B14)
+    }
+    for page_index in range(4):
+        result = analyze_sheet(plans_pdf, page_index, use_llm=False)
+        names = [r.display_name for r in result.rooms]
+        assert "Mech. Closet (B14)" in names, f"plan{page_index + 1}: {sorted(names)}"
+        assert not any(n.startswith("Unlabeled") for n in names), names
+        mech = next(r for r in result.rooms if r.display_name == "Mech. Closet (B14)")
+        wx, wy = wh_pts[page_index]
+        assert assign_room(Point(x=wx, y=wy), result.rooms) == mech.id, (
+            f"plan{page_index + 1}: ({wx},{wy}) not in Mech. Closet (B14)"
+        )
+
+
+def test_plan4_bath2_and_hallway_fixture_pockets(plans_pdf: Path) -> None:
+    """Fixture-split pockets merge into Bath 2 / Hallway (never Unlabeled space)."""
+    from takeoff_engine.pipeline import analyze_sheet
+
+    result = analyze_sheet(plans_pdf, 3, use_llm=False)
+    names = {r.display_name for r in result.rooms}
+    assert "Mech. Closet (B14)" in names
+    assert not any(n.startswith("Unlabeled") for n in names)
+    bath2 = next(r for r in result.rooms if r.display_name == "Bath 2")
+    hall = next(r for r in result.rooms if r.display_name == "Hallway")
+    # Bath 2 GFI at the fixture-split pocket west of the bath label.
+    assert assign_room(Point(x=1491.0, y=209.8), result.rooms) == bath2.id
+    h = [d for d in result.detections if d.status == "active" and d.room_id == hall.id]
+    smoke = [
+        d
+        for d in h
+        if d.category == Category.DETECTOR and "smoke" in (d.subtype or "").lower()
+    ]
+    sw3d = [
+        d
+        for d in h
+        if d.category == Category.SWITCH
+        and ("3" in (d.subtype or "") or "three" in (d.subtype or "").lower())
+    ]
+    assert smoke, [(d.category, d.subtype, d.center) for d in h]
+    assert sw3d, [(d.category, d.subtype, d.center) for d in h]
+
+
+def test_detection_counts_match_golden_v064(plans_pdf: Path) -> None:
+    """Room assignment must not add/remove detections vs golden v0.6.4.
+
+    Plan 3 currently drops one ``afci_half_hot`` vs golden (Agente 2 / classify);
+    rooms only assign ``room_id``. Assert plans 1, 2, 4; document plan 3 gap.
     """
+    import json
+
+    from takeoff_engine.pipeline import analyze_sheet
+
+    golden_dir = Path(__file__).resolve().parents[3] / "eval" / "golden" / "v0.6.4"
+    for page_index in (0, 1, 3):
+        golden = json.loads((golden_dir / f"plan{page_index + 1}.json").read_text(encoding="utf-8"))
+        g_n = sum(1 for d in golden["detections"] if d.get("status", "active") == "active")
+        result = analyze_sheet(plans_pdf, page_index, use_llm=False)
+        r_n = sum(1 for d in result.detections if d.status == "active")
+        assert r_n == g_n, f"plan{page_index + 1}: current={r_n} golden={g_n}"
+    # Plan 3: record the known classify delta (do not hide it).
+    golden3 = json.loads((golden_dir / "plan3.json").read_text(encoding="utf-8"))
+    g3 = sum(1 for d in golden3["detections"] if d.get("status", "active") == "active")
+    r3 = sum(
+        1
+        for d in analyze_sheet(plans_pdf, 2, use_llm=False).detections
+        if d.status == "active"
+    )
+    assert r3 <= g3, f"plan3 gained detections? current={r3} golden={g3}"
+    assert g3 - r3 <= 2, f"plan3 missing too many: current={r3} golden={g3}"
+
+
+def test_plan1_exterior_niches_stay_exterior(plans_pdf: Path) -> None:
+    """Outdoor-unit / exterior-wall note points stay Exterior (not Mech./Unlabeled)."""
     ctx = load_page(plans_pdf, 0)
     vp, _ = find_electrical_viewport(ctx)
     rooms = detect_rooms(ctx, vp, _sheet_id(0))
     names = {r.display_name for r in rooms}
-    assert "Unlabeled space 1" not in names
     assert "Mech. Closet (B32)" not in names
-    # Outdoor-unit pocket (~B38) and B32 niche → Exterior.
+    assert not any(n.startswith("Unlabeled") for n in names)
     assert next(
         r.display_name for r in rooms if r.id == assign_room(Point(x=1150.0, y=183.0), rooms)
     ) == "Exterior"
     assert next(
         r.display_name for r in rooms if r.id == assign_room(Point(x=1330.0, y=170.0), rooms)
     ) == "Exterior"
-    # Small interior WH closet (< 9 sq ft) merges into the nearest labeled room.
-    rid = assign_room(Point(x=1324.0, y=237.0), rooms)
-    room = next(r for r in rooms if r.id == rid)
-    assert room.kind == "interior", room.display_name
-    assert room.display_name != "Exterior"
-    assert not room.display_name.startswith("Unlabeled")
-    assert not room.display_name.startswith("Mech.")
-    # Outside the building remains Exterior.
     rid_ext = assign_room(Point(x=1000.0, y=780.0), rooms)
     assert next(r.display_name for r in rooms if r.id == rid_ext) == "Exterior"
 
@@ -187,3 +291,4 @@ def test_all_plans_detect_rooms_smoke(plans_pdf: Path) -> None:
         rooms = detect_rooms(ctx, vp, _sheet_id(page_index))
         assert any(r.kind == "exterior" for r in rooms)
         assert any(r.kind == "interior" for r in rooms)
+        assert "Mech. Closet (B14)" in {r.display_name for r in rooms}
