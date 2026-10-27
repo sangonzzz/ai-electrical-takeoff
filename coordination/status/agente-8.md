@@ -2,25 +2,26 @@
 
 ## Estado
 
-Wires **v3 final**: curved-only + measured gap window; `nm_14_3` = clean 3-way traveler only; residual millwork → A6 beta.
+Wires **v3.1** shipped: plan1 laundry/entry 3D curves restored, ≥2 `nm_14_3`, no B38 attach. Waiting on Agente 1 version bump.
 
 ## Hecho
 
-- Reject **collinear** dash chains (`MAX_CHAIN_STRAIGHTNESS = 0.88` + direction variance)
-- Gap membership `[1.5, 9]` around measured ~3.8 pt; length collect `[1.5, 12]` (PDF flatten of ~7 pt dashes)
-- **`nm_14_3`:** consecutive distant 3-way hops, or traveler BFS that does **not** graze lights/fans/receptacles (living loop stays `nm_14_2`)
-- Messaged Agente 6: Wires layer **off by default** + **beta** badge (kitchen/bath millwork still leaks)
-- Messaged Agente 1: bump `PIPELINE_VERSION`
-- Tests + `docs/modules/bom.md` + `data/assumptions.yaml` updated; PNGs regenerated
+- Dash = open black polyline 4–14 pt after carving receptacle/detector (+ outdoor 240V) bboxes +2 pt
+- Link gap 1.5–10 pt, turn ≤45° (calibrated from nominal 1.5–6 / 35° for Escondido flatten)
+- Chain ≥3 dashes; reject only ≥6 dashes with every point ≤1 pt of chord
+- Tip tangent extend ≤36 pt (nominal 12); both ends must attach to different devices; never outdoor 240V/B38
+- Cable: either-end `three_way` / `three_way_dimmer` → `nm_14_3`, else `nm_14_2`
+- Plan1 regression + unit tests green; 4 debug PNGs checked
+- Messaged Agente 1 for `PIPELINE_VERSION` bump
 
-## Run counts (v3 final)
+## Run counts (v3.1)
 
 | Plan | runs | nm_14_2 | nm_14_3 | notes |
 |------|------|---------|---------|-------|
-| 1    | 15   | 15      | 0       | 3-way path shares lighting ink → no clean traveler |
-| 2    | 22   | 22      | 0       | |
-| 3    | 33   | 33      | 0       | |
-| 4    | 44   | 44      | 0       | kitchen millwork FPs remain (beta) |
+| 1    | 28   | 21      | 7       | laundry→kitchen + entry→living restored |
+| 2    | 32   | 31      | 1       | |
+| 3    | 33   | 27      | 6       | |
+| 4    | 33   | 30      | 3       | held |
 
 ## Cómo probarlo
 
@@ -33,24 +34,23 @@ PNGs: `out/debug/wires_plan{1..4}.png`
 ## Siguiente
 
 - Agente 1 version bump
-- Agente 6 wires beta UI
-- No further wires engine work this round (timebox done)
+- Agente 6 wires beta UI (already messaged earlier)
 
 ## Bloqueos
 
 - Agente 1 version bump
-- Agente 6 beta layer (requested)
 
 ## Decisions
 
-- Collinear filter at **chain** link time, not every short hop (short hops on real curves look “straight”)
-- Traveler BFS rejected if path grazes mid-path lights — better 0 `nm_14_3` than labeling the living loop
-- Residual millwork → product beta, not more engine churn in this timebox
+- Carve only receptacle/detector (+ outdoor), not switch/light/fan — otherwise tip attach never reaches devices
+- Calibrate gap/turn/extend beyond nominal product numbers so Escondido flatten-join still links real arcs
+- Outdoor 240V / B38 never endpoints (and carved) so laundry curves do not stick to equipment
+- Simple either-end 3-way → `nm_14_3` (replaces traveler-only rule that yielded 0)
 
 ## Needs from Santiago
 
-None (this round was approved).
+None.
 
 ## Explicación para Santiago
 
-Última pasada de cables: las rayitas de cable en estos planos son **curvas**, así que botamos cadenas casi rectas (gabinetes, equipos). El hueco entre rayitas ~3.8 pt filtra juntas continuas de símbolos. `nm_14_3` queda **solo** para el tramo viajero entre dos 3-way; si el camino pasa por luces (loop living/cocina), todo queda `nm_14_2`. Todavía se cuelan algunos gabinetes/baños en el overlay, así que pedí a Agente 6 que la capa Wires arranque **apagada** con badge **beta**.
+Restauramos los cables largos del plan 1 (lavandería 3D → luces de cocina, entrada 3D → luces del living). El algoritmo junta rayitas negras abiertas, alarga las puntas hasta un aparato, y marca `nm_14_3` si hay un three-way en cualquier extremo. Rechazamos solo cadenas muy rectas (gabinetes) y no conectamos al equipo exterior B38. Los umbrales del PDF real son un poco más holgados que los números nominales (huecos y alcance de punta), documentados en `docs/modules/bom.md`. Pedí a Agente 1 que suba la versión del pipeline.

@@ -107,7 +107,9 @@ def main() -> int:
         counts.append((page_index, len(runs)))
 
         vp = result.sheet.viewport
-        dashes = _collect_dash_candidates(ctx, vp) if vp is not None else []
+        dashes = (
+            _collect_dash_candidates(ctx, vp, result.detections) if vp is not None else []
+        )
         wires_png = DEBUG_DIR / f"wires_plan{page_index + 1}.png"
         render_wire_debug_png(
             str(PLANS),
