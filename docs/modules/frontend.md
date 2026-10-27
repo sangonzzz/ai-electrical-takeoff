@@ -27,7 +27,10 @@ radius 10 px, transitions ~150 ms. Light theme default.
 
 ## Editing
 
-- **Undo / Redo** — labeled header buttons; Ctrl+Z / Ctrl+Shift+Z (fixture stacks).
+- **Undo / Redo** — labeled header buttons; Ctrl+Z / Ctrl+Shift+Z.
+  Fixture: snapshot stacks. Real API: client command stack
+  (create↔delete/restore, update/move↔PATCH previous values); clears redo on new
+  action; refreshes sheet/BOM/corrections after each step.
 - **Component palette** — drag subtypes onto the plan (ghost + “Drop on the plan”);
   click-to-add still works in Add mode. Room auto-assigned on create.
 - **Details** — editable X/Y in PDF points (also drag marks on the plan).
@@ -74,6 +77,7 @@ pnpm exec tsc --noEmit && pnpm exec vitest run
 ## Known limits
 
 - Fixture BOM is a lightweight derivation of sample wires/boxes.
-- Undo/redo stacks are fixture-local until the backend exposes history.
+- Fixture undo uses full-result snapshots; API mode uses per-action inverses +
+  `POST /api/detections/{id}/restore` (Agente 5).
 - `web/src/types/contracts.ts` is owned by Agente 1.
 - Lazy fixture JSON import (Agente 1 request) still pending.

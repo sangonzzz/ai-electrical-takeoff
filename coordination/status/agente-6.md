@@ -2,45 +2,40 @@
 
 ## Estado
 
-Review/Steven polish shipped: Undo/Redo, palette drag-drop, X/Y fields, wire label density, Excel/quote export, renamed to Electrical Takeoff.
+Real-API Undo/Redo via client command stack + Agente 5 restore; asked Agente 7 to re-run e2e.
 
 ## Hecho
 
-- Product rename: **Electrical Takeoff** (no Atreyus in UI)
-- Undo + Redo labeled in top bar (Ctrl+Z / Ctrl+Shift+Z); clear disabled state; fixture redo stack
-- Component palette with icons; drag ghost + “Drop on the plan”; click-to-add kept; room auto-assign
-- Details: editable X/Y PDF points
-- Wire labels only on hover (or all when ≤14 wires)
-- Download Excel (`export.xlsx`) + Download quote PDF (`quote.pdf`); short `file_hash` in header
-- `data-testid="detection-mark"` for Agente 7 e2e
-- Earlier: home job poll from document status, UI redesign
+- Client command stack (`lib/commandStack.ts`): create→delete, delete→restore, update/move→PATCH previous
+- `restoreDetection` → `POST /api/detections/{id}/restore`
+- canUndo/canRedo enable after edits in API mode; redo cleared on new action; BOM/sheet refresh
+- Ctrl+Z / Ctrl+Shift+Z unchanged; fixture stacks kept
+- Messages to Agente 5 (restore dependency) and Agente 7 (re-run e2e)
+- Earlier: palette DnD, X/Y, wire labels, Excel/quote, Electrical Takeoff rename
 
 ## Cómo probarlo
 
 ```bash
 cd web
-pnpm install --frozen-lockfile
-pnpm exec tsc --noEmit
-pnpm exec vitest run
-VITE_USE_FIXTURE=true pnpm dev
-# Sheet: Undo/Redo after edit; drag a receptacle onto the plan; edit X/Y; hover wires on plan 2;
-# Download Excel / quote PDF buttons in the header
+pnpm exec tsc --noEmit && pnpm exec vitest run
+# Against API (Agente 5 restore live):
+# VITE_USE_FIXTURE=false pnpm dev → add mark → Undo enables → count drops → Redo restores
+# Agente 7: make e2e  # expect undo_then_redo pass
 ```
 
 ## Siguiente
 
 - Lazy fixture import (Agente 1)
-- Smoke-test Excel/quote against live Agente 5 routes when ready
+- Confirm e2e undo_then_redo after A5 commits restore
 
 ## Bloqueos
 
-- Excel/quote PDF API routes still landing (UI wired; fixture stubs downloads)
+- e2e undo needs Agente 5 restore route committed/deployed in the stack under test
 
 ## Decisions
 
-- Product display name: **Electrical Takeoff**
-- Wire label low-density threshold: 14 runs
-- Undo/Redo live in the header (not only the floating toolbar)
+- Client-owned history for API mode (not server `/undo` tip) so Undo works for the session’s edits even before corrections-log undo lands
+- Soft-delete restore preserves detection id across undo create / redo create
 
 ## Needs from Santiago
 
@@ -48,8 +43,8 @@ VITE_USE_FIXTURE=true pnpm dev
 
 ## Explicación para Santiago
 
-Agregué lo que pidió la review y Steven: botones Undo/Redo visibles arriba con atajos,
-una paleta de componentes para arrastrar marcas al plano (con fantasma y “Drop on the plan”),
-campos X/Y editables en Details, labels de cables solo al hover cuando hay muchos,
-exports Excel y PDF de cotización, y el nombre del producto ahora es Electrical Takeoff
-(sin Atreyus). Commits chicos por feature.
+Antes Undo/Redo solo andaban en fixture. Ahora en API real cada acción guarda su
+inversa: crear se deshace con delete, borrar con restore, mover/editar con un PATCH
+de los valores anteriores. Redo vuelve a aplicar; si hacés algo nuevo se limpia el
+redo. Los botones se habilitan de verdad y el takeoff/BOM se refrescan. Le pedí a
+Agente 7 que vuelva a correr el e2e.

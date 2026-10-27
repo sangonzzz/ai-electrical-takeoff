@@ -1,4 +1,5 @@
 import type { Bom, Detection, SheetResult, Takeoff } from "@/types/contracts";
+import type { DetectionPatchBody } from "@/lib/commandStack";
 import {
   documentFromDetail,
   documentFromUpload,
@@ -206,9 +207,9 @@ export async function createDetection(
 
 export async function patchDetection(
   id: string,
-  patch: Partial<Detection>,
+  patch: DetectionPatchBody,
 ): Promise<DetectionMutationResult> {
-  if (useFixture) return fixturePatchDetection(id, patch);
+  if (useFixture) return fixturePatchDetection(id, patch as Partial<Detection>);
   return request<DetectionMutationResult>(`/api/detections/${id}`, {
     method: "PATCH",
     body: JSON.stringify(patch),
@@ -222,9 +223,26 @@ export async function deleteDetection(id: string): Promise<DetectionMutationResu
   });
 }
 
+/**
+ * POST /api/detections/{id}/restore — undelete a soft-deleted mark (Agente 5).
+ * Used by the client command stack to undo delete / redo create.
+ */
+export async function restoreDetection(
+  id: string,
+  opts?: { history_action?: "undo" | "redo" },
+): Promise<DetectionMutationResult> {
+  if (useFixture) {
+    return fixturePatchDetection(id, { status: "active" });
+  }
+  return request<DetectionMutationResult>(`/api/detections/${id}/restore`, {
+    method: "POST",
+    body: JSON.stringify(opts ?? {}),
+  });
+}
+
 export async function undoLastAction(sheetId: string): Promise<SheetBundle | null> {
   if (useFixture) return fixtureUndo();
-  // Backend may expose undo later; until then this is a no-op outside fixture.
+  // Real API undo is client-side (command stack in useSheetBundle).
   void sheetId;
   return null;
 }
