@@ -228,7 +228,11 @@ async def create_reanalyze_run(
     *,
     enqueue: bool = True,
 ) -> AnalysisRun:
-    """New run for reanalyze; previous runs untouched until worker succeeds."""
+    """Fresh analysis: new queued run; old runs + corrections kept as-is.
+
+    Does not clear prior corrections. ``current_run_id`` stays on the last
+    succeeded run until this job succeeds (worker updates it).
+    """
     run = _new_queued_run(
         sheet_id=sheet.id,
         file_hash=document.file_hash,

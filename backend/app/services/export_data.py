@@ -15,10 +15,15 @@ from app.services.takeoff_svc import sheet_bom, sheet_takeoff
 from app.settings import Settings
 
 
-async def _corrections_for_sheet(session: AsyncSession, sheet_id: str) -> list[Correction]:
+async def _corrections_for_run(
+    session: AsyncSession, sheet_id: str, run_id: str
+) -> list[Correction]:
     result = await session.execute(
         select(Correction)
-        .where(Correction.sheet_id == sheet_id)
+        .where(
+            Correction.sheet_id == sheet_id,
+            Correction.analysis_run_id == run_id,
+        )
         .order_by(Correction.created_at.asc())
     )
     return list(result.scalars().all())
@@ -54,7 +59,7 @@ async def load_sheet_export_bundle(
         wires=wires,
         takeoff=takeoff,
         bom=bom,
-        corrections=await _corrections_for_sheet(session, sheet.id),
+        corrections=await _corrections_for_run(session, sheet.id, run.id),
         pipeline_version=run.pipeline_version,
         overlay_png=overlay,
     )

@@ -19,10 +19,16 @@ from app.services.sheet_ops import (
 _UNDOABLE = frozenset({"create", "update", "delete", "redo"})
 
 
-async def _corrections_desc(session: AsyncSession, sheet_id: str) -> list[Correction]:
+async def _corrections_desc(session: AsyncSession, sheet: Sheet) -> list[Correction]:
+    """Tip of the corrections log for the *current* run (empty after fresh reanalyze)."""
+    if not sheet.current_run_id:
+        return []
     result = await session.execute(
         select(Correction)
-        .where(Correction.sheet_id == sheet_id)
+        .where(
+            Correction.sheet_id == sheet.id,
+            Correction.analysis_run_id == sheet.current_run_id,
+        )
         .order_by(Correction.created_at.desc(), Correction.id.desc())
     )
     return list(result.scalars().all())
@@ -90,7 +96,7 @@ async def undo_sheet(
     session: AsyncSession, sheet: Sheet
 ) -> SheetDetailResponse:
     run = await require_succeeded_run(session, sheet)
-    corrections = await _corrections_desc(session, sheet.id)
+    corrections = await _corrections_desc(session, sheet)
     status = history_status(corrections)
     if not status.can_undo:
         raise HTTPException(status_code=409, detail="nothing to undo")
@@ -140,7 +146,7 @@ async def redo_sheet(
     session: AsyncSession, sheet: Sheet
 ) -> SheetDetailResponse:
     run = await require_succeeded_run(session, sheet)
-    corrections = await _corrections_desc(session, sheet.id)
+    corrections = await _corrections_desc(session, sheet)
     status = history_status(corrections)
     if not status.can_redo:
         raise HTTPException(status_code=409, detail="nothing to redo")
@@ -174,6 +180,6 @@ async def redo_sheet(
     return build_sheet_detail(sheet, run)
 
 
-async def get_history_status(session: AsyncSession, sheet_id: str) -> HistoryStatusResponse:
-    corrections = await _corrections_desc(session, sheet_id)
+async def get_history_status(session: AsyncSession, sheet: Sheet) -> HistoryStatusResponse:
+    corrections = await _corrections_desc(session, sheet)
     return history_status(corrections)

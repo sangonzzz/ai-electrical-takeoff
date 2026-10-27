@@ -100,9 +100,30 @@ async def test_image_png(client: AsyncClient, sample_pdf: Path) -> None:
 
 @pytest.mark.asyncio
 async def test_reanalyze_creates_new_run(client: AsyncClient, sample_pdf: Path) -> None:
+    """Fresh analysis: new run, old run kept, corrections empty on new current run."""
+    from sqlalchemy import func, select
+
+    from app.db import SessionLocal
+    from app.models import Correction
+
     up = await _upload(client, sample_pdf)
     sheet_id = up["sheets"][0]["sheet_id"]
     old_job = up["sheets"][0]["job_id"]
+
+    # Seed a correction on the first run
+    created = await client.post(
+        f"/api/sheets/{sheet_id}/detections",
+        json={
+            "category": "light",
+            "subtype": "recessed",
+            "center": {"x": 900.0, "y": 300.0},
+        },
+    )
+    assert created.status_code == 200
+    before = await client.get(f"/api/sheets/{sheet_id}/corrections")
+    assert len(before.json()) >= 1
+    hist = await client.get(f"/api/sheets/{sheet_id}/history")
+    assert hist.json()["can_undo"] is True
 
     resp = await client.post(f"/api/sheets/{sheet_id}/reanalyze")
     assert resp.status_code == 202
@@ -114,3 +135,13 @@ async def test_reanalyze_creates_new_run(client: AsyncClient, sample_pdf: Path) 
 
     old = await client.get(f"/api/jobs/{old_job}")
     assert old.json()["status"] == "succeeded"
+
+    # UI surface for current run is empty (fresh); prior rows still in DB
+    after = await client.get(f"/api/sheets/{sheet_id}/corrections")
+    assert after.json() == []
+    hist2 = await client.get(f"/api/sheets/{sheet_id}/history")
+    assert hist2.json() == {"can_undo": False, "can_redo": False}
+
+    async with SessionLocal() as session:
+        total = await session.scalar(select(func.count()).select_from(Correction))
+    assert total is not None and total >= 1

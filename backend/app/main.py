@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -12,11 +13,18 @@ from app.services.queue import close_arq_pool
 from app.services.storage import ensure_dirs
 from app.settings import get_settings
 
+logger = logging.getLogger(__name__)
+
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     settings = get_settings()
     ensure_dirs(settings)
+    if settings.auto_migrate:
+        from app.db_bootstrap import bootstrap_database
+
+        logger.info("Bootstrapping DB from DATABASE_URL …")
+        await bootstrap_database(settings.database_url)
     yield
     await close_arq_pool()
 

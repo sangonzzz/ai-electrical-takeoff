@@ -26,6 +26,9 @@ class Settings(BaseSettings):
 
     database_url: str = "postgresql+asyncpg://takeoff:takeoff@localhost:5432/takeoff"
     redis_url: str = "redis://localhost:6379/0"
+    # Create DB (if missing) + alembic upgrade head on API startup.
+    # Set false in pytest (conftest uses metadata.create_all).
+    auto_migrate: bool = True
 
     storage_dir: Path = REPO_ROOT / "storage"
     cache_dir: Path = REPO_ROOT / ".cache"

@@ -22,6 +22,8 @@ os.environ["DATABASE_URL"] = TEST_DB
 os.environ["ENGINE"] = "fake"
 os.environ["INLINE_JOBS"] = "true"
 os.environ["ENABLE_BOM"] = "true"
+# Tests use metadata.create_all; skip lifespan alembic.
+os.environ["AUTO_MIGRATE"] = "false"
 
 from app.db import Base  # noqa: E402
 from app.main import create_app  # noqa: E402

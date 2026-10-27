@@ -46,9 +46,13 @@ ARQ is an asyncio-native Redis queue that fits FastAPI’s event loop. Analysis 
 
 Same file SHA-256 returns the **same document**. For each page, if a `succeeded` run already exists for `(file_hash, page_index, pipeline_version)`, that run is reused and **not** re-enqueued.
 
-## Versioning
+## Versioning / fresh analysis
 
-`POST /api/sheets/{id}/reanalyze` creates a **new** run. Old runs and their corrections stay untouched. `current_run_id` switches only when the new run succeeds.
+`POST /api/sheets/{id}/reanalyze` (UI “fresh analysis” button) creates a **new** queued
+run with no corrections applied. Old runs and their correction rows stay in the DB.
+`current_run_id` switches only when the new run succeeds. After that, GET
+`/corrections` and `/history` are scoped to the **current** run (empty until the
+user edits again).
 
 ## CRUD rules
 
@@ -66,6 +70,19 @@ Same file SHA-256 returns the **same document**. For each page, if a `succeeded`
 | `ENABLE_LLM` / `ENABLE_BOM` | true | Passed through to the engine / BOM gate |
 | `INLINE_JOBS` | false | Run worker in-process (tests) |
 | `DATABASE_URL` / `REDIS_URL` | compose defaults | Postgres + Redis |
+| `AUTO_MIGRATE` | true | On API startup: create DB if missing + `alembic upgrade head` |
+
+### E2E isolation (separate database)
+
+Point the API at another database name on the same Postgres (Agente 7 e2e):
+
+```bash
+DATABASE_URL=postgresql+asyncpg://takeoff:takeoff@localhost:5432/takeoff_e2e
+```
+
+On startup the API (and `docker-entrypoint-api.sh`) will `CREATE DATABASE takeoff_e2e`
+if needed and run migrations against that URL. Tests use `takeoff_test` with
+`AUTO_MIGRATE=false` + `metadata.create_all`.
 
 Human review: `POST /api/sheets/{id}/review-complete` sets `human_reviewed` on the
 current run; `GET /api/sheets/{id}/ground-truth.json` exports active detections for

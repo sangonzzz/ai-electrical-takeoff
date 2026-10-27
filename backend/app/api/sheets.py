@@ -98,10 +98,16 @@ async def get_bom(sheet_id: str, session: DbSession, settings: AppSettings) -> B
 
 @router.get("/api/sheets/{sheet_id}/corrections", response_model=list[CorrectionOut])
 async def get_corrections(sheet_id: str, session: DbSession) -> list[CorrectionOut]:
-    await get_sheet_or_404(session, sheet_id)
+    """Corrections for the sheet's *current* run only (fresh after reanalyze)."""
+    sheet = await get_sheet_or_404(session, sheet_id)
+    if not sheet.current_run_id:
+        return []
     result = await session.execute(
         select(Correction)
-        .where(Correction.sheet_id == sheet_id)
+        .where(
+            Correction.sheet_id == sheet_id,
+            Correction.analysis_run_id == sheet.current_run_id,
+        )
         .order_by(Correction.created_at.asc())
     )
     rows = result.scalars().all()
@@ -129,6 +135,13 @@ async def get_corrections(sheet_id: str, session: DbSession) -> list[CorrectionO
 async def reanalyze(
     sheet_id: str, session: DbSession, settings: AppSettings
 ) -> ReanalyzeResponse:
+    """Fresh analysis button: enqueue a new run with no corrections applied.
+
+    Previous runs (and their correction rows) stay in the DB. ``current_run_id``
+    switches only when the new job succeeds; until then the UI still shows the
+    last succeeded run. After success, GET corrections / history are empty for
+    the new run.
+    """
     sheet = await get_sheet_or_404(session, sheet_id)
     doc = sheet.document or await session.get(Document, sheet.document_id)
     if doc is None:
@@ -291,8 +304,8 @@ async def restore_detection_route(
 
 @router.get("/api/sheets/{sheet_id}/history", response_model=HistoryStatusResponse)
 async def sheet_history(sheet_id: str, session: DbSession) -> HistoryStatusResponse:
-    await get_sheet_or_404(session, sheet_id)
-    return await get_history_status(session, sheet_id)
+    sheet = await get_sheet_or_404(session, sheet_id)
+    return await get_history_status(session, sheet)
 
 
 @router.post("/api/sheets/{sheet_id}/undo", response_model=SheetDetailResponse)
