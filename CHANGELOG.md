@@ -2,11 +2,21 @@
 
 Plain-language notes for Santiago. Newest first.
 
+## v0.6.3 — wires restore + patches (frozen)
+
+Approved wires restore to v0.6.0 geometry (`6ffe668`) plus two small patches:
+
+- **Wires restored** to v0.6.0 best geometry (undo v3.1 wall/door tracing regression).
+- **B38 exclusion:** keynote + outdoor equipment (`gfci_240v` / `B38`) ink never used as endpoints.
+- **3-way rule:** either-end `three_way` / `three_way_dimmer` → cable type `nm_14_3`.
+
+**Engine frozen after this tag:** no further detection/rooms/LLM/BOM/overlay changes
+without Santiago’s approval (`AGENTS.md` §14).
+
 ## v0.6.2 — engine patch (frozen)
 
-Patch bump for approved post-0.6.1 engine fixes. **Engine frozen after this tag:**
-no further detection/rooms/LLM/BOM/overlay changes without Santiago’s approval
-(`AGENTS.md` §14).
+Patch bump for approved post-0.6.1 engine fixes. Engine was frozen after this tag
+until Santiago approved the v0.6.3 wires restore.
 
 ## v0.6.1 — engine patch
 
