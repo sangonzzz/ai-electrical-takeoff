@@ -1,0 +1,6197 @@
+{
+  "boxes": [
+    {
+      "bbox": {
+        "x0": 532.74,
+        "x1": 544.74,
+        "y0": 260.68,
+        "y1": 276.68
+      },
+      "center": {
+        "x": 538.74,
+        "y": 268.68
+      },
+      "cover": "none",
+      "detection_ids": [
+        "det:0002"
+      ],
+      "gangs": 1,
+      "id": "box:0000",
+      "kind": "ceiling_round",
+      "source": "geometry"
+    },
+    {
+      "bbox": {
+        "x0": 732.78,
+        "x1": 744.78,
+        "y0": 436.18,
+        "y1": 452.18
+      },
+      "center": {
+        "x": 738.78,
+        "y": 444.18
+      },
+      "cover": "none",
+      "detection_ids": [
+        "det:0009"
+      ],
+      "gangs": 1,
+      "id": "box:0001",
+      "kind": "ceiling_round",
+      "source": "geometry"
+    },
+    {
+      "bbox": {
+        "x0": 805.14,
+        "x1": 817.14,
+        "y0": 290.02,
+        "y1": 306.02
+      },
+      "center": {
+        "x": 811.14,
+        "y": 298.02
+      },
+      "cover": "none",
+      "detection_ids": [
+        "det:0004"
+      ],
+      "gangs": 1,
+      "id": "box:0002",
+      "kind": "ceiling_round",
+      "source": "geometry"
+    },
+    {
+      "bbox": {
+        "x0": 1049.58,
+        "x1": 1061.58,
+        "y0": 278.74,
+        "y1": 294.74
+      },
+      "center": {
+        "x": 1055.58,
+        "y": 286.74
+      },
+      "cover": "none",
+      "detection_ids": [
+        "det:0003"
+      ],
+      "gangs": 1,
+      "id": "box:0003",
+      "kind": "ceiling_round",
+      "source": "geometry"
+    },
+    {
+      "bbox": {
+        "x0": 398.28,
+        "x1": 410.28,
+        "y0": 247.78,
+        "y1": 263.78
+      },
+      "center": {
+        "x": 404.28,
+        "y": 255.78
+      },
+      "cover": "plate",
+      "detection_ids": [
+        "det:0022"
+      ],
+      "gangs": 1,
+      "id": "box:0004",
+      "kind": "device",
+      "source": "geometry"
+    },
+    {
+      "bbox": {
+        "x0": 398.28,
+        "x1": 410.28,
+        "y0": 381.94,
+        "y1": 397.94
+      },
+      "center": {
+        "x": 404.28,
+        "y": 389.94
+      },
+      "cover": "plate",
+      "detection_ids": [
+        "det:0023"
+      ],
+      "gangs": 1,
+      "id": "box:0005",
+      "kind": "device",
+      "source": "geometry"
+    },
+    {
+      "bbox": {
+        "x0": 529.62,
+        "x1": 541.62,
+        "y0": 411.4,
+        "y1": 427.4
+      },
+      "center": {
+        "x": 535.62,
+        "y": 419.4
+      },
+      "cover": "plate",
+      "detection_ids": [
+        "det:0024"
+      ],
+      "gangs": 1,
+      "id": "box:0006",
+      "kind": "device",
+      "source": "geometry"
+    },
+    {
+      "bbox": {
+        "x0": 554.7,
+        "x1": 566.7,
+        "y0": 335.62,
+        "y1": 351.62
+      },
+      "center": {
+        "x": 560.7,
+        "y": 343.62
+      },
+      "cover": "plate",
+      "detection_ids": [
+        "det:0025"
+      ],
+      "gangs": 1,
+      "id": "box:0007",
+      "kind": "device",
+      "source": "geometry"
+    },
+    {
+      "bbox": {
+        "x0": 554.94,
+        "x1": 566.94,
+        "y0": 378.7,
+        "y1": 394.7
+      },
+      "center": {
+        "x": 560.94,
+        "y": 386.7
+      },
+      "cover": "plate",
+      "detection_ids": [
+        "det:0037"
+      ],
+      "gangs": 1,
+      "id": "box:0008",
+      "kind": "device",
+      "source": "geometry"
+    },
+    {
+      "bbox": {
+        "x0": 576.54,
+        "x1": 588.54,
+        "y0": 297.22,
+        "y1": 313.22
+      },
+      "center": {
+        "x": 582.54,
+        "y": 305.22
+      },
+      "cover": "plate",
+      "detection_ids": [
+        "det:0026"
+      ],
+      "gangs": 1,
+      "id": "box:0009",
+      "kind": "device",
+      "source": "geometry"
+    },
+    {
+      "bbox": {
+        "x0": 576.54,
+        "x1": 588.54,
+        "y0": 401.38,
+        "y1": 417.38
+      },
+      "center": {
+        "x": 582.54,
+        "y": 409.38
+      },
+      "cover": "plate",
+      "detection_ids": [
+        "det:0027"
+      ],
+      "gangs": 1,
+      "id": "box:0010",
+      "kind": "device",
+      "source": "geometry"
+    },
+    {
+      "bbox": {
+        "x0": 577.08,
+        "x1": 589.08,
+        "y0": 329.44,
+        "y1": 345.44
+      },
+      "center": {
+        "x": 583.08,
+        "y": 337.44
+      },
+      "cover": "plate",
+      "detection_ids": [
+        "det:0038"
+      ],
+      "gangs": 1,
+      "id": "box:0011",
+      "kind": "device",
+      "source": "geometry"
+    },
+    {
+      "bbox": {
+        "x0": 601.74,
+        "x1": 613.74,
+        "y0": 192.1,
+        "y1": 208.1
+      },
+      "center": {
+        "x": 607.74,
+        "y": 200.1
+      },
+      "cover": "plate",
+      "detection_ids": [
+        "det:0040"
+      ],
+      "gangs": 1,
+      "id": "box:0012",
+      "kind": "device",
+      "source": "geometry"
+    },
+    {
+      "bbox": {
+        "x0": 628.68,
+        "x1": 640.68,
+        "y0": 191.26,
+        "y1": 207.26
+      },
+      "center": {
+        "x": 634.68,
+        "y": 199.26
+      },
+      "cover": "plate",
+      "detection_ids": [
+        "det:0041"
+      ],
+      "gangs": 1,
+      "id": "box:0013",
+      "kind": "device",
+      "source": "geometry"
+    },
+    {
+      "bbox": {
+        "x0": 646.86,
+        "x1": 658.86,
+        "y0": 192.1,
+        "y1": 208.1
+      },
+      "center": {
+        "x": 652.86,
+        "y": 200.1
+      },
+      "cover": "plate",
+      "detection_ids": [
+        "det:0050"
+      ],
+      "gangs": 1,
+      "id": "box:0014",
+      "kind": "device",
+      "source": "geometry"
+    },
+    {
+      "bbox": {
+        "x0": 688.08,
+        "x1": 700.08,
+        "y0": 192.04,
+        "y1": 208.04
+      },
+      "center": {
+        "x": 694.08,
+        "y": 200.04
+      },
+      "cover": "plate",
+      "detection_ids": [
+        "det:0058"
+      ],
+      "gangs": 1,
+      "id": "box:0015",
+      "kind": "device",
+      "source": "geometry"
+    },
+    {
+      "bbox": {
+        "x0": 700.62,
+        "x1": 712.62,
+        "y0": 191.26,
+        "y1": 207.26
+      },
+      "center": {
+        "x": 706.62,
+        "y": 199.26
+      },
+      "cover": "plate",
+      "detection_ids": [
+        "det:0042"
+      ],
+      "gangs": 1,
+      "id": "box:0016",
+      "kind": "device",
+      "source": "geometry"
+    },
+    {
+      "bbox": {
+        "x0": 701.04,
+        "x1": 713.04,
+        "y0": 434.14,
+        "y1": 450.14
+      },
+      "center": {
+        "x": 707.04,
+        "y": 442.14
+      },
+      "cover": "weatherproof_cover",
+      "detection_ids": [
+        "det:0051"
+      ],
+      "gangs": 1,
+      "id": "box:0017",
+      "kind": "device",
+      "source": "geometry"
+    },
+    {
+      "bbox": {
+        "x0": 709.62,
+        "x1": 721.62,
+        "y0": 410.8,
+        "y1": 426.8
+      },
+      "center": {
+        "x": 715.62,
+        "y": 418.8
+      },
+      "cover": "plate",
+      "detection_ids": [
+        "det:0028"
+      ],
+      "gangs": 1,
+      "id": "box:0018",
+      "kind": "device",
+      "source": "geometry"
+    },
+    {
+      "bbox": {
+        "x0": 727.08,
+        "x1": 739.08,
+        "y0": 410.38,
+        "y1": 426.38
+      },
+      "center": {
+        "x": 733.08,
+        "y": 418.38
+      },
+      "cover": "plate",
+      "detection_ids": [
+        "det:0062"
+      ],
+      "gangs": 1,
+      "id": "box:0019",
+      "kind": "device",
+      "source": "geometry"
+    },
+    {
+      "bbox": {
+        "x0": 737.4,
+        "x1": 749.4,
+        "y0": 410.2,
+        "y1": 426.2
+      },
+      "center": {
+        "x": 743.4,
+        "y": 418.2
+      },
+      "cover": "plate",
+      "detection_ids": [
+        "det:0053"
+      ],
+      "gangs": 1,
+      "id": "box:0020",
+      "kind": "device",
+      "source": "geometry"
+    },
+    {
+      "bbox": {
+        "x0": 763.62,
+        "x1": 775.62,
+        "y0": 191.26,
+        "y1": 207.26
+      },
+      "center": {
+        "x": 769.62,
+        "y": 199.26
+      },
+      "cover": "plate",
+      "detection_ids": [
+        "det:0043"
+      ],
+      "gangs": 1,
+      "id": "box:0021",
+      "kind": "device",
+      "source": "geometry"
+    },
+    {
+      "bbox": {
+        "x0": 781.62,
+        "x1": 793.62,
+        "y0": 191.26,
+        "y1": 207.26
+      },
+      "center": {
+        "x": 787.62,
+        "y": 199.26
+      },
+      "cover": "plate",
+      "detection_ids": [
+        "det:0049"
+      ],
+      "gangs": 1,
+      "id": "box:0022",
+      "kind": "device",
+      "source": "geometry"
+    },
+    {
+      "bbox": {
+        "x0": 818.82,
+        "x1": 830.82,
+        "y0": 361.18,
+        "y1": 377.18
+      },
+      "center": {
+        "x": 824.82,
+        "y": 369.18
+      },
+      "cover": "plate",
+      "detection_ids": [
+        "det:0044"
+      ],
+      "gangs": 1,
+      "id": "box:0023",
+      "kind": "device",
+      "source": "geometry"
+    },
+    {
+      "bbox": {
+        "x0": 824.58,
+        "x1": 836.58,
+        "y0": 410.62,
+        "y1": 426.62
+      },
+      "center": {
+        "x": 830.58,
+        "y": 418.62
+      },
+      "cover": "plate",
+      "detection_ids": [
+        "det:0029"
+      ],
+      "gangs": 1,
+      "id": "box:0024",
+      "kind": "device",
+      "source": "geometry"
+    },
+    {
+      "bbox": {
+        "x0": 835.56,
+        "x1": 847.56,
+        "y0": 191.26,
+        "y1": 207.26
+      },
+      "center": {
+        "x": 841.56,
+        "y": 199.26
+      },
+      "cover": "plate",
+      "detection_ids": [
+        "det:0045"
+      ],
+      "gangs": 1,
+      "id": "box:0025",
+      "kind": "device",
+      "source": "geometry"
+    },
+    {
+      "bbox": {
+        "x0": 868.68,
+        "x1": 880.68,
+        "y0": 311.86,
+        "y1": 327.86
+      },
+      "center": {
+        "x": 874.68,
+        "y": 319.86
+      },
+      "cover": "plate",
+      "detection_ids": [
+        "det:0030"
+      ],
+      "gangs": 1,
+      "id": "box:0026",
+      "kind": "device",
+      "source": "geometry"
+    },
+    {
+      "bbox": {
+        "x0": 897.6,
+        "x1": 909.6,
+        "y0": 332.62,
+        "y1": 348.62
+      },
+      "center": {
+        "x": 903.6,
+        "y": 340.62
+      },
+      "cover": "plate",
+      "detection_ids": [
+        "det:0063"
+      ],
+      "gangs": 1,
+      "id": "box:0027",
+      "kind": "device",
+      "source": "geometry"
+    },
+    {
+      "bbox": {
+        "x0": 898.98,
+        "x1": 910.98,
+        "y0": 230.02,
+        "y1": 246.02
+      },
+      "center": {
+        "x": 904.98,
+        "y": 238.02
+      },
+      "cover": "plate",
+      "detection_ids": [
+        "det:0031"
+      ],
+      "gangs": 1,
+      "id": "box:0028",
+      "kind": "device",
+      "source": "geometry"
+    },
+    {
+      "bbox": {
+        "x0": 900.56,
+        "x1": 912.56,
+        "y0": 271.56,
+        "y1": 287.56
+      },
+      "center": {
+        "x": 906.56,
+        "y": 279.56
+      },
+      "cover": "plate",
+      "detection_ids": [
+        "det:0061"
+      ],
+      "gangs": 1,
+      "id": "box:0029",
+      "kind": "device",
+      "source": "geometry"
+    },
+    {
+      "bbox": {
+        "x0": 947.58,
+        "x1": 959.58,
+        "y0": 192.1,
+        "y1": 208.1
+      },
+      "center": {
+        "x": 953.58,
+        "y": 200.1
+      },
+      "cover": "plate",
+      "detection_ids": [
+        "det:0047"
+      ],
+      "gangs": 1,
+      "id": "box:0030",
+      "kind": "device",
+      "source": "geometry"
+    },
+    {
+      "bbox": {
+        "x0": 974.94,
+        "x1": 986.94,
+        "y0": 191.26,
+        "y1": 207.26
+      },
+      "center": {
+        "x": 980.94,
+        "y": 199.26
+      },
+      "cover": "plate",
+      "detection_ids": [
+        "det:0046"
+      ],
+      "gangs": 1,
+      "id": "box:0031",
+      "kind": "device",
+      "source": "geometry"
+    },
+    {
+      "bbox": {
+        "x0": 1027.62,
+        "x1": 1039.62,
+        "y0": 378.7,
+        "y1": 394.7
+      },
+      "center": {
+        "x": 1033.62,
+        "y": 386.7
+      },
+      "cover": "plate",
+      "detection_ids": [
+        "det:0039"
+      ],
+      "gangs": 1,
+      "id": "box:0032",
+      "kind": "device",
+      "source": "geometry"
+    },
+    {
+      "bbox": {
+        "x0": 1027.74,
+        "x1": 1039.74,
+        "y0": 344.02,
+        "y1": 360.02
+      },
+      "center": {
+        "x": 1033.74,
+        "y": 352.02
+      },
+      "cover": "plate",
+      "detection_ids": [
+        "det:0032"
+      ],
+      "gangs": 1,
+      "id": "box:0033",
+      "kind": "device",
+      "source": "geometry"
+    },
+    {
+      "bbox": {
+        "x0": 1044.42,
+        "x1": 1056.42,
+        "y0": 215.14,
+        "y1": 231.14
+      },
+      "center": {
+        "x": 1050.42,
+        "y": 223.14
+      },
+      "cover": "plate",
+      "detection_ids": [
+        "det:0048"
+      ],
+      "gangs": 1,
+      "id": "box:0034",
+      "kind": "device",
+      "source": "geometry"
+    },
+    {
+      "bbox": {
+        "x0": 1049.94,
+        "x1": 1061.94,
+        "y0": 411.7,
+        "y1": 427.7
+      },
+      "center": {
+        "x": 1055.94,
+        "y": 419.7
+      },
+      "cover": "plate",
+      "detection_ids": [
+        "det:0033"
+      ],
+      "gangs": 1,
+      "id": "box:0035",
+      "kind": "device",
+      "source": "geometry"
+    },
+    {
+      "bbox": {
+        "x0": 1065.78,
+        "x1": 1077.78,
+        "y0": 235.9,
+        "y1": 251.9
+      },
+      "center": {
+        "x": 1071.78,
+        "y": 243.9
+      },
+      "cover": "plate",
+      "detection_ids": [
+        "det:0034"
+      ],
+      "gangs": 1,
+      "id": "box:0036",
+      "kind": "device",
+      "source": "geometry"
+    },
+    {
+      "bbox": {
+        "x0": 1174.38,
+        "x1": 1186.38,
+        "y0": 411.7,
+        "y1": 427.7
+      },
+      "center": {
+        "x": 1180.38,
+        "y": 419.7
+      },
+      "cover": "plate",
+      "detection_ids": [
+        "det:0035"
+      ],
+      "gangs": 1,
+      "id": "box:0037",
+      "kind": "device",
+      "source": "geometry"
+    },
+    {
+      "bbox": {
+        "x0": 1179.18,
+        "x1": 1191.18,
+        "y0": 166.54,
+        "y1": 182.54
+      },
+      "center": {
+        "x": 1185.18,
+        "y": 174.54
+      },
+      "cover": "weatherproof_cover",
+      "detection_ids": [
+        "det:0052"
+      ],
+      "gangs": 1,
+      "id": "box:0038",
+      "kind": "device",
+      "source": "geometry"
+    },
+    {
+      "bbox": {
+        "x0": 1191.54,
+        "x1": 1203.54,
+        "y0": 249.1,
+        "y1": 265.1
+      },
+      "center": {
+        "x": 1197.54,
+        "y": 257.1
+      },
+      "cover": "plate",
+      "detection_ids": [
+        "det:0036"
+      ],
+      "gangs": 1,
+      "id": "box:0039",
+      "kind": "device",
+      "source": "geometry"
+    },
+    {
+      "bbox": {
+        "x0": 548.76,
+        "x1": 572.76,
+        "y0": 301.06,
+        "y1": 317.06
+      },
+      "center": {
+        "x": 560.76,
+        "y": 309.06
+      },
+      "cover": "plate",
+      "detection_ids": [
+        "det:0054",
+        "det:0057"
+      ],
+      "gangs": 2,
+      "id": "box:0040",
+      "kind": "device",
+      "source": "geometry"
+    },
+    {
+      "bbox": {
+        "x0": 876.9,
+        "x1": 900.9,
+        "y0": 332.56,
+        "y1": 348.56
+      },
+      "center": {
+        "x": 888.9,
+        "y": 340.56
+      },
+      "cover": "plate",
+      "detection_ids": [
+        "det:0055",
+        "det:0059"
+      ],
+      "gangs": 2,
+      "id": "box:0041",
+      "kind": "device",
+      "source": "geometry"
+    },
+    {
+      "bbox": {
+        "x0": 1021.86,
+        "x1": 1045.86,
+        "y0": 325.54,
+        "y1": 341.54
+      },
+      "center": {
+        "x": 1033.86,
+        "y": 333.54
+      },
+      "cover": "plate",
+      "detection_ids": [
+        "det:0056",
+        "det:0060"
+      ],
+      "gangs": 2,
+      "id": "box:0042",
+      "kind": "device",
+      "source": "geometry"
+    },
+    {
+      "bbox": {
+        "x0": 464.26,
+        "x1": 476.26,
+        "y0": 316.95,
+        "y1": 332.95
+      },
+      "center": {
+        "x": 470.26,
+        "y": 324.95
+      },
+      "cover": "none",
+      "detection_ids": [
+        "det:0000"
+      ],
+      "gangs": 1,
+      "id": "box:0043",
+      "kind": "fan_rated",
+      "source": "geometry"
+    },
+    {
+      "bbox": {
+        "x0": 1111.9,
+        "x1": 1123.9,
+        "y0": 316.95,
+        "y1": 332.95
+      },
+      "center": {
+        "x": 1117.9,
+        "y": 324.95
+      },
+      "cover": "none",
+      "detection_ids": [
+        "det:0001"
+      ],
+      "gangs": 1,
+      "id": "box:0044",
+      "kind": "fan_rated",
+      "source": "geometry"
+    },
+    {
+      "bbox": {
+        "x0": 632.4,
+        "x1": 644.4,
+        "y0": 356.44,
+        "y1": 372.44
+      },
+      "center": {
+        "x": 638.4,
+        "y": 364.44
+      },
+      "cover": "none",
+      "detection_ids": [
+        "det:0010"
+      ],
+      "gangs": 1,
+      "id": "box:0045",
+      "kind": "none",
+      "source": "geometry"
+    },
+    {
+      "bbox": {
+        "x0": 633.3,
+        "x1": 645.3,
+        "y0": 280.36,
+        "y1": 296.36
+      },
+      "center": {
+        "x": 639.3,
+        "y": 288.36
+      },
+      "cover": "none",
+      "detection_ids": [
+        "det:0011"
+      ],
+      "gangs": 1,
+      "id": "box:0046",
+      "kind": "none",
+      "source": "geometry"
+    },
+    {
+      "bbox": {
+        "x0": 643.68,
+        "x1": 655.68,
+        "y0": 228.34,
+        "y1": 244.34
+      },
+      "center": {
+        "x": 649.68,
+        "y": 236.34
+      },
+      "cover": "none",
+      "detection_ids": [
+        "det:0005"
+      ],
+      "gangs": 1,
+      "id": "box:0047",
+      "kind": "none",
+      "source": "geometry"
+    },
+    {
+      "bbox": {
+        "x0": 659.7,
+        "x1": 671.7,
+        "y0": 204.16,
+        "y1": 220.16
+      },
+      "center": {
+        "x": 665.7,
+        "y": 212.16
+      },
+      "cover": "none",
+      "detection_ids": [
+        "det:0006"
+      ],
+      "gangs": 1,
+      "id": "box:0048",
+      "kind": "none",
+      "source": "geometry"
+    },
+    {
+      "bbox": {
+        "x0": 659.7,
+        "x1": 671.7,
+        "y0": 222.1,
+        "y1": 238.1
+      },
+      "center": {
+        "x": 665.7,
+        "y": 230.1
+      },
+      "cover": "none",
+      "detection_ids": [
+        "det:0012"
+      ],
+      "gangs": 1,
+      "id": "box:0049",
+      "kind": "none",
+      "source": "geometry"
+    },
+    {
+      "bbox": {
+        "x0": 752.16,
+        "x1": 764.16,
+        "y0": 280.36,
+        "y1": 296.36
+      },
+      "center": {
+        "x": 758.16,
+        "y": 288.36
+      },
+      "cover": "none",
+      "detection_ids": [
+        "det:0013"
+      ],
+      "gangs": 1,
+      "id": "box:0050",
+      "kind": "none",
+      "source": "geometry"
+    },
+    {
+      "bbox": {
+        "x0": 752.16,
+        "x1": 764.16,
+        "y0": 356.44,
+        "y1": 372.44
+      },
+      "center": {
+        "x": 758.16,
+        "y": 364.44
+      },
+      "cover": "none",
+      "detection_ids": [
+        "det:0014"
+      ],
+      "gangs": 1,
+      "id": "box:0051",
+      "kind": "none",
+      "source": "geometry"
+    },
+    {
+      "bbox": {
+        "x0": 752.34,
+        "x1": 764.34,
+        "y0": 222.1,
+        "y1": 238.1
+      },
+      "center": {
+        "x": 758.34,
+        "y": 230.1
+      },
+      "cover": "none",
+      "detection_ids": [
+        "det:0015"
+      ],
+      "gangs": 1,
+      "id": "box:0052",
+      "kind": "none",
+      "source": "geometry"
+    },
+    {
+      "bbox": {
+        "x0": 844.86,
+        "x1": 856.86,
+        "y0": 222.1,
+        "y1": 238.1
+      },
+      "center": {
+        "x": 850.86,
+        "y": 230.1
+      },
+      "cover": "none",
+      "detection_ids": [
+        "det:0016"
+      ],
+      "gangs": 1,
+      "id": "box:0053",
+      "kind": "none",
+      "source": "geometry"
+    },
+    {
+      "bbox": {
+        "x0": 872.04,
+        "x1": 884.04,
+        "y0": 280.36,
+        "y1": 296.36
+      },
+      "center": {
+        "x": 878.04,
+        "y": 288.36
+      },
+      "cover": "none",
+      "detection_ids": [
+        "det:0017"
+      ],
+      "gangs": 1,
+      "id": "box:0054",
+      "kind": "none",
+      "source": "geometry"
+    },
+    {
+      "bbox": {
+        "x0": 872.1,
+        "x1": 884.1,
+        "y0": 372.46,
+        "y1": 388.46
+      },
+      "center": {
+        "x": 878.1,
+        "y": 380.46
+      },
+      "cover": "none",
+      "detection_ids": [
+        "det:0018"
+      ],
+      "gangs": 1,
+      "id": "box:0055",
+      "kind": "none",
+      "source": "geometry"
+    },
+    {
+      "bbox": {
+        "x0": 910.63,
+        "x1": 922.63,
+        "y0": 293.77,
+        "y1": 309.77
+      },
+      "center": {
+        "x": 916.63,
+        "y": 301.77
+      },
+      "cover": "none",
+      "detection_ids": [
+        "det:0019"
+      ],
+      "gangs": 1,
+      "id": "box:0056",
+      "kind": "none",
+      "source": "geometry"
+    },
+    {
+      "bbox": {
+        "x0": 931.68,
+        "x1": 943.68,
+        "y0": 389.26,
+        "y1": 405.26
+      },
+      "center": {
+        "x": 937.68,
+        "y": 397.26
+      },
+      "cover": "none",
+      "detection_ids": [
+        "det:0007"
+      ],
+      "gangs": 1,
+      "id": "box:0057",
+      "kind": "none",
+      "source": "geometry"
+    },
+    {
+      "bbox": {
+        "x0": 961.92,
+        "x1": 973.92,
+        "y0": 227.38,
+        "y1": 243.38
+      },
+      "center": {
+        "x": 967.92,
+        "y": 235.38
+      },
+      "cover": "none",
+      "detection_ids": [
+        "det:0008"
+      ],
+      "gangs": 1,
+      "id": "box:0058",
+      "kind": "none",
+      "source": "geometry"
+    },
+    {
+      "bbox": {
+        "x0": 964.5,
+        "x1": 976.5,
+        "y0": 280.36,
+        "y1": 296.36
+      },
+      "center": {
+        "x": 970.5,
+        "y": 288.36
+      },
+      "cover": "none",
+      "detection_ids": [
+        "det:0020"
+      ],
+      "gangs": 1,
+      "id": "box:0059",
+      "kind": "none",
+      "source": "geometry"
+    },
+    {
+      "bbox": {
+        "x0": 989.46,
+        "x1": 1001.46,
+        "y0": 372.46,
+        "y1": 388.46
+      },
+      "center": {
+        "x": 995.46,
+        "y": 380.46
+      },
+      "cover": "none",
+      "detection_ids": [
+        "det:0021"
+      ],
+      "gangs": 1,
+      "id": "box:0060",
+      "kind": "none",
+      "source": "geometry"
+    }
+  ],
+  "detections": [
+    {
+      "bbox": {
+        "x0": 412.93,
+        "x1": 545.51,
+        "y0": 267.01,
+        "y1": 382.55
+      },
+      "category": "ceiling_fan",
+      "center": {
+        "x": 470.26,
+        "y": 324.95
+      },
+      "codes": [
+        "AFI",
+        "D",
+        "F",
+        "FC",
+        "SD"
+      ],
+      "confidence": 0.92,
+      "id": "det:0000",
+      "needs_review": false,
+      "room_id": "room:0002",
+      "rotation_deg": 0,
+      "source": "geometry",
+      "subtype": "ceiling_fan"
+    },
+    {
+      "bbox": {
+        "x0": 1048.57,
+        "x1": 1176.11,
+        "y0": 267.01,
+        "y1": 382.55
+      },
+      "category": "ceiling_fan",
+      "center": {
+        "x": 1117.9,
+        "y": 324.95
+      },
+      "codes": [
+        "AFI",
+        "D",
+        "F",
+        "FC",
+        "SD"
+      ],
+      "confidence": 0.92,
+      "id": "det:0001",
+      "needs_review": false,
+      "room_id": "room:0003",
+      "rotation_deg": 0,
+      "source": "geometry",
+      "subtype": "ceiling_fan"
+    },
+    {
+      "bbox": {
+        "x0": 531.73,
+        "x1": 545.75,
+        "y0": 261.61,
+        "y1": 275.75
+      },
+      "category": "detector",
+      "center": {
+        "x": 538.74,
+        "y": 268.68
+      },
+      "codes": [
+        "SD"
+      ],
+      "confidence": 0.95,
+      "id": "det:0002",
+      "needs_review": false,
+      "room_id": "room:0002",
+      "rotation_deg": 0,
+      "source": "geometry",
+      "subtype": "smoke"
+    },
+    {
+      "bbox": {
+        "x0": 1048.57,
+        "x1": 1062.59,
+        "y0": 279.73,
+        "y1": 293.75
+      },
+      "category": "detector",
+      "center": {
+        "x": 1055.58,
+        "y": 286.74
+      },
+      "codes": [
+        "SD"
+      ],
+      "confidence": 0.93,
+      "id": "det:0003",
+      "needs_review": false,
+      "room_id": "room:0003",
+      "rotation_deg": 0,
+      "source": "geometry",
+      "subtype": "smoke"
+    },
+    {
+      "bbox": {
+        "x0": 804.13,
+        "x1": 818.15,
+        "y0": 291.01,
+        "y1": 305.03
+      },
+      "category": "detector",
+      "center": {
+        "x": 811.14,
+        "y": 298.02
+      },
+      "codes": [
+        "SD/MA"
+      ],
+      "confidence": 0.93,
+      "id": "det:0004",
+      "needs_review": false,
+      "room_id": "room:0006",
+      "rotation_deg": 0,
+      "source": "geometry",
+      "subtype": "smoke_co"
+    },
+    {
+      "bbox": {
+        "x0": 648.13,
+        "x1": 651.23,
+        "y0": 231.72,
+        "y1": 240.95
+      },
+      "category": "exhaust_fan",
+      "center": {
+        "x": 649.68,
+        "y": 236.34
+      },
+      "codes": [
+        "GFI"
+      ],
+      "confidence": 0.3,
+      "id": "det:0005",
+      "needs_review": false,
+      "room_id": "room:0009",
+      "rotation_deg": 270,
+      "source": "geometry",
+      "subtype": "bath_exhaust"
+    },
+    {
+      "bbox": {
+        "x0": 657.7,
+        "x1": 673.7,
+        "y0": 204.16,
+        "y1": 220.16
+      },
+      "category": "exhaust_fan",
+      "center": {
+        "x": 665.7,
+        "y": 212.16
+      },
+      "codes": [
+        "240V",
+        "MW"
+      ],
+      "confidence": 0.87,
+      "id": "det:0006",
+      "needs_review": false,
+      "room_id": "room:0009",
+      "rotation_deg": 0,
+      "source": "geometry",
+      "subtype": "bath_exhaust"
+    },
+    {
+      "bbox": {
+        "x0": 930.73,
+        "x1": 944.63,
+        "y0": 392.41,
+        "y1": 402.11
+      },
+      "category": "exhaust_fan",
+      "center": {
+        "x": 937.68,
+        "y": 397.26
+      },
+      "codes": [],
+      "confidence": 0.83,
+      "id": "det:0007",
+      "needs_review": false,
+      "room_id": "room:0001",
+      "rotation_deg": 180,
+      "source": "geometry",
+      "subtype": "bath_exhaust"
+    },
+    {
+      "bbox": {
+        "x0": 963.13,
+        "x1": 972.71,
+        "y0": 230.65,
+        "y1": 240.11
+      },
+      "category": "exhaust_fan",
+      "center": {
+        "x": 967.92,
+        "y": 235.38
+      },
+      "codes": [
+        "IAQ"
+      ],
+      "confidence": 0.99,
+      "id": "det:0008",
+      "needs_review": false,
+      "room_id": "room:0010",
+      "rotation_deg": 0,
+      "source": "geometry",
+      "subtype": "indoor_air_quality"
+    },
+    {
+      "bbox": {
+        "x0": 725.05,
+        "x1": 752.51,
+        "y0": 435.25,
+        "y1": 453.11
+      },
+      "category": "light",
+      "center": {
+        "x": 738.78,
+        "y": 444.18
+      },
+      "codes": [
+        "+84",
+        "EXT"
+      ],
+      "confidence": 0.25,
+      "id": "det:0009",
+      "needs_review": false,
+      "room_id": "room:0007",
+      "rotation_deg": 0,
+      "source": "geometry",
+      "subtype": "exterior_wall"
+    },
+    {
+      "bbox": {
+        "x0": 632.41,
+        "x1": 644.39,
+        "y0": 358.45,
+        "y1": 370.43
+      },
+      "category": "light",
+      "center": {
+        "x": 638.4,
+        "y": 364.44
+      },
+      "codes": [],
+      "confidence": 0.86,
+      "id": "det:0010",
+      "needs_review": false,
+      "room_id": "room:0011",
+      "rotation_deg": 90,
+      "source": "geometry",
+      "subtype": "recessed"
+    },
+    {
+      "bbox": {
+        "x0": 632.41,
+        "x1": 646.19,
+        "y0": 282.37,
+        "y1": 294.35
+      },
+      "category": "light",
+      "center": {
+        "x": 639.3,
+        "y": 288.36
+      },
+      "codes": [],
+      "confidence": 0.79,
+      "id": "det:0011",
+      "needs_review": false,
+      "room_id": "room:0009",
+      "rotation_deg": 0,
+      "source": "geometry",
+      "subtype": "recessed"
+    },
+    {
+      "bbox": {
+        "x0": 659.7,
+        "x1": 671.7,
+        "y0": 224.1,
+        "y1": 236.1
+      },
+      "category": "light",
+      "center": {
+        "x": 665.7,
+        "y": 230.1
+      },
+      "codes": [],
+      "confidence": 0.88,
+      "id": "det:0012",
+      "needs_review": false,
+      "room_id": "room:0009",
+      "rotation_deg": 0,
+      "source": "geometry",
+      "subtype": "recessed"
+    },
+    {
+      "bbox": {
+        "x0": 752.17,
+        "x1": 764.15,
+        "y0": 282.37,
+        "y1": 294.35
+      },
+      "category": "light",
+      "center": {
+        "x": 758.16,
+        "y": 288.36
+      },
+      "codes": [],
+      "confidence": 0.85,
+      "id": "det:0013",
+      "needs_review": false,
+      "room_id": "room:0009",
+      "rotation_deg": 90,
+      "source": "geometry",
+      "subtype": "recessed"
+    },
+    {
+      "bbox": {
+        "x0": 752.17,
+        "x1": 764.15,
+        "y0": 358.45,
+        "y1": 370.43
+      },
+      "category": "light",
+      "center": {
+        "x": 758.16,
+        "y": 364.44
+      },
+      "codes": [],
+      "confidence": 0.87,
+      "id": "det:0014",
+      "needs_review": false,
+      "room_id": "room:0011",
+      "rotation_deg": 90,
+      "source": "geometry",
+      "subtype": "recessed"
+    },
+    {
+      "bbox": {
+        "x0": 744.97,
+        "x1": 771.59,
+        "y0": 224.17,
+        "y1": 236.03
+      },
+      "category": "light",
+      "center": {
+        "x": 758.34,
+        "y": 230.1
+      },
+      "codes": [
+        "+42\"",
+        "GFI"
+      ],
+      "confidence": 0.85,
+      "id": "det:0015",
+      "needs_review": false,
+      "room_id": "room:0009",
+      "rotation_deg": 180,
+      "source": "geometry",
+      "subtype": "recessed"
+    },
+    {
+      "bbox": {
+        "x0": 837.61,
+        "x1": 863.51,
+        "y0": 224.17,
+        "y1": 236.03
+      },
+      "category": "light",
+      "center": {
+        "x": 850.86,
+        "y": 230.1
+      },
+      "codes": [
+        "+42\"",
+        "GFI"
+      ],
+      "confidence": 0.85,
+      "id": "det:0016",
+      "needs_review": false,
+      "room_id": "room:0006",
+      "rotation_deg": 180,
+      "source": "geometry",
+      "subtype": "recessed"
+    },
+    {
+      "bbox": {
+        "x0": 872.05,
+        "x1": 884.03,
+        "y0": 282.37,
+        "y1": 294.35
+      },
+      "category": "light",
+      "center": {
+        "x": 878.04,
+        "y": 288.36
+      },
+      "codes": [],
+      "confidence": 0.85,
+      "id": "det:0017",
+      "needs_review": false,
+      "room_id": "room:0006",
+      "rotation_deg": 90,
+      "source": "geometry",
+      "subtype": "recessed"
+    },
+    {
+      "bbox": {
+        "x0": 872.05,
+        "x1": 884.03,
+        "y0": 371.29,
+        "y1": 386.39
+      },
+      "category": "light",
+      "center": {
+        "x": 878.1,
+        "y": 380.46
+      },
+      "codes": [],
+      "confidence": 0.85,
+      "id": "det:0018",
+      "needs_review": false,
+      "room_id": "room:0001",
+      "rotation_deg": 180,
+      "source": "geometry",
+      "subtype": "recessed"
+    },
+    {
+      "bbox": {
+        "x0": 910.63,
+        "x1": 922.63,
+        "y0": 295.77,
+        "y1": 307.77
+      },
+      "category": "light",
+      "center": {
+        "x": 916.63,
+        "y": 301.77
+      },
+      "codes": [],
+      "confidence": 0.88,
+      "id": "det:0019",
+      "needs_review": false,
+      "room_id": "room:0000",
+      "rotation_deg": 0,
+      "source": "geometry",
+      "subtype": "recessed"
+    },
+    {
+      "bbox": {
+        "x0": 947.41,
+        "x1": 976.43,
+        "y0": 272.05,
+        "y1": 294.35
+      },
+      "category": "light",
+      "center": {
+        "x": 970.5,
+        "y": 288.36
+      },
+      "codes": [],
+      "confidence": 0.85,
+      "id": "det:0020",
+      "needs_review": false,
+      "room_id": "room:0008",
+      "rotation_deg": 180,
+      "source": "geometry",
+      "subtype": "recessed"
+    },
+    {
+      "bbox": {
+        "x0": 989.53,
+        "x1": 1001.39,
+        "y0": 374.05,
+        "y1": 386.39
+      },
+      "category": "light",
+      "center": {
+        "x": 995.46,
+        "y": 380.46
+      },
+      "codes": [],
+      "confidence": 0.89,
+      "id": "det:0021",
+      "needs_review": false,
+      "room_id": "room:0001",
+      "rotation_deg": 180,
+      "source": "geometry",
+      "subtype": "recessed"
+    },
+    {
+      "bbox": {
+        "x0": 397.81,
+        "x1": 410.75,
+        "y0": 251.53,
+        "y1": 260.03
+      },
+      "category": "receptacle",
+      "center": {
+        "x": 404.28,
+        "y": 255.78
+      },
+      "codes": [
+        "AFI"
+      ],
+      "confidence": 1.0,
+      "id": "det:0022",
+      "needs_review": false,
+      "room_id": "room:0002",
+      "rotation_deg": 90,
+      "source": "geometry",
+      "subtype": "afci"
+    },
+    {
+      "bbox": {
+        "x0": 397.81,
+        "x1": 410.75,
+        "y0": 385.69,
+        "y1": 394.19
+      },
+      "category": "receptacle",
+      "center": {
+        "x": 404.28,
+        "y": 389.94
+      },
+      "codes": [
+        "AFI"
+      ],
+      "confidence": 0.98,
+      "id": "det:0023",
+      "needs_review": false,
+      "room_id": "room:0002",
+      "rotation_deg": 90,
+      "source": "geometry",
+      "subtype": "afci"
+    },
+    {
+      "bbox": {
+        "x0": 531.37,
+        "x1": 539.87,
+        "y0": 412.93,
+        "y1": 425.87
+      },
+      "category": "receptacle",
+      "center": {
+        "x": 535.62,
+        "y": 419.4
+      },
+      "codes": [
+        "AFI"
+      ],
+      "confidence": 1.0,
+      "id": "det:0024",
+      "needs_review": false,
+      "room_id": "room:0002",
+      "rotation_deg": 0,
+      "source": "geometry",
+      "subtype": "afci"
+    },
+    {
+      "bbox": {
+        "x0": 554.17,
+        "x1": 567.23,
+        "y0": 339.37,
+        "y1": 347.87
+      },
+      "category": "receptacle",
+      "center": {
+        "x": 560.7,
+        "y": 343.62
+      },
+      "codes": [
+        "AFI"
+      ],
+      "confidence": 0.74,
+      "id": "det:0025",
+      "needs_review": false,
+      "room_id": "room:0002",
+      "rotation_deg": 90,
+      "source": "geometry",
+      "subtype": "afci"
+    },
+    {
+      "bbox": {
+        "x0": 576.01,
+        "x1": 589.07,
+        "y0": 300.97,
+        "y1": 309.47
+      },
+      "category": "receptacle",
+      "center": {
+        "x": 582.54,
+        "y": 305.22
+      },
+      "codes": [
+        "AFI"
+      ],
+      "confidence": 1.0,
+      "id": "det:0026",
+      "needs_review": false,
+      "room_id": "room:0011",
+      "rotation_deg": 90,
+      "source": "geometry",
+      "subtype": "afci"
+    },
+    {
+      "bbox": {
+        "x0": 576.01,
+        "x1": 589.07,
+        "y0": 405.13,
+        "y1": 413.63
+      },
+      "category": "receptacle",
+      "center": {
+        "x": 582.54,
+        "y": 409.38
+      },
+      "codes": [
+        "AFI"
+      ],
+      "confidence": 1.0,
+      "id": "det:0027",
+      "needs_review": false,
+      "room_id": "room:0011",
+      "rotation_deg": 90,
+      "source": "geometry",
+      "subtype": "afci"
+    },
+    {
+      "bbox": {
+        "x0": 711.37,
+        "x1": 719.87,
+        "y0": 412.33,
+        "y1": 425.27
+      },
+      "category": "receptacle",
+      "center": {
+        "x": 715.62,
+        "y": 418.8
+      },
+      "codes": [
+        "AFI"
+      ],
+      "confidence": 1.0,
+      "id": "det:0028",
+      "needs_review": false,
+      "room_id": "room:0011",
+      "rotation_deg": 0,
+      "source": "geometry",
+      "subtype": "afci"
+    },
+    {
+      "bbox": {
+        "x0": 826.33,
+        "x1": 834.83,
+        "y0": 412.09,
+        "y1": 425.15
+      },
+      "category": "receptacle",
+      "center": {
+        "x": 830.58,
+        "y": 418.62
+      },
+      "codes": [
+        "AFI"
+      ],
+      "confidence": 1.0,
+      "id": "det:0029",
+      "needs_review": false,
+      "room_id": "room:0001",
+      "rotation_deg": 0,
+      "source": "geometry",
+      "subtype": "afci"
+    },
+    {
+      "bbox": {
+        "x0": 870.49,
+        "x1": 878.87,
+        "y0": 313.33,
+        "y1": 326.39
+      },
+      "category": "receptacle",
+      "center": {
+        "x": 874.68,
+        "y": 319.86
+      },
+      "codes": [
+        "AFI"
+      ],
+      "confidence": 1.0,
+      "id": "det:0030",
+      "needs_review": false,
+      "room_id": "room:0006",
+      "rotation_deg": 0,
+      "source": "geometry",
+      "subtype": "afci"
+    },
+    {
+      "bbox": {
+        "x0": 898.45,
+        "x1": 911.51,
+        "y0": 233.77,
+        "y1": 242.27
+      },
+      "category": "receptacle",
+      "center": {
+        "x": 904.98,
+        "y": 238.02
+      },
+      "codes": [
+        "3D",
+        "AFI"
+      ],
+      "confidence": 0.74,
+      "id": "det:0031",
+      "needs_review": false,
+      "room_id": "room:0006",
+      "rotation_deg": 90,
+      "source": "geometry",
+      "subtype": "afci"
+    },
+    {
+      "bbox": {
+        "x0": 1027.21,
+        "x1": 1040.27,
+        "y0": 347.77,
+        "y1": 356.27
+      },
+      "category": "receptacle",
+      "center": {
+        "x": 1033.74,
+        "y": 352.02
+      },
+      "codes": [
+        "AFI",
+        "F"
+      ],
+      "confidence": 1.0,
+      "id": "det:0032",
+      "needs_review": false,
+      "room_id": "room:0003",
+      "rotation_deg": 90,
+      "source": "geometry",
+      "subtype": "afci"
+    },
+    {
+      "bbox": {
+        "x0": 1051.69,
+        "x1": 1060.19,
+        "y0": 413.17,
+        "y1": 426.23
+      },
+      "category": "receptacle",
+      "center": {
+        "x": 1055.94,
+        "y": 419.7
+      },
+      "codes": [
+        "AFI"
+      ],
+      "confidence": 0.99,
+      "id": "det:0033",
+      "needs_review": false,
+      "room_id": "room:0003",
+      "rotation_deg": 0,
+      "source": "geometry",
+      "subtype": "afci"
+    },
+    {
+      "bbox": {
+        "x0": 1067.53,
+        "x1": 1076.03,
+        "y0": 237.37,
+        "y1": 250.43
+      },
+      "category": "receptacle",
+      "center": {
+        "x": 1071.78,
+        "y": 243.9
+      },
+      "codes": [
+        "AFI"
+      ],
+      "confidence": 0.99,
+      "id": "det:0034",
+      "needs_review": false,
+      "room_id": "room:0003",
+      "rotation_deg": 180,
+      "source": "geometry",
+      "subtype": "afci"
+    },
+    {
+      "bbox": {
+        "x0": 1176.13,
+        "x1": 1184.63,
+        "y0": 413.17,
+        "y1": 426.23
+      },
+      "category": "receptacle",
+      "center": {
+        "x": 1180.38,
+        "y": 419.7
+      },
+      "codes": [
+        "AFI"
+      ],
+      "confidence": 1.0,
+      "id": "det:0035",
+      "needs_review": false,
+      "room_id": "room:0003",
+      "rotation_deg": 0,
+      "source": "geometry",
+      "subtype": "afci"
+    },
+    {
+      "bbox": {
+        "x0": 1191.01,
+        "x1": 1204.07,
+        "y0": 252.85,
+        "y1": 261.35
+      },
+      "category": "receptacle",
+      "center": {
+        "x": 1197.54,
+        "y": 257.1
+      },
+      "codes": [
+        "AFI"
+      ],
+      "confidence": 0.74,
+      "id": "det:0036",
+      "needs_review": false,
+      "room_id": "room:0003",
+      "rotation_deg": 90,
+      "source": "geometry",
+      "subtype": "afci"
+    },
+    {
+      "bbox": {
+        "x0": 554.41,
+        "x1": 567.47,
+        "y0": 382.45,
+        "y1": 390.95
+      },
+      "category": "receptacle",
+      "center": {
+        "x": 560.94,
+        "y": 386.7
+      },
+      "codes": [
+        "FC"
+      ],
+      "confidence": 0.74,
+      "id": "det:0037",
+      "needs_review": false,
+      "room_id": "room:0002",
+      "rotation_deg": 90,
+      "source": "geometry",
+      "subtype": "fan_coil_dedicated"
+    },
+    {
+      "bbox": {
+        "x0": 576.13,
+        "x1": 590.03,
+        "y0": 333.25,
+        "y1": 341.63
+      },
+      "category": "receptacle",
+      "center": {
+        "x": 583.08,
+        "y": 337.44
+      },
+      "codes": [
+        "FC"
+      ],
+      "confidence": 0.86,
+      "id": "det:0038",
+      "needs_review": false,
+      "room_id": "room:0011",
+      "rotation_deg": 90,
+      "source": "geometry",
+      "subtype": "fan_coil_dedicated"
+    },
+    {
+      "bbox": {
+        "x0": 1027.09,
+        "x1": 1040.15,
+        "y0": 382.45,
+        "y1": 390.95
+      },
+      "category": "receptacle",
+      "center": {
+        "x": 1033.62,
+        "y": 386.7
+      },
+      "codes": [
+        "FC"
+      ],
+      "confidence": 1.0,
+      "id": "det:0039",
+      "needs_review": false,
+      "room_id": "room:0003",
+      "rotation_deg": 90,
+      "source": "geometry",
+      "subtype": "fan_coil_dedicated"
+    },
+    {
+      "bbox": {
+        "x0": 603.49,
+        "x1": 611.99,
+        "y0": 193.57,
+        "y1": 206.63
+      },
+      "category": "receptacle",
+      "center": {
+        "x": 607.74,
+        "y": 200.1
+      },
+      "codes": [
+        "GFI"
+      ],
+      "confidence": 1.0,
+      "id": "det:0040",
+      "needs_review": false,
+      "room_id": "room:0009",
+      "rotation_deg": 180,
+      "source": "geometry",
+      "subtype": "gfci"
+    },
+    {
+      "bbox": {
+        "x0": 630.49,
+        "x1": 638.87,
+        "y0": 192.73,
+        "y1": 205.79
+      },
+      "category": "receptacle",
+      "center": {
+        "x": 634.68,
+        "y": 199.26
+      },
+      "codes": [
+        "+42\"",
+        "GFI"
+      ],
+      "confidence": 0.99,
+      "id": "det:0041",
+      "needs_review": false,
+      "room_id": "room:0009",
+      "rotation_deg": 180,
+      "source": "geometry",
+      "subtype": "gfci"
+    },
+    {
+      "bbox": {
+        "x0": 702.37,
+        "x1": 710.87,
+        "y0": 192.73,
+        "y1": 205.79
+      },
+      "category": "receptacle",
+      "center": {
+        "x": 706.62,
+        "y": 199.26
+      },
+      "codes": [
+        "+42\"",
+        "F",
+        "GFI"
+      ],
+      "confidence": 1.0,
+      "id": "det:0042",
+      "needs_review": false,
+      "room_id": "room:0009",
+      "rotation_deg": 180,
+      "source": "geometry",
+      "subtype": "gfci"
+    },
+    {
+      "bbox": {
+        "x0": 765.37,
+        "x1": 773.87,
+        "y0": 192.73,
+        "y1": 205.79
+      },
+      "category": "receptacle",
+      "center": {
+        "x": 769.62,
+        "y": 199.26
+      },
+      "codes": [
+        "+42\"",
+        "GFI"
+      ],
+      "confidence": 0.99,
+      "id": "det:0043",
+      "needs_review": false,
+      "room_id": "room:0006",
+      "rotation_deg": 180,
+      "source": "geometry",
+      "subtype": "gfci"
+    },
+    {
+      "bbox": {
+        "x0": 818.29,
+        "x1": 831.35,
+        "y0": 364.93,
+        "y1": 373.43
+      },
+      "category": "receptacle",
+      "center": {
+        "x": 824.82,
+        "y": 369.18
+      },
+      "codes": [
+        "+42\"",
+        "GFI"
+      ],
+      "confidence": 1.0,
+      "id": "det:0044",
+      "needs_review": false,
+      "room_id": "room:0001",
+      "rotation_deg": 90,
+      "source": "geometry",
+      "subtype": "gfci"
+    },
+    {
+      "bbox": {
+        "x0": 837.37,
+        "x1": 845.75,
+        "y0": 192.73,
+        "y1": 205.79
+      },
+      "category": "receptacle",
+      "center": {
+        "x": 841.56,
+        "y": 199.26
+      },
+      "codes": [
+        "+42\"",
+        "GFI"
+      ],
+      "confidence": 0.99,
+      "id": "det:0045",
+      "needs_review": false,
+      "room_id": "room:0006",
+      "rotation_deg": 180,
+      "source": "geometry",
+      "subtype": "gfci"
+    },
+    {
+      "bbox": {
+        "x0": 976.69,
+        "x1": 985.19,
+        "y0": 192.73,
+        "y1": 205.79
+      },
+      "category": "receptacle",
+      "center": {
+        "x": 980.94,
+        "y": 199.26
+      },
+      "codes": [
+        "+42\"",
+        "GFI"
+      ],
+      "confidence": 1.0,
+      "id": "det:0046",
+      "needs_review": false,
+      "room_id": "room:0010",
+      "rotation_deg": 180,
+      "source": "geometry",
+      "subtype": "gfci"
+    },
+    {
+      "bbox": {
+        "x0": 949.33,
+        "x1": 957.83,
+        "y0": 193.57,
+        "y1": 206.63
+      },
+      "category": "receptacle",
+      "center": {
+        "x": 953.58,
+        "y": 200.1
+      },
+      "codes": [
+        "240V",
+        "GFI"
+      ],
+      "confidence": 1.0,
+      "id": "det:0047",
+      "needs_review": false,
+      "room_id": "room:0010",
+      "rotation_deg": 180,
+      "source": "geometry",
+      "subtype": "gfci_240v"
+    },
+    {
+      "bbox": {
+        "x0": 1046.17,
+        "x1": 1054.67,
+        "y0": 216.61,
+        "y1": 229.67
+      },
+      "category": "receptacle",
+      "center": {
+        "x": 1050.42,
+        "y": 223.14
+      },
+      "codes": [
+        "240V",
+        "GFI"
+      ],
+      "confidence": 1.0,
+      "id": "det:0048",
+      "needs_review": false,
+      "room_id": "room:0015",
+      "rotation_deg": 0,
+      "source": "geometry",
+      "subtype": "gfci_240v"
+    },
+    {
+      "bbox": {
+        "x0": 783.37,
+        "x1": 791.87,
+        "y0": 192.73,
+        "y1": 205.79
+      },
+      "category": "receptacle",
+      "center": {
+        "x": 787.62,
+        "y": 199.26
+      },
+      "codes": [
+        "DW",
+        "GFI"
+      ],
+      "confidence": 0.99,
+      "id": "det:0049",
+      "needs_review": false,
+      "room_id": "room:0006",
+      "rotation_deg": 180,
+      "source": "geometry",
+      "subtype": "gfci_dishwasher"
+    },
+    {
+      "bbox": {
+        "x0": 648.61,
+        "x1": 657.11,
+        "y0": 193.57,
+        "y1": 206.63
+      },
+      "category": "receptacle",
+      "center": {
+        "x": 652.86,
+        "y": 200.1
+      },
+      "codes": [
+        "GFI",
+        "MW"
+      ],
+      "confidence": 1.0,
+      "id": "det:0050",
+      "needs_review": false,
+      "room_id": "room:0009",
+      "rotation_deg": 180,
+      "source": "geometry",
+      "subtype": "gfci_microwave"
+    },
+    {
+      "bbox": {
+        "x0": 702.85,
+        "x1": 711.23,
+        "y0": 435.61,
+        "y1": 448.67
+      },
+      "category": "receptacle",
+      "center": {
+        "x": 707.04,
+        "y": 442.14
+      },
+      "codes": [
+        "GFI",
+        "WP"
+      ],
+      "confidence": 1.0,
+      "id": "det:0051",
+      "needs_review": false,
+      "room_id": "room:0007",
+      "rotation_deg": 180,
+      "source": "geometry",
+      "subtype": "gfci_weatherproof"
+    },
+    {
+      "bbox": {
+        "x0": 1180.93,
+        "x1": 1189.43,
+        "y0": 168.01,
+        "y1": 181.07
+      },
+      "category": "receptacle",
+      "center": {
+        "x": 1185.18,
+        "y": 174.54
+      },
+      "codes": [
+        "GFI",
+        "WP"
+      ],
+      "confidence": 1.0,
+      "id": "det:0052",
+      "needs_review": false,
+      "room_id": "room:0007",
+      "rotation_deg": 0,
+      "source": "geometry",
+      "subtype": "gfci_weatherproof"
+    },
+    {
+      "bbox": {
+        "x0": 740.41,
+        "x1": 746.39,
+        "y0": 411.01,
+        "y1": 425.39
+      },
+      "category": "switch",
+      "center": {
+        "x": 743.4,
+        "y": 418.2
+      },
+      "codes": [
+        "A"
+      ],
+      "confidence": 0.93,
+      "id": "det:0053",
+      "needs_review": false,
+      "room_id": "room:0011",
+      "rotation_deg": 0,
+      "source": "geometry",
+      "subtype": "astronomical_timer"
+    },
+    {
+      "bbox": {
+        "x0": 553.57,
+        "x1": 567.95,
+        "y0": 302.05,
+        "y1": 308.03
+      },
+      "category": "switch",
+      "center": {
+        "x": 560.76,
+        "y": 305.04
+      },
+      "codes": [
+        "D"
+      ],
+      "confidence": 0.68,
+      "id": "det:0054",
+      "needs_review": false,
+      "room_id": "room:0002",
+      "rotation_deg": 90,
+      "source": "geometry",
+      "subtype": "dimmer"
+    },
+    {
+      "bbox": {
+        "x0": 881.65,
+        "x1": 887.63,
+        "y0": 333.37,
+        "y1": 347.63
+      },
+      "category": "switch",
+      "center": {
+        "x": 884.64,
+        "y": 340.5
+      },
+      "codes": [
+        "D"
+      ],
+      "confidence": 1.0,
+      "id": "det:0055",
+      "needs_review": false,
+      "room_id": "room:0001",
+      "rotation_deg": 180,
+      "source": "geometry",
+      "subtype": "dimmer"
+    },
+    {
+      "bbox": {
+        "x0": 1026.73,
+        "x1": 1040.99,
+        "y0": 326.53,
+        "y1": 332.51
+      },
+      "category": "switch",
+      "center": {
+        "x": 1033.86,
+        "y": 329.52
+      },
+      "codes": [
+        "D"
+      ],
+      "confidence": 0.99,
+      "id": "det:0056",
+      "needs_review": false,
+      "room_id": "room:0003",
+      "rotation_deg": 90,
+      "source": "geometry",
+      "subtype": "dimmer"
+    },
+    {
+      "bbox": {
+        "x0": 553.57,
+        "x1": 567.95,
+        "y0": 310.09,
+        "y1": 316.07
+      },
+      "category": "switch",
+      "center": {
+        "x": 560.76,
+        "y": 313.08
+      },
+      "codes": [
+        "F"
+      ],
+      "confidence": 0.68,
+      "id": "det:0057",
+      "needs_review": false,
+      "room_id": "room:0002",
+      "rotation_deg": 90,
+      "source": "geometry",
+      "subtype": "fan"
+    },
+    {
+      "bbox": {
+        "x0": 691.09,
+        "x1": 697.07,
+        "y0": 192.85,
+        "y1": 207.23
+      },
+      "category": "switch",
+      "center": {
+        "x": 694.08,
+        "y": 200.04
+      },
+      "codes": [
+        "240V",
+        "F",
+        "GFI"
+      ],
+      "confidence": 1.0,
+      "id": "det:0058",
+      "needs_review": false,
+      "room_id": "room:0009",
+      "rotation_deg": 180,
+      "source": "geometry",
+      "subtype": "fan"
+    },
+    {
+      "bbox": {
+        "x0": 890.17,
+        "x1": 896.15,
+        "y0": 333.49,
+        "y1": 347.75
+      },
+      "category": "switch",
+      "center": {
+        "x": 893.16,
+        "y": 340.62
+      },
+      "codes": [
+        "F"
+      ],
+      "confidence": 1.0,
+      "id": "det:0059",
+      "needs_review": false,
+      "room_id": "room:0001",
+      "rotation_deg": 180,
+      "source": "geometry",
+      "subtype": "fan"
+    },
+    {
+      "bbox": {
+        "x0": 1026.73,
+        "x1": 1040.99,
+        "y0": 334.57,
+        "y1": 340.55
+      },
+      "category": "switch",
+      "center": {
+        "x": 1033.86,
+        "y": 337.56
+      },
+      "codes": [
+        "AFI",
+        "F"
+      ],
+      "confidence": 0.99,
+      "id": "det:0060",
+      "needs_review": false,
+      "room_id": "room:0003",
+      "rotation_deg": 90,
+      "source": "geometry",
+      "subtype": "fan"
+    },
+    {
+      "bbox": {
+        "x0": 897.13,
+        "x1": 911.03,
+        "y0": 277.21,
+        "y1": 280.67
+      },
+      "category": "switch",
+      "center": {
+        "x": 906.56,
+        "y": 279.56
+      },
+      "codes": [],
+      "confidence": 0.31,
+      "id": "det:0061",
+      "needs_review": false,
+      "room_id": "room:0000",
+      "rotation_deg": 90,
+      "source": "geometry",
+      "subtype": "single_pole"
+    },
+    {
+      "bbox": {
+        "x0": 730.09,
+        "x1": 736.07,
+        "y0": 411.25,
+        "y1": 425.51
+      },
+      "category": "switch",
+      "center": {
+        "x": 733.08,
+        "y": 418.38
+      },
+      "codes": [
+        "3D"
+      ],
+      "confidence": 0.94,
+      "id": "det:0062",
+      "needs_review": false,
+      "room_id": "room:0011",
+      "rotation_deg": 0,
+      "source": "geometry",
+      "subtype": "three_way_dimmer"
+    },
+    {
+      "bbox": {
+        "x0": 900.61,
+        "x1": 906.59,
+        "y0": 333.49,
+        "y1": 347.75
+      },
+      "category": "switch",
+      "center": {
+        "x": 903.6,
+        "y": 340.62
+      },
+      "codes": [
+        "VS"
+      ],
+      "confidence": 1.0,
+      "id": "det:0063",
+      "needs_review": false,
+      "room_id": "room:0001",
+      "rotation_deg": 180,
+      "source": "geometry",
+      "subtype": "vacancy_sensor"
+    }
+  ],
+  "rooms": [
+    {
+      "centroid": null,
+      "display_name": "Attic",
+      "id": "room:0000",
+      "kind": "attic",
+      "polygon": [
+        {
+          "x": 901.56,
+          "y": 274.56
+        },
+        {
+          "x": 934.56,
+          "y": 274.56
+        },
+        {
+          "x": 934.56,
+          "y": 319.44
+        },
+        {
+          "x": 901.56,
+          "y": 319.44
+        }
+      ]
+    },
+    {
+      "centroid": null,
+      "display_name": "Bath",
+      "id": "room:0001",
+      "kind": "interior",
+      "polygon": [
+        {
+          "x": 819.0,
+          "y": 342.33
+        },
+        {
+          "x": 819.0,
+          "y": 361.67
+        },
+        {
+          "x": 846.33,
+          "y": 361.67
+        },
+        {
+          "x": 851.33,
+          "y": 366.0
+        },
+        {
+          "x": 849.0,
+          "y": 368.33
+        },
+        {
+          "x": 831.67,
+          "y": 368.33
+        },
+        {
+          "x": 830.67,
+          "y": 371.67
+        },
+        {
+          "x": 819.0,
+          "y": 371.67
+        },
+        {
+          "x": 819.0,
+          "y": 411.67
+        },
+        {
+          "x": 834.67,
+          "y": 411.67
+        },
+        {
+          "x": 837.0,
+          "y": 407.33
+        },
+        {
+          "x": 867.67,
+          "y": 407.33
+        },
+        {
+          "x": 870.0,
+          "y": 409.67
+        },
+        {
+          "x": 868.0,
+          "y": 411.67
+        },
+        {
+          "x": 868.0,
+          "y": 423.67
+        },
+        {
+          "x": 1018.33,
+          "y": 423.67
+        },
+        {
+          "x": 1018.33,
+          "y": 359.33
+        },
+        {
+          "x": 976.0,
+          "y": 359.33
+        },
+        {
+          "x": 973.67,
+          "y": 357.0
+        },
+        {
+          "x": 976.0,
+          "y": 354.67
+        },
+        {
+          "x": 1018.33,
+          "y": 354.67
+        },
+        {
+          "x": 1018.33,
+          "y": 341.33
+        },
+        {
+          "x": 976.0,
+          "y": 341.33
+        },
+        {
+          "x": 973.67,
+          "y": 334.33
+        },
+        {
+          "x": 947.67,
+          "y": 334.0
+        },
+        {
+          "x": 946.67,
+          "y": 337.33
+        },
+        {
+          "x": 928.67,
+          "y": 337.33
+        },
+        {
+          "x": 927.67,
+          "y": 333.67
+        },
+        {
+          "x": 905.0,
+          "y": 334.33
+        },
+        {
+          "x": 904.0,
+          "y": 348.33
+        },
+        {
+          "x": 885.0,
+          "y": 348.33
+        },
+        {
+          "x": 884.0,
+          "y": 334.33
+        },
+        {
+          "x": 851.33,
+          "y": 334.33
+        },
+        {
+          "x": 851.0,
+          "y": 339.0
+        },
+        {
+          "x": 846.33,
+          "y": 342.33
+        }
+      ]
+    },
+    {
+      "centroid": null,
+      "display_name": "Bed 1",
+      "id": "room:0002",
+      "kind": "interior",
+      "polygon": [
+        {
+          "x": 398.0,
+          "y": 238.0
+        },
+        {
+          "x": 398.0,
+          "y": 253.33
+        },
+        {
+          "x": 411.33,
+          "y": 254.33
+        },
+        {
+          "x": 410.33,
+          "y": 258.0
+        },
+        {
+          "x": 398.0,
+          "y": 258.0
+        },
+        {
+          "x": 398.0,
+          "y": 387.67
+        },
+        {
+          "x": 411.33,
+          "y": 388.67
+        },
+        {
+          "x": 410.33,
+          "y": 392.33
+        },
+        {
+          "x": 398.0,
+          "y": 392.33
+        },
+        {
+          "x": 398.0,
+          "y": 423.67
+        },
+        {
+          "x": 533.33,
+          "y": 423.67
+        },
+        {
+          "x": 534.33,
+          "y": 412.33
+        },
+        {
+          "x": 538.0,
+          "y": 413.33
+        },
+        {
+          "x": 538.0,
+          "y": 423.67
+        },
+        {
+          "x": 567.33,
+          "y": 423.67
+        },
+        {
+          "x": 567.33,
+          "y": 410.0
+        },
+        {
+          "x": 556.33,
+          "y": 410.0
+        },
+        {
+          "x": 553.0,
+          "y": 407.67
+        },
+        {
+          "x": 553.0,
+          "y": 366.0
+        },
+        {
+          "x": 567.33,
+          "y": 363.67
+        },
+        {
+          "x": 567.33,
+          "y": 346.0
+        },
+        {
+          "x": 553.67,
+          "y": 345.0
+        },
+        {
+          "x": 554.67,
+          "y": 341.33
+        },
+        {
+          "x": 567.33,
+          "y": 341.33
+        },
+        {
+          "x": 567.33,
+          "y": 314.33
+        },
+        {
+          "x": 553.0,
+          "y": 313.33
+        },
+        {
+          "x": 554.0,
+          "y": 304.33
+        },
+        {
+          "x": 566.0,
+          "y": 304.33
+        },
+        {
+          "x": 566.0,
+          "y": 238.0
+        },
+        {
+          "x": 522.67,
+          "y": 238.0
+        },
+        {
+          "x": 522.67,
+          "y": 297.33
+        },
+        {
+          "x": 520.33,
+          "y": 299.67
+        },
+        {
+          "x": 518.0,
+          "y": 297.33
+        },
+        {
+          "x": 518.0,
+          "y": 238.0
+        }
+      ]
+    },
+    {
+      "centroid": null,
+      "display_name": "Bed 2",
+      "id": "room:0003",
+      "kind": "interior",
+      "polygon": [
+        {
+          "x": 1027.67,
+          "y": 238.67
+        },
+        {
+          "x": 1029.0,
+          "y": 328.33
+        },
+        {
+          "x": 1041.67,
+          "y": 329.33
+        },
+        {
+          "x": 1040.33,
+          "y": 350.33
+        },
+        {
+          "x": 1042.0,
+          "y": 364.33
+        },
+        {
+          "x": 1042.0,
+          "y": 406.0
+        },
+        {
+          "x": 1027.67,
+          "y": 408.33
+        },
+        {
+          "x": 1027.67,
+          "y": 423.67
+        },
+        {
+          "x": 1053.67,
+          "y": 423.67
+        },
+        {
+          "x": 1054.67,
+          "y": 412.67
+        },
+        {
+          "x": 1058.33,
+          "y": 413.67
+        },
+        {
+          "x": 1058.33,
+          "y": 423.67
+        },
+        {
+          "x": 1178.0,
+          "y": 423.67
+        },
+        {
+          "x": 1179.0,
+          "y": 412.67
+        },
+        {
+          "x": 1182.67,
+          "y": 413.67
+        },
+        {
+          "x": 1182.67,
+          "y": 423.67
+        },
+        {
+          "x": 1203.67,
+          "y": 423.67
+        },
+        {
+          "x": 1203.67,
+          "y": 259.33
+        },
+        {
+          "x": 1190.33,
+          "y": 258.33
+        },
+        {
+          "x": 1191.33,
+          "y": 254.67
+        },
+        {
+          "x": 1203.67,
+          "y": 254.67
+        },
+        {
+          "x": 1203.67,
+          "y": 238.0
+        },
+        {
+          "x": 1074.0,
+          "y": 238.67
+        },
+        {
+          "x": 1073.0,
+          "y": 251.0
+        },
+        {
+          "x": 1069.33,
+          "y": 250.0
+        },
+        {
+          "x": 1069.33,
+          "y": 238.67
+        }
+      ]
+    },
+    {
+      "centroid": null,
+      "display_name": "CL 1",
+      "id": "room:0004",
+      "kind": "interior",
+      "polygon": [
+        {
+          "x": 1083.33,
+          "y": 193.67
+        },
+        {
+          "x": 1083.33,
+          "y": 230.33
+        },
+        {
+          "x": 1203.67,
+          "y": 230.33
+        },
+        {
+          "x": 1203.67,
+          "y": 193.67
+        }
+      ]
+    },
+    {
+      "centroid": null,
+      "display_name": "CL 2",
+      "id": "room:0005",
+      "kind": "interior",
+      "polygon": [
+        {
+          "x": 398.0,
+          "y": 193.67
+        },
+        {
+          "x": 398.0,
+          "y": 230.33
+        },
+        {
+          "x": 567.33,
+          "y": 230.33
+        },
+        {
+          "x": 567.33,
+          "y": 193.67
+        }
+      ]
+    },
+    {
+      "centroid": null,
+      "display_name": "Dining",
+      "id": "room:0006",
+      "kind": "interior",
+      "polygon": [
+        {
+          "x": 908.67,
+          "y": 193.67
+        },
+        {
+          "x": 843.67,
+          "y": 193.67
+        },
+        {
+          "x": 842.67,
+          "y": 206.33
+        },
+        {
+          "x": 839.33,
+          "y": 205.33
+        },
+        {
+          "x": 839.33,
+          "y": 193.67
+        },
+        {
+          "x": 790.0,
+          "y": 193.67
+        },
+        {
+          "x": 789.0,
+          "y": 206.33
+        },
+        {
+          "x": 785.33,
+          "y": 206.0
+        },
+        {
+          "x": 785.33,
+          "y": 195.0
+        },
+        {
+          "x": 772.0,
+          "y": 195.0
+        },
+        {
+          "x": 772.0,
+          "y": 208.33
+        },
+        {
+          "x": 782.33,
+          "y": 208.33
+        },
+        {
+          "x": 782.33,
+          "y": 211.67
+        },
+        {
+          "x": 758.67,
+          "y": 213.0
+        },
+        {
+          "x": 768.67,
+          "y": 340.33
+        },
+        {
+          "x": 810.0,
+          "y": 394.33
+        },
+        {
+          "x": 811.0,
+          "y": 325.33
+        },
+        {
+          "x": 872.33,
+          "y": 325.33
+        },
+        {
+          "x": 873.33,
+          "y": 313.0
+        },
+        {
+          "x": 877.0,
+          "y": 314.0
+        },
+        {
+          "x": 877.0,
+          "y": 325.33
+        },
+        {
+          "x": 885.33,
+          "y": 324.67
+        },
+        {
+          "x": 910.67,
+          "y": 264.67
+        },
+        {
+          "x": 908.67,
+          "y": 258.0
+        },
+        {
+          "x": 896.33,
+          "y": 257.0
+        },
+        {
+          "x": 898.0,
+          "y": 236.67
+        },
+        {
+          "x": 908.67,
+          "y": 235.67
+        }
+      ]
+    },
+    {
+      "centroid": null,
+      "display_name": "Exterior",
+      "id": "room:0007",
+      "kind": "exterior",
+      "polygon": []
+    },
+    {
+      "centroid": null,
+      "display_name": "Hallway",
+      "id": "room:0008",
+      "kind": "interior",
+      "polygon": [
+        {
+          "x": 885.33,
+          "y": 325.0
+        },
+        {
+          "x": 927.67,
+          "y": 326.0
+        },
+        {
+          "x": 928.67,
+          "y": 324.0
+        },
+        {
+          "x": 937.0,
+          "y": 324.0
+        },
+        {
+          "x": 938.0,
+          "y": 303.0
+        },
+        {
+          "x": 939.0,
+          "y": 324.0
+        },
+        {
+          "x": 947.67,
+          "y": 325.67
+        },
+        {
+          "x": 1019.0,
+          "y": 325.33
+        },
+        {
+          "x": 1019.0,
+          "y": 257.33
+        },
+        {
+          "x": 982.67,
+          "y": 257.33
+        },
+        {
+          "x": 980.67,
+          "y": 259.33
+        },
+        {
+          "x": 921.33,
+          "y": 257.33
+        },
+        {
+          "x": 919.33,
+          "y": 264.67
+        },
+        {
+          "x": 910.67,
+          "y": 265.0
+        }
+      ]
+    },
+    {
+      "centroid": null,
+      "display_name": "Kitchen",
+      "id": "room:0009",
+      "kind": "interior",
+      "polygon": [
+        {
+          "x": 576.33,
+          "y": 193.67
+        },
+        {
+          "x": 575.67,
+          "y": 294.67
+        },
+        {
+          "x": 768.33,
+          "y": 340.0
+        },
+        {
+          "x": 758.67,
+          "y": 213.33
+        },
+        {
+          "x": 752.33,
+          "y": 213.0
+        },
+        {
+          "x": 750.0,
+          "y": 210.67
+        },
+        {
+          "x": 752.33,
+          "y": 208.33
+        },
+        {
+          "x": 758.0,
+          "y": 208.33
+        },
+        {
+          "x": 757.0,
+          "y": 195.0
+        },
+        {
+          "x": 709.0,
+          "y": 193.67
+        },
+        {
+          "x": 708.0,
+          "y": 206.33
+        },
+        {
+          "x": 695.33,
+          "y": 206.33
+        },
+        {
+          "x": 694.33,
+          "y": 208.0
+        },
+        {
+          "x": 693.33,
+          "y": 193.67
+        },
+        {
+          "x": 680.33,
+          "y": 193.67
+        },
+        {
+          "x": 679.33,
+          "y": 207.33
+        },
+        {
+          "x": 678.33,
+          "y": 193.67
+        },
+        {
+          "x": 654.0,
+          "y": 193.67
+        },
+        {
+          "x": 653.0,
+          "y": 207.33
+        },
+        {
+          "x": 652.0,
+          "y": 193.67
+        },
+        {
+          "x": 637.0,
+          "y": 193.67
+        },
+        {
+          "x": 636.0,
+          "y": 206.33
+        },
+        {
+          "x": 632.33,
+          "y": 205.33
+        },
+        {
+          "x": 632.33,
+          "y": 193.67
+        },
+        {
+          "x": 610.0,
+          "y": 193.67
+        },
+        {
+          "x": 609.0,
+          "y": 207.0
+        },
+        {
+          "x": 605.33,
+          "y": 206.0
+        },
+        {
+          "x": 605.33,
+          "y": 193.67
+        }
+      ]
+    },
+    {
+      "centroid": null,
+      "display_name": "Laundry",
+      "id": "room:0010",
+      "kind": "interior",
+      "polygon": [
+        {
+          "x": 921.33,
+          "y": 207.67
+        },
+        {
+          "x": 921.33,
+          "y": 249.67
+        },
+        {
+          "x": 1018.33,
+          "y": 249.67
+        },
+        {
+          "x": 1018.33,
+          "y": 193.67
+        },
+        {
+          "x": 997.67,
+          "y": 193.67
+        },
+        {
+          "x": 993.67,
+          "y": 212.67
+        },
+        {
+          "x": 992.67,
+          "y": 206.33
+        },
+        {
+          "x": 978.67,
+          "y": 205.33
+        },
+        {
+          "x": 978.67,
+          "y": 193.67
+        },
+        {
+          "x": 954.67,
+          "y": 193.67
+        },
+        {
+          "x": 953.67,
+          "y": 207.33
+        },
+        {
+          "x": 952.67,
+          "y": 193.67
+        },
+        {
+          "x": 931.0,
+          "y": 193.67
+        },
+        {
+          "x": 931.33,
+          "y": 206.67
+        }
+      ]
+    },
+    {
+      "centroid": null,
+      "display_name": "Living",
+      "id": "room:0011",
+      "kind": "interior",
+      "polygon": [
+        {
+          "x": 575.67,
+          "y": 295.0
+        },
+        {
+          "x": 576.33,
+          "y": 303.0
+        },
+        {
+          "x": 589.33,
+          "y": 304.0
+        },
+        {
+          "x": 590.67,
+          "y": 359.33
+        },
+        {
+          "x": 576.33,
+          "y": 362.0
+        },
+        {
+          "x": 576.33,
+          "y": 407.0
+        },
+        {
+          "x": 588.33,
+          "y": 407.0
+        },
+        {
+          "x": 589.33,
+          "y": 410.67
+        },
+        {
+          "x": 576.33,
+          "y": 411.67
+        },
+        {
+          "x": 576.33,
+          "y": 423.67
+        },
+        {
+          "x": 713.33,
+          "y": 423.67
+        },
+        {
+          "x": 714.33,
+          "y": 411.67
+        },
+        {
+          "x": 718.0,
+          "y": 412.67
+        },
+        {
+          "x": 718.0,
+          "y": 423.67
+        },
+        {
+          "x": 732.0,
+          "y": 423.67
+        },
+        {
+          "x": 732.0,
+          "y": 411.67
+        },
+        {
+          "x": 743.0,
+          "y": 410.33
+        },
+        {
+          "x": 744.0,
+          "y": 423.67
+        },
+        {
+          "x": 810.0,
+          "y": 424.33
+        },
+        {
+          "x": 810.0,
+          "y": 394.67
+        },
+        {
+          "x": 768.33,
+          "y": 340.33
+        }
+      ]
+    },
+    {
+      "centroid": null,
+      "display_name": "Mech. Closet (B32)",
+      "id": "room:0012",
+      "kind": "interior",
+      "polygon": [
+        {
+          "x": 1104.67,
+          "y": 130.33
+        },
+        {
+          "x": 1104.67,
+          "y": 171.67
+        },
+        {
+          "x": 1116.67,
+          "y": 171.67
+        },
+        {
+          "x": 1122.0,
+          "y": 143.33
+        },
+        {
+          "x": 1122.0,
+          "y": 130.33
+        }
+      ]
+    },
+    {
+      "centroid": null,
+      "display_name": "Unlabeled space 1",
+      "id": "room:0013",
+      "kind": "interior",
+      "polygon": [
+        {
+          "x": 941.67,
+          "y": 151.33
+        },
+        {
+          "x": 941.67,
+          "y": 168.33
+        },
+        {
+          "x": 961.67,
+          "y": 168.33
+        },
+        {
+          "x": 961.67,
+          "y": 151.33
+        }
+      ]
+    },
+    {
+      "centroid": null,
+      "display_name": "Unlabeled space 2",
+      "id": "room:0014",
+      "kind": "interior",
+      "polygon": [
+        {
+          "x": 963.67,
+          "y": 151.33
+        },
+        {
+          "x": 963.67,
+          "y": 168.33
+        },
+        {
+          "x": 981.67,
+          "y": 168.33
+        },
+        {
+          "x": 981.67,
+          "y": 151.33
+        }
+      ]
+    },
+    {
+      "centroid": null,
+      "display_name": "Unlabeled space 3",
+      "id": "room:0015",
+      "kind": "interior",
+      "polygon": [
+        {
+          "x": 1027.67,
+          "y": 198.67
+        },
+        {
+          "x": 1027.67,
+          "y": 224.0
+        },
+        {
+          "x": 1049.33,
+          "y": 224.0
+        },
+        {
+          "x": 1050.33,
+          "y": 216.0
+        },
+        {
+          "x": 1051.33,
+          "y": 224.0
+        },
+        {
+          "x": 1070.67,
+          "y": 224.0
+        },
+        {
+          "x": 1070.67,
+          "y": 198.67
+        }
+      ]
+    }
+  ],
+  "schema_version": "1.0.0",
+  "sheet": {
+    "page_index": 1,
+    "scale_pt_per_ft": 18.0,
+    "title": "ELECTRICAL PLAN - PLAN 2",
+    "viewport": {
+      "x0": 146.0,
+      "x1": 1437.0,
+      "y0": 39.0,
+      "y1": 530.29
+    }
+  },
+  "warnings": [],
+  "wire_runs": [
+    {
+      "cable_type": "nm_14_2",
+      "confidence": 0.94,
+      "from_detection_id": "det:0000",
+      "id": "wire:0000",
+      "plan_length_ft": 7.36,
+      "points": [
+        {
+          "x": 476.16,
+          "y": 301.8
+        },
+        {
+          "x": 473.88,
+          "y": 311.16
+        },
+        {
+          "x": 467.52,
+          "y": 311.16
+        },
+        {
+          "x": 470.76,
+          "y": 320.28
+        },
+        {
+          "x": 473.52,
+          "y": 321.24
+        },
+        {
+          "x": 474.72,
+          "y": 322.8
+        },
+        {
+          "x": 475.2,
+          "y": 324.72
+        },
+        {
+          "x": 484.32,
+          "y": 327.96
+        },
+        {
+          "x": 484.32,
+          "y": 321.6
+        },
+        {
+          "x": 493.68,
+          "y": 319.32
+        },
+        {
+          "x": 495.72,
+          "y": 318.6
+        },
+        {
+          "x": 497.52,
+          "y": 318.12
+        },
+        {
+          "x": 503.28,
+          "y": 318.0
+        },
+        {
+          "x": 512.88,
+          "y": 317.76
+        },
+        {
+          "x": 513.6,
+          "y": 315.36
+        },
+        {
+          "x": 509.52,
+          "y": 315.84
+        },
+        {
+          "x": 512.88,
+          "y": 317.76
+        },
+        {
+          "x": 522.48,
+          "y": 318.36
+        },
+        {
+          "x": 524.28,
+          "y": 314.16
+        },
+        {
+          "x": 525.96,
+          "y": 313.92
+        },
+        {
+          "x": 530.4,
+          "y": 313.68
+        },
+        {
+          "x": 534.96,
+          "y": 313.44
+        },
+        {
+          "x": 539.88,
+          "y": 313.2
+        },
+        {
+          "x": 553.57,
+          "y": 308.03
+        }
+      ],
+      "source": "geometry",
+      "to_detection_id": "det:0054",
+      "total_length_ft": 13.36,
+      "vertical_allowance_ft": 6.0
+    },
+    {
+      "cable_type": "nm_14_2",
+      "confidence": 0.95,
+      "from_detection_id": "det:0006",
+      "id": "wire:0001",
+      "plan_length_ft": 20.5,
+      "points": [
+        {
+          "x": 661.2,
+          "y": 220.16
+        },
+        {
+          "x": 662.28,
+          "y": 230.04
+        },
+        {
+          "x": 660.0,
+          "y": 230.04
+        },
+        {
+          "x": 661.32,
+          "y": 229.08
+        },
+        {
+          "x": 661.32,
+          "y": 231.12
+        },
+        {
+          "x": 662.16,
+          "y": 232.92
+        },
+        {
+          "x": 663.72,
+          "y": 234.12
+        },
+        {
+          "x": 661.2,
+          "y": 234.6
+        },
+        {
+          "x": 670.2,
+          "y": 234.6
+        },
+        {
+          "x": 669.24,
+          "y": 232.92
+        },
+        {
+          "x": 670.08,
+          "y": 231.12
+        },
+        {
+          "x": 670.08,
+          "y": 229.08
+        },
+        {
+          "x": 669.24,
+          "y": 227.28
+        },
+        {
+          "x": 667.68,
+          "y": 226.08
+        },
+        {
+          "x": 665.64,
+          "y": 225.6
+        },
+        {
+          "x": 663.72,
+          "y": 226.08
+        },
+        {
+          "x": 662.16,
+          "y": 227.28
+        },
+        {
+          "x": 662.28,
+          "y": 230.04
+        },
+        {
+          "x": 660.0,
+          "y": 230.04
+        },
+        {
+          "x": 661.32,
+          "y": 229.08
+        },
+        {
+          "x": 661.32,
+          "y": 231.12
+        },
+        {
+          "x": 662.16,
+          "y": 232.92
+        },
+        {
+          "x": 663.72,
+          "y": 234.12
+        },
+        {
+          "x": 665.64,
+          "y": 234.6
+        },
+        {
+          "x": 667.68,
+          "y": 234.12
+        },
+        {
+          "x": 669.24,
+          "y": 232.92
+        },
+        {
+          "x": 670.08,
+          "y": 231.12
+        },
+        {
+          "x": 670.08,
+          "y": 229.08
+        },
+        {
+          "x": 669.24,
+          "y": 227.28
+        },
+        {
+          "x": 667.68,
+          "y": 226.08
+        },
+        {
+          "x": 665.64,
+          "y": 225.6
+        },
+        {
+          "x": 663.72,
+          "y": 226.08
+        },
+        {
+          "x": 662.16,
+          "y": 227.28
+        },
+        {
+          "x": 661.2,
+          "y": 225.6
+        },
+        {
+          "x": 661.2,
+          "y": 234.6
+        },
+        {
+          "x": 662.16,
+          "y": 232.92
+        },
+        {
+          "x": 663.72,
+          "y": 234.12
+        },
+        {
+          "x": 665.64,
+          "y": 234.6
+        },
+        {
+          "x": 667.68,
+          "y": 234.12
+        },
+        {
+          "x": 669.24,
+          "y": 232.92
+        },
+        {
+          "x": 670.08,
+          "y": 231.12
+        },
+        {
+          "x": 670.08,
+          "y": 229.08
+        },
+        {
+          "x": 669.24,
+          "y": 227.28
+        },
+        {
+          "x": 667.68,
+          "y": 226.08
+        },
+        {
+          "x": 665.64,
+          "y": 225.6
+        },
+        {
+          "x": 663.72,
+          "y": 226.08
+        },
+        {
+          "x": 662.16,
+          "y": 227.28
+        },
+        {
+          "x": 661.32,
+          "y": 229.08
+        },
+        {
+          "x": 661.32,
+          "y": 231.12
+        },
+        {
+          "x": 662.16,
+          "y": 232.92
+        },
+        {
+          "x": 663.72,
+          "y": 234.12
+        },
+        {
+          "x": 665.64,
+          "y": 234.6
+        },
+        {
+          "x": 667.68,
+          "y": 234.12
+        },
+        {
+          "x": 669.24,
+          "y": 232.92
+        },
+        {
+          "x": 670.08,
+          "y": 231.12
+        },
+        {
+          "x": 670.08,
+          "y": 229.08
+        },
+        {
+          "x": 669.24,
+          "y": 227.28
+        },
+        {
+          "x": 667.68,
+          "y": 226.08
+        },
+        {
+          "x": 665.64,
+          "y": 225.6
+        },
+        {
+          "x": 663.72,
+          "y": 226.08
+        },
+        {
+          "x": 662.16,
+          "y": 227.28
+        },
+        {
+          "x": 661.32,
+          "y": 229.08
+        },
+        {
+          "x": 661.32,
+          "y": 231.12
+        },
+        {
+          "x": 665.64,
+          "y": 233.52
+        },
+        {
+          "x": 665.64,
+          "y": 235.68
+        },
+        {
+          "x": 669.0,
+          "y": 230.04
+        },
+        {
+          "x": 671.28,
+          "y": 230.04
+        },
+        {
+          "x": 670.08,
+          "y": 229.08
+        },
+        {
+          "x": 670.08,
+          "y": 231.12
+        },
+        {
+          "x": 669.24,
+          "y": 232.92
+        },
+        {
+          "x": 667.68,
+          "y": 234.12
+        },
+        {
+          "x": 665.64,
+          "y": 234.6
+        },
+        {
+          "x": 663.72,
+          "y": 234.12
+        },
+        {
+          "x": 662.16,
+          "y": 232.92
+        },
+        {
+          "x": 661.32,
+          "y": 231.12
+        },
+        {
+          "x": 661.32,
+          "y": 229.08
+        },
+        {
+          "x": 662.16,
+          "y": 227.28
+        },
+        {
+          "x": 663.72,
+          "y": 226.08
+        },
+        {
+          "x": 665.64,
+          "y": 225.6
+        },
+        {
+          "x": 667.68,
+          "y": 226.08
+        },
+        {
+          "x": 669.24,
+          "y": 227.28
+        },
+        {
+          "x": 670.2,
+          "y": 225.6
+        },
+        {
+          "x": 670.2,
+          "y": 234.6
+        },
+        {
+          "x": 669.24,
+          "y": 232.92
+        },
+        {
+          "x": 667.68,
+          "y": 234.12
+        },
+        {
+          "x": 665.64,
+          "y": 234.6
+        },
+        {
+          "x": 663.72,
+          "y": 234.12
+        },
+        {
+          "x": 662.16,
+          "y": 232.92
+        },
+        {
+          "x": 661.32,
+          "y": 231.12
+        },
+        {
+          "x": 661.32,
+          "y": 229.08
+        },
+        {
+          "x": 662.16,
+          "y": 227.28
+        },
+        {
+          "x": 663.72,
+          "y": 226.08
+        },
+        {
+          "x": 665.64,
+          "y": 225.6
+        },
+        {
+          "x": 667.68,
+          "y": 226.08
+        },
+        {
+          "x": 669.24,
+          "y": 227.28
+        },
+        {
+          "x": 670.08,
+          "y": 229.08
+        },
+        {
+          "x": 670.08,
+          "y": 231.12
+        },
+        {
+          "x": 669.24,
+          "y": 232.92
+        },
+        {
+          "x": 667.68,
+          "y": 234.12
+        },
+        {
+          "x": 665.64,
+          "y": 234.6
+        },
+        {
+          "x": 663.72,
+          "y": 234.12
+        },
+        {
+          "x": 662.16,
+          "y": 232.92
+        },
+        {
+          "x": 661.32,
+          "y": 231.12
+        },
+        {
+          "x": 661.32,
+          "y": 229.08
+        },
+        {
+          "x": 662.16,
+          "y": 227.28
+        },
+        {
+          "x": 663.72,
+          "y": 226.08
+        },
+        {
+          "x": 665.64,
+          "y": 225.6
+        },
+        {
+          "x": 667.68,
+          "y": 226.08
+        },
+        {
+          "x": 669.24,
+          "y": 227.28
+        },
+        {
+          "x": 670.08,
+          "y": 229.08
+        },
+        {
+          "x": 670.08,
+          "y": 231.12
+        },
+        {
+          "x": 669.24,
+          "y": 232.92
+        },
+        {
+          "x": 667.68,
+          "y": 234.12
+        },
+        {
+          "x": 665.64,
+          "y": 234.6
+        },
+        {
+          "x": 663.72,
+          "y": 234.12
+        },
+        {
+          "x": 662.16,
+          "y": 232.92
+        },
+        {
+          "x": 661.32,
+          "y": 231.12
+        },
+        {
+          "x": 661.32,
+          "y": 229.08
+        },
+        {
+          "x": 662.16,
+          "y": 227.28
+        },
+        {
+          "x": 663.72,
+          "y": 226.08
+        },
+        {
+          "x": 665.64,
+          "y": 225.6
+        },
+        {
+          "x": 665.64,
+          "y": 230.04
+        },
+        {
+          "x": 675.84,
+          "y": 226.92
+        },
+        {
+          "x": 684.6,
+          "y": 222.48
+        },
+        {
+          "x": 687.24,
+          "y": 221.88
+        },
+        {
+          "x": 689.52,
+          "y": 221.04
+        },
+        {
+          "x": 691.32,
+          "y": 219.96
+        },
+        {
+          "x": 692.64,
+          "y": 218.52
+        },
+        {
+          "x": 693.24,
+          "y": 216.96
+        },
+        {
+          "x": 696.24,
+          "y": 222.96
+        },
+        {
+          "x": 698.52,
+          "y": 222.72
+        },
+        {
+          "x": 706.56,
+          "y": 222.12
+        },
+        {
+          "x": 716.88,
+          "y": 222.12
+        },
+        {
+          "x": 725.4,
+          "y": 222.84
+        },
+        {
+          "x": 744.97,
+          "y": 224.17
+        }
+      ],
+      "source": "geometry",
+      "to_detection_id": "det:0015",
+      "total_length_ft": 22.5,
+      "vertical_allowance_ft": 2.0
+    },
+    {
+      "cable_type": "nm_14_2",
+      "confidence": 0.89,
+      "from_detection_id": "det:0006",
+      "id": "wire:0002",
+      "plan_length_ft": 1.24,
+      "points": [
+        {
+          "x": 670.2,
+          "y": 220.16
+        },
+        {
+          "x": 667.8,
+          "y": 216.24
+        },
+        {
+          "x": 666.72,
+          "y": 217.68
+        },
+        {
+          "x": 664.8,
+          "y": 217.68
+        },
+        {
+          "x": 663.0,
+          "y": 216.84
+        },
+        {
+          "x": 661.68,
+          "y": 215.28
+        },
+        {
+          "x": 661.32,
+          "y": 213.24
+        },
+        {
+          "x": 657.11,
+          "y": 206.63
+        }
+      ],
+      "source": "geometry",
+      "to_detection_id": "det:0050",
+      "total_length_ft": 9.74,
+      "vertical_allowance_ft": 8.5
+    },
+    {
+      "cable_type": "nm_14_2",
+      "confidence": 0.95,
+      "from_detection_id": "det:0010",
+      "id": "wire:0003",
+      "plan_length_ft": 7.47,
+      "points": [
+        {
+          "x": 631.44,
+          "y": 337.32
+        },
+        {
+          "x": 630.72,
+          "y": 329.64
+        },
+        {
+          "x": 630.6,
+          "y": 322.92
+        },
+        {
+          "x": 630.6,
+          "y": 320.16
+        },
+        {
+          "x": 631.32,
+          "y": 311.88
+        },
+        {
+          "x": 631.8,
+          "y": 309.48
+        },
+        {
+          "x": 633.24,
+          "y": 302.88
+        },
+        {
+          "x": 635.28,
+          "y": 296.04
+        },
+        {
+          "x": 633.96,
+          "y": 292.8
+        },
+        {
+          "x": 633.96,
+          "y": 283.92
+        },
+        {
+          "x": 634.92,
+          "y": 285.6
+        },
+        {
+          "x": 636.48,
+          "y": 284.28
+        },
+        {
+          "x": 633.96,
+          "y": 283.92
+        },
+        {
+          "x": 642.96,
+          "y": 283.92
+        },
+        {
+          "x": 641.88,
+          "y": 285.6
+        },
+        {
+          "x": 642.84,
+          "y": 287.4
+        },
+        {
+          "x": 642.96,
+          "y": 283.92
+        },
+        {
+          "x": 642.96,
+          "y": 292.8
+        },
+        {
+          "x": 641.88,
+          "y": 291.12
+        },
+        {
+          "x": 640.32,
+          "y": 292.44
+        },
+        {
+          "x": 638.4,
+          "y": 292.8
+        },
+        {
+          "x": 636.48,
+          "y": 292.44
+        },
+        {
+          "x": 634.92,
+          "y": 291.12
+        },
+        {
+          "x": 634.08,
+          "y": 289.32
+        },
+        {
+          "x": 634.08,
+          "y": 287.4
+        },
+        {
+          "x": 634.92,
+          "y": 285.6
+        },
+        {
+          "x": 638.4,
+          "y": 285.0
+        },
+        {
+          "x": 638.4,
+          "y": 282.72
+        },
+        {
+          "x": 638.4,
+          "y": 288.36
+        },
+        {
+          "x": 645.84,
+          "y": 284.64
+        },
+        {
+          "x": 652.08,
+          "y": 282.0
+        },
+        {
+          "x": 646.19,
+          "y": 282.37
+        }
+      ],
+      "source": "geometry",
+      "to_detection_id": "det:0011",
+      "total_length_ft": 9.47,
+      "vertical_allowance_ft": 2.0
+    },
+    {
+      "cable_type": "nm_14_2",
+      "confidence": 0.95,
+      "from_detection_id": "det:0012",
+      "id": "wire:0004",
+      "plan_length_ft": 1.14,
+      "points": [
+        {
+          "x": 671.7,
+          "y": 230.04
+        },
+        {
+          "x": 669.0,
+          "y": 230.04
+        },
+        {
+          "x": 669.24,
+          "y": 227.28
+        },
+        {
+          "x": 667.68,
+          "y": 226.08
+        },
+        {
+          "x": 670.2,
+          "y": 225.6
+        },
+        {
+          "x": 661.2,
+          "y": 220.16
+        }
+      ],
+      "source": "geometry",
+      "to_detection_id": "det:0006",
+      "total_length_ft": 3.14,
+      "vertical_allowance_ft": 2.0
+    },
+    {
+      "cable_type": "nm_14_2",
+      "confidence": 0.73,
+      "from_detection_id": "det:0015",
+      "id": "wire:0005",
+      "plan_length_ft": 5.75,
+      "points": [
+        {
+          "x": 790.56,
+          "y": 235.68
+        },
+        {
+          "x": 789.36,
+          "y": 226.68
+        },
+        {
+          "x": 788.88,
+          "y": 222.96
+        },
+        {
+          "x": 778.68,
+          "y": 224.52
+        },
+        {
+          "x": 768.48,
+          "y": 226.92
+        },
+        {
+          "x": 758.28,
+          "y": 230.04
+        },
+        {
+          "x": 754.92,
+          "y": 230.04
+        },
+        {
+          "x": 752.64,
+          "y": 230.04
+        },
+        {
+          "x": 747.84,
+          "y": 226.92
+        },
+        {
+          "x": 745.32,
+          "y": 226.32
+        },
+        {
+          "x": 737.52,
+          "y": 224.52
+        },
+        {
+          "x": 727.2,
+          "y": 222.96
+        },
+        {
+          "x": 718.68,
+          "y": 222.24
+        },
+        {
+          "x": 710.87,
+          "y": 205.79
+        }
+      ],
+      "source": "geometry",
+      "to_detection_id": "det:0042",
+      "total_length_ft": 12.25,
+      "vertical_allowance_ft": 6.5
+    },
+    {
+      "cable_type": "nm_14_2",
+      "confidence": 0.58,
+      "from_detection_id": "det:0016",
+      "id": "wire:0006",
+      "plan_length_ft": 4.03,
+      "points": [
+        {
+          "x": 837.61,
+          "y": 224.17
+        },
+        {
+          "x": 818.04,
+          "y": 222.84
+        },
+        {
+          "x": 809.4,
+          "y": 222.12
+        },
+        {
+          "x": 799.2,
+          "y": 222.12
+        },
+        {
+          "x": 791.16,
+          "y": 222.72
+        },
+        {
+          "x": 788.88,
+          "y": 222.96
+        },
+        {
+          "x": 789.36,
+          "y": 226.68
+        },
+        {
+          "x": 771.59,
+          "y": 235.68
+        }
+      ],
+      "source": "geometry",
+      "to_detection_id": "det:0015",
+      "total_length_ft": 6.03,
+      "vertical_allowance_ft": 2.0
+    },
+    {
+      "cable_type": "nm_14_2",
+      "confidence": 0.53,
+      "from_detection_id": "det:0017",
+      "id": "wire:0007",
+      "plan_length_ft": 3.77,
+      "points": [
+        {
+          "x": 872.05,
+          "y": 282.37
+        },
+        {
+          "x": 851.16,
+          "y": 278.4
+        },
+        {
+          "x": 844.56,
+          "y": 276.72
+        },
+        {
+          "x": 835.8,
+          "y": 274.92
+        },
+        {
+          "x": 824.64,
+          "y": 273.6
+        },
+        {
+          "x": 815.64,
+          "y": 291.01
+        }
+      ],
+      "source": "geometry",
+      "to_detection_id": "det:0004",
+      "total_length_ft": 5.77,
+      "vertical_allowance_ft": 2.0
+    },
+    {
+      "cable_type": "nm_14_2",
+      "confidence": 0.95,
+      "from_detection_id": "det:0020",
+      "id": "wire:0008",
+      "plan_length_ft": 9.58,
+      "points": [
+        {
+          "x": 949.08,
+          "y": 272.05
+        },
+        {
+          "x": 951.36,
+          "y": 273.0
+        },
+        {
+          "x": 953.4,
+          "y": 273.36
+        },
+        {
+          "x": 955.44,
+          "y": 273.72
+        },
+        {
+          "x": 957.24,
+          "y": 274.08
+        },
+        {
+          "x": 958.92,
+          "y": 274.56
+        },
+        {
+          "x": 957.12,
+          "y": 283.08
+        },
+        {
+          "x": 960.6,
+          "y": 284.16
+        },
+        {
+          "x": 966.0,
+          "y": 283.92
+        },
+        {
+          "x": 975.0,
+          "y": 283.92
+        },
+        {
+          "x": 973.92,
+          "y": 285.6
+        },
+        {
+          "x": 974.88,
+          "y": 287.4
+        },
+        {
+          "x": 975.0,
+          "y": 283.92
+        },
+        {
+          "x": 975.0,
+          "y": 292.8
+        },
+        {
+          "x": 973.92,
+          "y": 291.12
+        },
+        {
+          "x": 972.36,
+          "y": 292.44
+        },
+        {
+          "x": 970.44,
+          "y": 292.8
+        },
+        {
+          "x": 968.52,
+          "y": 292.44
+        },
+        {
+          "x": 966.96,
+          "y": 291.12
+        },
+        {
+          "x": 966.12,
+          "y": 289.32
+        },
+        {
+          "x": 966.12,
+          "y": 287.4
+        },
+        {
+          "x": 966.96,
+          "y": 285.6
+        },
+        {
+          "x": 970.44,
+          "y": 285.0
+        },
+        {
+          "x": 970.44,
+          "y": 282.72
+        },
+        {
+          "x": 969.24,
+          "y": 282.96
+        },
+        {
+          "x": 968.64,
+          "y": 281.52
+        },
+        {
+          "x": 970.44,
+          "y": 288.36
+        },
+        {
+          "x": 960.6,
+          "y": 284.16
+        },
+        {
+          "x": 960.48,
+          "y": 274.92
+        },
+        {
+          "x": 958.92,
+          "y": 274.56
+        },
+        {
+          "x": 957.24,
+          "y": 274.08
+        },
+        {
+          "x": 955.44,
+          "y": 273.72
+        },
+        {
+          "x": 953.4,
+          "y": 273.36
+        },
+        {
+          "x": 951.36,
+          "y": 273.0
+        },
+        {
+          "x": 950.76,
+          "y": 280.92
+        },
+        {
+          "x": 941.16,
+          "y": 278.64
+        },
+        {
+          "x": 941.04,
+          "y": 271.44
+        },
+        {
+          "x": 939.12,
+          "y": 271.2
+        },
+        {
+          "x": 936.48,
+          "y": 270.84
+        },
+        {
+          "x": 933.84,
+          "y": 270.48
+        },
+        {
+          "x": 931.2,
+          "y": 270.12
+        },
+        {
+          "x": 928.44,
+          "y": 269.88
+        },
+        {
+          "x": 922.44,
+          "y": 276.72
+        },
+        {
+          "x": 917.4,
+          "y": 276.96
+        },
+        {
+          "x": 911.03,
+          "y": 277.56
+        }
+      ],
+      "source": "geometry",
+      "to_detection_id": "det:0061",
+      "total_length_ft": 15.58,
+      "vertical_allowance_ft": 6.0
+    },
+    {
+      "cable_type": "nm_14_2",
+      "confidence": 0.67,
+      "from_detection_id": "det:0031",
+      "id": "wire:0009",
+      "plan_length_ft": 2.92,
+      "points": [
+        {
+          "x": 910.92,
+          "y": 242.27
+        },
+        {
+          "x": 897.24,
+          "y": 247.56
+        },
+        {
+          "x": 893.88,
+          "y": 247.92
+        },
+        {
+          "x": 891.12,
+          "y": 247.56
+        },
+        {
+          "x": 888.6,
+          "y": 246.72
+        },
+        {
+          "x": 886.2,
+          "y": 245.4
+        },
+        {
+          "x": 879.24,
+          "y": 239.76
+        },
+        {
+          "x": 876.84,
+          "y": 237.72
+        },
+        {
+          "x": 874.44,
+          "y": 235.68
+        },
+        {
+          "x": 863.51,
+          "y": 233.76
+        }
+      ],
+      "source": "geometry",
+      "to_detection_id": "det:0016",
+      "total_length_ft": 11.42,
+      "vertical_allowance_ft": 8.5
+    },
+    {
+      "cable_type": "nm_14_2",
+      "confidence": 0.94,
+      "from_detection_id": "det:0031",
+      "id": "wire:0010",
+      "plan_length_ft": 12.74,
+      "points": [
+        {
+          "x": 949.08,
+          "y": 272.05
+        },
+        {
+          "x": 951.36,
+          "y": 273.0
+        },
+        {
+          "x": 953.4,
+          "y": 273.36
+        },
+        {
+          "x": 955.44,
+          "y": 273.72
+        },
+        {
+          "x": 957.24,
+          "y": 274.08
+        },
+        {
+          "x": 958.92,
+          "y": 274.56
+        },
+        {
+          "x": 957.12,
+          "y": 283.08
+        },
+        {
+          "x": 960.6,
+          "y": 284.16
+        },
+        {
+          "x": 966.0,
+          "y": 283.92
+        },
+        {
+          "x": 975.0,
+          "y": 283.92
+        },
+        {
+          "x": 973.92,
+          "y": 285.6
+        },
+        {
+          "x": 974.88,
+          "y": 287.4
+        },
+        {
+          "x": 975.0,
+          "y": 283.92
+        },
+        {
+          "x": 975.0,
+          "y": 292.8
+        },
+        {
+          "x": 973.92,
+          "y": 291.12
+        },
+        {
+          "x": 972.36,
+          "y": 292.44
+        },
+        {
+          "x": 970.44,
+          "y": 292.8
+        },
+        {
+          "x": 968.52,
+          "y": 292.44
+        },
+        {
+          "x": 966.96,
+          "y": 291.12
+        },
+        {
+          "x": 966.12,
+          "y": 289.32
+        },
+        {
+          "x": 966.12,
+          "y": 287.4
+        },
+        {
+          "x": 966.96,
+          "y": 285.6
+        },
+        {
+          "x": 970.44,
+          "y": 285.0
+        },
+        {
+          "x": 970.44,
+          "y": 282.72
+        },
+        {
+          "x": 969.24,
+          "y": 282.96
+        },
+        {
+          "x": 968.64,
+          "y": 281.52
+        },
+        {
+          "x": 970.44,
+          "y": 288.36
+        },
+        {
+          "x": 960.6,
+          "y": 284.16
+        },
+        {
+          "x": 960.48,
+          "y": 274.92
+        },
+        {
+          "x": 958.92,
+          "y": 274.56
+        },
+        {
+          "x": 957.24,
+          "y": 274.08
+        },
+        {
+          "x": 955.44,
+          "y": 273.72
+        },
+        {
+          "x": 953.4,
+          "y": 273.36
+        },
+        {
+          "x": 951.36,
+          "y": 273.0
+        },
+        {
+          "x": 950.76,
+          "y": 280.92
+        },
+        {
+          "x": 941.16,
+          "y": 278.64
+        },
+        {
+          "x": 941.04,
+          "y": 271.44
+        },
+        {
+          "x": 939.12,
+          "y": 271.2
+        },
+        {
+          "x": 936.48,
+          "y": 270.84
+        },
+        {
+          "x": 933.84,
+          "y": 270.48
+        },
+        {
+          "x": 931.2,
+          "y": 270.12
+        },
+        {
+          "x": 928.44,
+          "y": 269.88
+        },
+        {
+          "x": 922.44,
+          "y": 276.72
+        },
+        {
+          "x": 917.4,
+          "y": 276.96
+        },
+        {
+          "x": 910.68,
+          "y": 277.56
+        },
+        {
+          "x": 904.2,
+          "y": 278.64
+        },
+        {
+          "x": 900.48,
+          "y": 268.08
+        },
+        {
+          "x": 898.8,
+          "y": 267.96
+        },
+        {
+          "x": 896.76,
+          "y": 257.04
+        },
+        {
+          "x": 893.4,
+          "y": 256.8
+        },
+        {
+          "x": 890.76,
+          "y": 256.92
+        },
+        {
+          "x": 888.84,
+          "y": 257.4
+        },
+        {
+          "x": 898.45,
+          "y": 242.27
+        }
+      ],
+      "source": "geometry",
+      "to_detection_id": "det:0020",
+      "total_length_ft": 21.24,
+      "vertical_allowance_ft": 8.5
+    },
+    {
+      "cable_type": "nm_14_2",
+      "confidence": 0.62,
+      "from_detection_id": "det:0038",
+      "id": "wire:0011",
+      "plan_length_ft": 2.44,
+      "points": [
+        {
+          "x": 588.84,
+          "y": 360.48
+        },
+        {
+          "x": 587.16,
+          "y": 361.08
+        },
+        {
+          "x": 580.08,
+          "y": 361.44
+        },
+        {
+          "x": 575.64,
+          "y": 361.44
+        },
+        {
+          "x": 567.96,
+          "y": 364.08
+        },
+        {
+          "x": 563.52,
+          "y": 364.08
+        },
+        {
+          "x": 556.44,
+          "y": 364.44
+        },
+        {
+          "x": 545.51,
+          "y": 364.92
+        }
+      ],
+      "source": "geometry",
+      "to_detection_id": "det:0000",
+      "total_length_ft": 10.94,
+      "vertical_allowance_ft": 8.5
+    },
+    {
+      "cable_type": "nm_14_2",
+      "confidence": 0.85,
+      "from_detection_id": "det:0042",
+      "id": "wire:0012",
+      "plan_length_ft": 0.3,
+      "points": [
+        {
+          "x": 702.37,
+          "y": 197.4
+        },
+        {
+          "x": 697.07,
+          "y": 196.32
+        }
+      ],
+      "source": "geometry",
+      "to_detection_id": "det:0058",
+      "total_length_ft": 10.8,
+      "vertical_allowance_ft": 10.5
+    },
+    {
+      "cable_type": "nm_14_2",
+      "confidence": 0.91,
+      "from_detection_id": "det:0050",
+      "id": "wire:0013",
+      "plan_length_ft": 1.55,
+      "points": [
+        {
+          "x": 657.11,
+          "y": 206.63
+        },
+        {
+          "x": 664.8,
+          "y": 208.92
+        },
+        {
+          "x": 666.72,
+          "y": 208.92
+        },
+        {
+          "x": 668.52,
+          "y": 209.76
+        },
+        {
+          "x": 669.84,
+          "y": 211.32
+        },
+        {
+          "x": 670.32,
+          "y": 213.24
+        },
+        {
+          "x": 669.84,
+          "y": 215.28
+        },
+        {
+          "x": 668.52,
+          "y": 216.84
+        },
+        {
+          "x": 665.64,
+          "y": 224.1
+        }
+      ],
+      "source": "geometry",
+      "to_detection_id": "det:0012",
+      "total_length_ft": 10.05,
+      "vertical_allowance_ft": 8.5
+    },
+    {
+      "cable_type": "nm_14_2",
+      "confidence": 0.95,
+      "from_detection_id": "det:0055",
+      "id": "wire:0014",
+      "plan_length_ft": 0.53,
+      "points": [
+        {
+          "x": 881.65,
+          "y": 339.24
+        },
+        {
+          "x": 882.48,
+          "y": 340.68
+        },
+        {
+          "x": 890.17,
+          "y": 339.36
+        }
+      ],
+      "source": "geometry",
+      "to_detection_id": "det:0059",
+      "total_length_ft": 10.53,
+      "vertical_allowance_ft": 10.0
+    },
+    {
+      "cable_type": "nm_14_2",
+      "confidence": 0.95,
+      "from_detection_id": "det:0056",
+      "id": "wire:0015",
+      "plan_length_ft": 0.45,
+      "points": [
+        {
+          "x": 1029.72,
+          "y": 326.53
+        },
+        {
+          "x": 1030.2,
+          "y": 334.57
+        }
+      ],
+      "source": "geometry",
+      "to_detection_id": "det:0060",
+      "total_length_ft": 10.45,
+      "vertical_allowance_ft": 10.0
+    },
+    {
+      "cable_type": "nm_14_2",
+      "confidence": 0.95,
+      "from_detection_id": "det:0058",
+      "id": "wire:0016",
+      "plan_length_ft": 2.03,
+      "points": [
+        {
+          "x": 696.24,
+          "y": 207.23
+        },
+        {
+          "x": 686.04,
+          "y": 224.52
+        },
+        {
+          "x": 675.84,
+          "y": 221.52
+        },
+        {
+          "x": 672.96,
+          "y": 220.32
+        },
+        {
+          "x": 670.2,
+          "y": 220.16
+        }
+      ],
+      "source": "geometry",
+      "to_detection_id": "det:0006",
+      "total_length_ft": 8.03,
+      "vertical_allowance_ft": 6.0
+    },
+    {
+      "cable_type": "nm_14_2",
+      "confidence": 0.95,
+      "from_detection_id": "det:0058",
+      "id": "wire:0017",
+      "plan_length_ft": 3.35,
+      "points": [
+        {
+          "x": 697.07,
+          "y": 196.32
+        },
+        {
+          "x": 692.88,
+          "y": 196.32
+        },
+        {
+          "x": 691.8,
+          "y": 197.4
+        },
+        {
+          "x": 694.32,
+          "y": 193.2
+        },
+        {
+          "x": 694.32,
+          "y": 206.88
+        },
+        {
+          "x": 693.24,
+          "y": 215.16
+        },
+        {
+          "x": 693.24,
+          "y": 216.96
+        },
+        {
+          "x": 692.64,
+          "y": 218.52
+        },
+        {
+          "x": 691.32,
+          "y": 219.96
+        },
+        {
+          "x": 689.52,
+          "y": 221.04
+        },
+        {
+          "x": 687.24,
+          "y": 221.88
+        },
+        {
+          "x": 678.6,
+          "y": 226.2
+        },
+        {
+          "x": 675.84,
+          "y": 226.92
+        },
+        {
+          "x": 671.7,
+          "y": 230.04
+        }
+      ],
+      "source": "geometry",
+      "to_detection_id": "det:0012",
+      "total_length_ft": 9.35,
+      "vertical_allowance_ft": 6.0
+    },
+    {
+      "cable_type": "nm_14_2",
+      "confidence": 0.95,
+      "from_detection_id": "det:0059",
+      "id": "wire:0018",
+      "plan_length_ft": 7.86,
+      "points": [
+        {
+          "x": 893.04,
+          "y": 347.75
+        },
+        {
+          "x": 894.48,
+          "y": 365.88
+        },
+        {
+          "x": 897.84,
+          "y": 371.64
+        },
+        {
+          "x": 900.12,
+          "y": 374.76
+        },
+        {
+          "x": 904.44,
+          "y": 378.84
+        },
+        {
+          "x": 907.32,
+          "y": 381.12
+        },
+        {
+          "x": 912.96,
+          "y": 384.96
+        },
+        {
+          "x": 915.72,
+          "y": 386.64
+        },
+        {
+          "x": 922.8,
+          "y": 390.36
+        },
+        {
+          "x": 924.84,
+          "y": 391.2
+        },
+        {
+          "x": 931.08,
+          "y": 393.96
+        },
+        {
+          "x": 939.84,
+          "y": 397.2
+        },
+        {
+          "x": 939.84,
+          "y": 392.76
+        },
+        {
+          "x": 941.88,
+          "y": 393.24
+        },
+        {
+          "x": 943.44,
+          "y": 394.56
+        },
+        {
+          "x": 944.28,
+          "y": 396.36
+        },
+        {
+          "x": 944.28,
+          "y": 398.28
+        },
+        {
+          "x": 943.44,
+          "y": 400.08
+        },
+        {
+          "x": 941.88,
+          "y": 401.4
+        },
+        {
+          "x": 939.84,
+          "y": 401.76
+        },
+        {
+          "x": 937.92,
+          "y": 401.4
+        },
+        {
+          "x": 936.36,
+          "y": 400.08
+        },
+        {
+          "x": 935.52,
+          "y": 398.28
+        },
+        {
+          "x": 935.52,
+          "y": 396.36
+        },
+        {
+          "x": 936.36,
+          "y": 394.56
+        },
+        {
+          "x": 937.92,
+          "y": 393.24
+        },
+        {
+          "x": 937.92,
+          "y": 401.4
+        },
+        {
+          "x": 939.84,
+          "y": 401.76
+        },
+        {
+          "x": 941.88,
+          "y": 401.4
+        },
+        {
+          "x": 943.44,
+          "y": 400.08
+        },
+        {
+          "x": 944.28,
+          "y": 398.28
+        },
+        {
+          "x": 944.28,
+          "y": 396.36
+        },
+        {
+          "x": 943.44,
+          "y": 394.56
+        },
+        {
+          "x": 941.88,
+          "y": 393.24
+        },
+        {
+          "x": 939.84,
+          "y": 392.76
+        },
+        {
+          "x": 937.92,
+          "y": 393.24
+        },
+        {
+          "x": 936.36,
+          "y": 394.56
+        },
+        {
+          "x": 935.52,
+          "y": 396.36
+        },
+        {
+          "x": 935.52,
+          "y": 398.28
+        },
+        {
+          "x": 936.36,
+          "y": 402.11
+        }
+      ],
+      "source": "geometry",
+      "to_detection_id": "det:0007",
+      "total_length_ft": 13.86,
+      "vertical_allowance_ft": 6.0
+    },
+    {
+      "cable_type": "nm_14_2",
+      "confidence": 0.94,
+      "from_detection_id": "det:0059",
+      "id": "wire:0019",
+      "plan_length_ft": 2.92,
+      "points": [
+        {
+          "x": 890.17,
+          "y": 339.36
+        },
+        {
+          "x": 891.0,
+          "y": 340.8
+        },
+        {
+          "x": 884.88,
+          "y": 336.36
+        },
+        {
+          "x": 883.44,
+          "y": 336.84
+        },
+        {
+          "x": 884.88,
+          "y": 333.72
+        },
+        {
+          "x": 884.88,
+          "y": 347.28
+        },
+        {
+          "x": 884.04,
+          "y": 356.64
+        },
+        {
+          "x": 883.68,
+          "y": 360.0
+        },
+        {
+          "x": 883.08,
+          "y": 362.88
+        },
+        {
+          "x": 882.24,
+          "y": 365.16
+        },
+        {
+          "x": 879.48,
+          "y": 371.29
+        }
+      ],
+      "source": "geometry",
+      "to_detection_id": "det:0018",
+      "total_length_ft": 8.92,
+      "vertical_allowance_ft": 6.0
+    },
+    {
+      "cable_type": "nm_14_2",
+      "confidence": 0.95,
+      "from_detection_id": "det:0060",
+      "id": "wire:0020",
+      "plan_length_ft": 1.5,
+      "points": [
+        {
+          "x": 1030.2,
+          "y": 334.57
+        },
+        {
+          "x": 1029.72,
+          "y": 337.44
+        },
+        {
+          "x": 1027.08,
+          "y": 337.32
+        },
+        {
+          "x": 1040.64,
+          "y": 337.32
+        },
+        {
+          "x": 1048.57,
+          "y": 337.56
+        }
+      ],
+      "source": "geometry",
+      "to_detection_id": "det:0001",
+      "total_length_ft": 7.5,
+      "vertical_allowance_ft": 6.0
+    },
+    {
+      "cable_type": "nm_14_2",
+      "confidence": 0.77,
+      "from_detection_id": "det:0061",
+      "id": "wire:0021",
+      "plan_length_ft": 4.51,
+      "points": [
+        {
+          "x": 911.03,
+          "y": 277.21
+        },
+        {
+          "x": 912.84,
+          "y": 268.44
+        },
+        {
+          "x": 910.56,
+          "y": 268.32
+        },
+        {
+          "x": 908.28,
+          "y": 268.32
+        },
+        {
+          "x": 904.2,
+          "y": 278.64
+        },
+        {
+          "x": 897.48,
+          "y": 280.32
+        },
+        {
+          "x": 891.12,
+          "y": 282.48
+        },
+        {
+          "x": 886.68,
+          "y": 284.16
+        },
+        {
+          "x": 882.6,
+          "y": 283.92
+        },
+        {
+          "x": 873.6,
+          "y": 283.92
+        },
+        {
+          "x": 874.68,
+          "y": 288.36
+        },
+        {
+          "x": 872.4,
+          "y": 288.36
+        },
+        {
+          "x": 864.0,
+          "y": 282.6
+        },
+        {
+          "x": 872.05,
+          "y": 282.37
+        }
+      ],
+      "source": "geometry",
+      "to_detection_id": "det:0017",
+      "total_length_ft": 10.51,
+      "vertical_allowance_ft": 6.0
+    },
+    {
+      "cable_type": "nm_14_2",
+      "confidence": 0.58,
+      "from_detection_id": "det:0061",
+      "id": "wire:0022",
+      "plan_length_ft": 3.61,
+      "points": [
+        {
+          "x": 898.8,
+          "y": 277.21
+        },
+        {
+          "x": 897.24,
+          "y": 267.84
+        },
+        {
+          "x": 897.24,
+          "y": 257.04
+        },
+        {
+          "x": 910.92,
+          "y": 257.04
+        },
+        {
+          "x": 906.72,
+          "y": 249.96
+        },
+        {
+          "x": 907.8,
+          "y": 248.88
+        },
+        {
+          "x": 918.6,
+          "y": 249.96
+        },
+        {
+          "x": 911.51,
+          "y": 242.27
+        }
+      ],
+      "source": "geometry",
+      "to_detection_id": "det:0031",
+      "total_length_ft": 16.11,
+      "vertical_allowance_ft": 12.5
+    },
+    {
+      "cable_type": "nm_14_2",
+      "confidence": 0.94,
+      "from_detection_id": "det:0063",
+      "id": "wire:0023",
+      "plan_length_ft": 9.17,
+      "points": [
+        {
+          "x": 902.16,
+          "y": 347.75
+        },
+        {
+          "x": 902.64,
+          "y": 358.44
+        },
+        {
+          "x": 904.08,
+          "y": 359.88
+        },
+        {
+          "x": 906.12,
+          "y": 361.08
+        },
+        {
+          "x": 915.96,
+          "y": 363.6
+        },
+        {
+          "x": 920.16,
+          "y": 364.08
+        },
+        {
+          "x": 924.84,
+          "y": 364.44
+        },
+        {
+          "x": 926.64,
+          "y": 364.44
+        },
+        {
+          "x": 933.36,
+          "y": 364.8
+        },
+        {
+          "x": 934.92,
+          "y": 364.92
+        },
+        {
+          "x": 940.32,
+          "y": 365.04
+        },
+        {
+          "x": 945.84,
+          "y": 365.28
+        },
+        {
+          "x": 953.64,
+          "y": 365.64
+        },
+        {
+          "x": 956.76,
+          "y": 365.76
+        },
+        {
+          "x": 962.16,
+          "y": 366.12
+        },
+        {
+          "x": 967.08,
+          "y": 366.6
+        },
+        {
+          "x": 973.68,
+          "y": 367.44
+        },
+        {
+          "x": 976.92,
+          "y": 367.92
+        },
+        {
+          "x": 981.24,
+          "y": 368.88
+        },
+        {
+          "x": 985.08,
+          "y": 370.08
+        },
+        {
+          "x": 990.96,
+          "y": 375.96
+        },
+        {
+          "x": 999.96,
+          "y": 375.96
+        },
+        {
+          "x": 998.88,
+          "y": 380.4
+        },
+        {
+          "x": 1001.04,
+          "y": 380.4
+        },
+        {
+          "x": 999.84,
+          "y": 381.36
+        },
+        {
+          "x": 999.84,
+          "y": 379.44
+        },
+        {
+          "x": 999.0,
+          "y": 377.64
+        },
+        {
+          "x": 997.44,
+          "y": 376.32
+        },
+        {
+          "x": 994.8,
+          "y": 377.64
+        },
+        {
+          "x": 993.36,
+          "y": 375.36
+        },
+        {
+          "x": 992.04,
+          "y": 380.4
+        },
+        {
+          "x": 989.88,
+          "y": 380.4
+        },
+        {
+          "x": 986.76,
+          "y": 370.8
+        },
+        {
+          "x": 985.08,
+          "y": 370.08
+        },
+        {
+          "x": 981.24,
+          "y": 368.88
+        },
+        {
+          "x": 989.53,
+          "y": 374.05
+        }
+      ],
+      "source": "geometry",
+      "to_detection_id": "det:0021",
+      "total_length_ft": 15.17,
+      "vertical_allowance_ft": 6.0
+    },
+    {
+      "cable_type": "nm_14_3",
+      "confidence": 0.93,
+      "from_detection_id": "det:0062",
+      "id": "wire:0024",
+      "plan_length_ft": 2.7,
+      "points": [
+        {
+          "x": 752.51,
+          "y": 452.28
+        },
+        {
+          "x": 748.92,
+          "y": 452.76
+        },
+        {
+          "x": 745.8,
+          "y": 452.64
+        },
+        {
+          "x": 742.44,
+          "y": 451.92
+        },
+        {
+          "x": 738.72,
+          "y": 450.6
+        },
+        {
+          "x": 734.76,
+          "y": 448.56
+        },
+        {
+          "x": 732.12,
+          "y": 447.48
+        },
+        {
+          "x": 730.08,
+          "y": 447.48
+        },
+        {
+          "x": 728.28,
+          "y": 446.64
+        },
+        {
+          "x": 727.08,
+          "y": 445.08
+        },
+        {
+          "x": 726.6,
+          "y": 443.04
+        },
+        {
+          "x": 727.08,
+          "y": 441.12
+        },
+        {
+          "x": 728.28,
+          "y": 439.56
+        },
+        {
+          "x": 730.08,
+          "y": 438.72
+        },
+        {
+          "x": 730.09,
+          "y": 425.51
+        }
+      ],
+      "source": "geometry",
+      "to_detection_id": "det:0009",
+      "total_length_ft": 9.7,
+      "vertical_allowance_ft": 7.0
+    },
+    {
+      "cable_type": "nm_14_3",
+      "confidence": 0.95,
+      "from_detection_id": "det:0062",
+      "id": "wire:0025",
+      "plan_length_ft": 2.83,
+      "points": [
+        {
+          "x": 732.48,
+          "y": 411.25
+        },
+        {
+          "x": 732.96,
+          "y": 394.56
+        },
+        {
+          "x": 735.0,
+          "y": 387.24
+        },
+        {
+          "x": 736.44,
+          "y": 383.88
+        },
+        {
+          "x": 739.2,
+          "y": 379.2
+        },
+        {
+          "x": 741.96,
+          "y": 375.84
+        },
+        {
+          "x": 747.12,
+          "y": 371.04
+        },
+        {
+          "x": 752.17,
+          "y": 367.56
+        }
+      ],
+      "source": "geometry",
+      "to_detection_id": "det:0014",
+      "total_length_ft": 8.83,
+      "vertical_allowance_ft": 6.0
+    }
+  ]
+}
