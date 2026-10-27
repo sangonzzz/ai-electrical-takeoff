@@ -2,6 +2,11 @@
 
 Plain-language notes for Santiago. Newest first.
 
+## v0.5.1 — engine patch
+
+Patch bump so backend idempotency picks up the latest engine behavior after
+post-0.5.0 fixes (same minor line as round 6 / LLM rules / wires v2).
+
 ## v0.5.0 — round 6 engine + LLM rules + wires v2
 
 Approved engine bump after further precision work:
