@@ -4,10 +4,11 @@ Owner: **Agente 8**. Pure functions so the backend recomputes after any CRUD cha
 
 ## What it does
 
-1. **`find_wire_runs`** — chain dashed black strokes in the electrical viewport into device-to-device `WireRun` polylines, measure length in feet, assign cable type.
-2. **`compute_boxes`** — group nearby switches into multi-gang boxes; assign box kind and cover per device rules.
-3. **`compute_bom`** — aggregate devices, boxes, plates/covers, and cable (feet + rolls) into priced `Bom` lines with `source_ids`.
-4. **`load_price_list` / `load_assumptions`** — YAML loaders for `data/price_list.yaml` and `data/assumptions.yaml`.
+1. **`find_wire_runs`** — chain dashed black strokes in the electrical viewport into device-to-device `WireRun` polylines, measure length in feet, assign cable type. **Frozen** for edits — do not re-trace on CRUD.
+2. **`compute_boxes`** — group nearby switches into multi-gang boxes; assign box kind and cover per device rules. Always **derived** from current detections.
+3. **`compute_bom`** — aggregate devices, boxes, plates/covers, and cable (feet + rolls) into priced `Bom` lines with `source_ids`. Accepts edited runs/boxes unchanged in signature.
+4. **`bom_edit`** — pure helpers to recompute / reattach / create user runs after detection moves (see **Editing**).
+5. **`load_price_list` / `load_assumptions`** — YAML loaders for `data/price_list.yaml` and `data/assumptions.yaml`.
 
 ## Measured dash geometry (Plan 1, page 0)
 
@@ -81,12 +82,37 @@ Verified examples (2026-10-25): 14/2 250 ft roll $125; 14/3 250 ft $165; 1-gang 
 | `slack_ft_per_end` | 1 | Spec |
 | `waste_fraction` | 0.10 | Spec |
 
+## Editing
+
+CRUD must update boxes, cable totals, and price **without** calling `find_wire_runs` again (engine freeze / golden eval). Use `engine/takeoff_engine/bom_edit.py`:
+
+| Helper | Role |
+|--------|------|
+| `recompute_run` | Measure polyline → `plan_length_ft`; vertical + total from assumptions; cable type from rule unless manual override |
+| `reattach_runs` | After a detection move: snap matching run tips to the new center (keep interior points); return **only** changed runs |
+| `make_user_run` | New `source="user"` run; straight centers→centers when `points is None` |
+
+**Propagation (assessment extra):**
+
+1. User moves a switch (or changes a run polyline / cable type).
+2. Backend updates the detection (or run) in sheet state.
+3. `reattach_runs(...)` (if a device moved) then merge returned runs; or `recompute_run` after a polyline/type edit; or `make_user_run` for a new hop.
+4. `boxes = compute_boxes(detections, sheet_id)` — gangs re-group by distance (move away from a 2-gang → two 1G; move next to a peer → 2G).
+5. `bom = compute_bom(sheet_id, detections, wire_runs, boxes, prices, assumptions)` — feet move between `nm_14_2_*` / `nm_14_3_*` lines and `total_usd` updates.
+
+**Cable type rule (estimator):** any run with `three_way` / `three_way_dimmer` (or codes `3` / `3D`) at **either** end → `nm_14_3`; else `nm_14_2`.
+
+**Manual override:** if `run.source == "user"`, `recompute_run` **keeps** `cable_type` (reviewer lock). `make_user_run(..., cable_type=...)` sets that lock; omit `cable_type` to infer once at creation.
+
 ## Public API (for backend / frontend)
 
 ```python
 find_wire_runs(ctx, viewport, detections, scale_pt_per_ft, assumptions) -> list[WireRun]
 compute_boxes(detections, sheet_id) -> list[Box]
 compute_bom(sheet_id, detections, wire_runs, boxes, prices, assumptions) -> Bom
+recompute_run(run, detections_by_id, scale_pt_per_ft, assumptions) -> WireRun
+reattach_runs(runs, detections_by_id, moved_detection_id, scale_pt_per_ft, assumptions) -> list[WireRun]
+make_user_run(sheet_id, from_detection, to_detection, points | None, scale_pt_per_ft, assumptions, cable_type | None) -> WireRun
 load_price_list(path=None) -> dict[str, dict]   # keyed by item_key
 load_assumptions(path=None) -> dict
 ```
