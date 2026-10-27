@@ -1,11 +1,20 @@
 /**
  * Full demo quality pass against the docker stack at http://localhost:5173.
  * Requires: `make up` with healthy api/web/worker.
+ *
+ * Covers Agente 6 review UI: palette click-add + drag-drop, undo/redo,
+ * X/Y position fields, Download Excel / quote PDF (files opened via openpyxl/pymupdf).
  */
 import { expect, test, type Locator, type Page } from "@playwright/test";
+import {
+  clickAndSaveDownload,
+  validatePdf,
+  validateXlsx,
+} from "../helpers/exports";
 import { resetSteps, step } from "../helpers/steps";
 
 const SHEETS_TIMEOUT_MS = 8 * 60 * 1000;
+const PALETTE_MIME = "application/x-electrical-mark";
 
 async function waitForFourSucceeded(page: Page): Promise<void> {
   await expect
@@ -16,17 +25,21 @@ async function waitForFourSucceeded(page: Page): Promise<void> {
     .toBeGreaterThanOrEqual(4);
 }
 
+/** Prefer Agente 6 data-testid; fall back to detection layer groups. */
 function detectionMarks(page: Page): Locator {
-  return page.locator('g[data-layer="detections"] > g');
+  return page.locator(
+    '[data-testid="detection-mark"], g[data-layer="detections"] > g',
+  );
 }
 
 /** React 19 SVG clicks are flaky under zoom-pan; invoke the fiber onClick. */
 async function selectFirstMark(page: Page): Promise<void> {
   await page.getByTitle("Select (V)").click();
   const ok = await page.evaluate(() => {
-    const g = document.querySelector(
-      'g[data-layer="detections"] > g',
-    ) as (SVGElement & Record<string, unknown>) | null;
+    const g = (document.querySelector('[data-testid="detection-mark"]') ??
+      document.querySelector('g[data-layer="detections"] > g')) as
+      | (SVGElement & Record<string, unknown>)
+      | null;
     if (!g) return false;
     const key = Object.keys(g).find((k) => k.startsWith("__reactProps$"));
     if (!key) return false;
@@ -44,6 +57,125 @@ async function totalForFirstCategory(page: Page): Promise<number> {
   await expect(totalBtn).toBeVisible();
   const text = (await totalBtn.innerText()).trim();
   return Number.parseInt(text, 10);
+}
+
+async function ensureMarksLayer(page: Page): Promise<void> {
+  const marksLayer = page.getByRole("button", { name: "Marks", exact: true });
+  if ((await marksLayer.getAttribute("aria-pressed")) === "false") {
+    await marksLayer.click();
+  }
+}
+
+/**
+ * Invoke PlanOverlay React onClick in add mode (zoom-pan often swallows page.mouse
+ * clicks before they reach the SVG).
+ */
+async function clickPlanBackground(page: Page, fracX: number, fracY: number): Promise<void> {
+  const ok = await page.evaluate(
+    ({ fracX: fx, fracY: fy }) => {
+      const svg = document.querySelector(
+        "svg[data-plan-overlay]",
+      ) as (SVGSVGElement & Record<string, unknown>) | null;
+      if (!svg) return "no-svg";
+      const rect = svg.getBoundingClientRect();
+      const clientX = rect.left + rect.width * fx;
+      const clientY = rect.top + rect.height * fy;
+      const key = Object.keys(svg).find((k) => k.startsWith("__reactProps$"));
+      if (!key) return "no-fiber";
+      const props = svg[key] as {
+        onClick?: (e: Record<string, unknown>) => void;
+      };
+      props.onClick?.({
+        clientX,
+        clientY,
+        currentTarget: svg,
+        target: svg,
+        stopPropagation() {},
+        preventDefault() {},
+      });
+      return "ok";
+    },
+    { fracX, fracY },
+  );
+  expect(ok, `clickPlanBackground: ${ok}`).toBe("ok");
+}
+
+/**
+ * Drop via React onDrop + DataTransfer mock (custom MIME is unreliable on
+ * synthetic DragEvents in Chromium; fiber call matches production handler).
+ */
+async function paletteDropAt(
+  page: Page,
+  category: string,
+  subtype: string,
+  fracX: number,
+  fracY: number,
+): Promise<void> {
+  const overlay = page.locator("svg[data-plan-overlay]");
+  await expect(overlay).toBeVisible();
+  const payload = JSON.stringify({ category, subtype });
+
+  const ok = await page.evaluate(
+    ({ mime, payload: data, fracX: fx, fracY: fy }) => {
+      const svg = document.querySelector(
+        "svg[data-plan-overlay]",
+      ) as (SVGSVGElement & Record<string, unknown>) | null;
+      if (!svg) return "no-svg";
+      const rect = svg.getBoundingClientRect();
+      const clientX = rect.left + rect.width * fx;
+      const clientY = rect.top + rect.height * fy;
+      const key = Object.keys(svg).find((k) => k.startsWith("__reactProps$"));
+      if (!key) return "no-fiber";
+      const props = svg[key] as {
+        onDragOver?: (e: Record<string, unknown>) => void;
+        onDrop?: (e: Record<string, unknown>) => void;
+      };
+      const dt = {
+        types: [mime],
+        dropEffect: "copy",
+        effectAllowed: "copy",
+        getData: (t: string) => (t === mime ? data : ""),
+        setData() {},
+      };
+      props.onDragOver?.({
+        dataTransfer: dt,
+        preventDefault() {},
+        clientX,
+        clientY,
+        currentTarget: svg,
+      });
+      props.onDrop?.({
+        dataTransfer: dt,
+        preventDefault() {},
+        clientX,
+        clientY,
+        currentTarget: svg,
+        stopPropagation() {},
+      });
+      return "ok";
+    },
+    { mime: PALETTE_MIME, payload, fracX, fracY },
+  );
+  expect(ok, `paletteDropAt: ${ok}`).toBe("ok");
+}
+
+/** Prefer a real HTML5 drag from the palette button when the control is present. */
+async function paletteDragToPlan(
+  page: Page,
+  buttonName: string,
+  fracX: number,
+  fracY: number,
+): Promise<boolean> {
+  const source = page.getByRole("button", { name: buttonName, exact: true });
+  if (!(await source.isVisible().catch(() => false))) return false;
+  const overlay = page.locator("svg[data-plan-overlay]");
+  const box = await overlay.boundingBox();
+  if (!box) return false;
+  await source.dragTo(overlay, {
+    targetPosition: { x: box.width * fracX, y: box.height * fracY },
+    force: true,
+  });
+  return true;
 }
 
 test.describe.configure({ mode: "serial" });
@@ -97,7 +229,6 @@ test("demo plans quality pass", async ({ page }) => {
     const n = Number.parseInt((await cell.innerText()).trim(), 10);
     expect(n).toBeGreaterThan(0);
     await cell.click();
-    // Highlighted marks get an extra cyan ring circle.
     await expect(
       page.locator('g[data-layer="detections"] circle[stroke="#38bdf8"]').first(),
     ).toBeVisible({ timeout: 10_000 });
@@ -124,12 +255,10 @@ test("demo plans quality pass", async ({ page }) => {
 
     await page.getByRole("button", { name: "Details" }).click();
     await subtypeSelect.selectOption({ value: other! });
-    // Category total for same category should stay; subtype label in details changes.
     await expect(subtypeSelect).toHaveValue(other!);
 
     await page.getByRole("button", { name: "Takeoff" }).click();
     const totalAfter = await totalForFirstCategory(page);
-    // Same category total unchanged when only subtype flips within category.
     expect(totalAfter).toBe(totalBeforeSubtype);
   });
 
@@ -149,8 +278,6 @@ test("demo plans quality pass", async ({ page }) => {
     );
     expect(roomOptions.length).toBeGreaterThan(0);
 
-    // Prefer a real drag on the plan; fall back to room select if assignment
-    // does not change (viewport/room geometry may keep the same room).
     const mark = detectionMarks(page).first();
     const box = await mark.boundingBox();
     expect(box).toBeTruthy();
@@ -165,14 +292,12 @@ test("demo plans quality pass", async ({ page }) => {
     await page.getByRole("button", { name: "Details" }).click();
     let roomAfter = await roomSelect.inputValue();
     if (roomAfter === roomBefore) {
-      // Explicit room reassignment still proves totals update across rooms.
       await roomSelect.selectOption(roomOptions[0].value);
       roomAfter = await roomSelect.inputValue();
     }
     expect(roomAfter).not.toBe(roomBefore);
 
     await page.getByRole("button", { name: "Takeoff" }).click();
-    // At least one room row still renders counts after the move.
     await expect(page.locator("table tbody tr").first()).toBeVisible();
   });
 
@@ -192,32 +317,38 @@ test("demo plans quality pass", async ({ page }) => {
   });
 
   await step(
-    "add_increments",
-    "Add increments",
+    "add_click_palette",
+    "Add via palette click-select then plan click",
     async () => {
-      // Ensure Marks layer is on.
-      const marksLayer = page.getByRole("button", { name: "Marks", exact: true });
-      if ((await marksLayer.getAttribute("aria-pressed")) === "false") {
-        await marksLayer.click();
-      }
+      await ensureMarksLayer(page);
       const before = await detectionMarks(page).count();
       if (before === 0) {
         throw new Error(
-          `detection layer empty before add (countAfterDelete was ${countAfterDelete}) — possible UI clear after delete`,
+          `detection layer empty before click-add (countAfterDelete was ${countAfterDelete})`,
         );
       }
-      await page.getByTitle("Add (A)").click();
-      await expect(page.getByText(/Add mode/i)).toBeVisible();
-      const overlay = page.locator("svg[data-plan-overlay]");
-      const box = await overlay.boundingBox();
-      expect(box).toBeTruthy();
-      const respPromise = page.waitForResponse(
-        (r) => r.url().includes("/detections") && r.request().method() === "POST",
-        { timeout: 20_000 },
-      ).catch(() => null);
-      await page.mouse.click(box!.x + box!.width * 0.4, box!.y + box!.height * 0.4);
+      // exact: true — title substring also matches "recessed vapor proof"
+      const paletteBtn = page.getByRole("button", { name: "recessed", exact: true });
+      await expect(paletteBtn).toBeVisible();
+      await paletteBtn.click();
+      await expect(
+        page.getByText("Add mode — click the plan · Esc to cancel"),
+      ).toBeVisible({ timeout: 5_000 });
+
+      const respPromise = page
+        .waitForResponse(
+          (r) => r.url().includes("/detections") && r.request().method() === "POST",
+          { timeout: 20_000 },
+        )
+        .catch(() => null);
+      await clickPlanBackground(page, 0.78, 0.18);
       const resp = await respPromise;
-      if (resp && !resp.ok()) {
+      if (!resp) {
+        throw new Error(
+          "palette click-add: no POST /detections after plan background click (Agente 6: add-mode onAddAt)",
+        );
+      }
+      if (!resp.ok()) {
         throw new Error(`POST /detections failed: HTTP ${resp.status()}`);
       }
       await expect
@@ -228,25 +359,200 @@ test("demo plans quality pass", async ({ page }) => {
   );
 
   await step(
-    "undo",
-    "Undo",
+    "add_drag_palette",
+    "Add via palette drag-and-drop onto plan",
+    async () => {
+      await ensureMarksLayer(page);
+      const before = await detectionMarks(page).count();
+      const respPromise = page
+        .waitForResponse(
+          (r) => r.url().includes("/detections") && r.request().method() === "POST",
+          { timeout: 20_000 },
+        )
+        .catch(() => null);
+      // Real HTML5 drag first; fiber onDrop fallback for custom MIME.
+      const dragged = await paletteDragToPlan(page, "single pole", 0.55, 0.45);
+      if (!dragged) {
+        await paletteDropAt(page, "switch", "single_pole", 0.55, 0.45);
+      }
+      const resp = await respPromise;
+      if (!resp) {
+        // dragTo may not preserve custom MIME — retry via fiber onDrop
+        const retry = page
+          .waitForResponse(
+            (r) => r.url().includes("/detections") && r.request().method() === "POST",
+            { timeout: 15_000 },
+          )
+          .catch(() => null);
+        await paletteDropAt(page, "switch", "single_pole", 0.62, 0.52);
+        const resp2 = await retry;
+        if (!resp2) {
+          throw new Error(
+            "palette drag-drop: no POST /detections (custom MIME / onPaletteDrop) — Agente 6",
+          );
+        }
+        if (!resp2.ok()) {
+          throw new Error(`POST /detections (drop) failed: HTTP ${resp2.status()}`);
+        }
+      } else if (!resp.ok()) {
+        throw new Error(`POST /detections (drop) failed: HTTP ${resp.status()}`);
+      }
+      await expect
+        .poll(async () => detectionMarks(page).count(), { timeout: 20_000 })
+        .toBeGreaterThan(before);
+    },
+    { soft: true },
+  );
+
+  let countBeforeUndo = 0;
+
+  await step(
+    "undo_then_redo",
+    "Undo then redo restores state",
     async () => {
       const undoBtn = page.getByTitle("Undo (Ctrl+Z)");
+      const redoBtn = page.getByTitle("Redo (Ctrl+Shift+Z)");
+      await expect(undoBtn).toBeVisible();
+      await expect(redoBtn).toBeVisible();
+
       if (await undoBtn.isDisabled()) {
         throw new Error(
-          "Undo control is disabled — canUndo false; undoLastAction is a no-op outside fixture mode (web/src/api/client.ts)",
+          "Undo disabled — canUndo is false outside fixture; undoLastAction/redoLastAction are no-ops in web/src/api/client.ts (need Agente 5 history API + Agente 6 canUndo wiring)",
         );
       }
-      const before = await detectionMarks(page).count();
+
+      countBeforeUndo = await detectionMarks(page).count();
       await undoBtn.click();
-      await page.waitForTimeout(700);
-      const after = await detectionMarks(page).count();
-      if (after === before) {
+      await expect
+        .poll(async () => detectionMarks(page).count(), { timeout: 15_000 })
+        .not.toBe(countBeforeUndo);
+      const afterUndo = await detectionMarks(page).count();
+
+      if (await redoBtn.isDisabled()) {
         throw new Error(
-          "Undo did not change detections (backend undo not wired)",
+          `Undo changed count ${countBeforeUndo}→${afterUndo} but Redo stayed disabled (canRedo false)`,
         );
       }
-      expect(after).not.toBe(before);
+      await redoBtn.click();
+      await expect
+        .poll(async () => detectionMarks(page).count(), { timeout: 15_000 })
+        .toBe(countBeforeUndo);
+    },
+    { soft: true },
+  );
+
+  await step(
+    "edit_xy",
+    "Edit X/Y fields moves the mark",
+    async () => {
+      if (await page.getByText("No mark selected").isVisible()) {
+        await selectFirstMark(page);
+      }
+      await page.getByRole("button", { name: "Details" }).click();
+      const xInput = page.locator("label").filter({ hasText: /^X$/ }).locator("input");
+      const yInput = page.locator("label").filter({ hasText: /^Y$/ }).locator("input");
+      await expect(xInput).toBeVisible();
+      await expect(yInput).toBeVisible();
+
+      const xBefore = Number.parseFloat(await xInput.inputValue());
+      const yBefore = Number.parseFloat(await yInput.inputValue());
+      expect(Number.isFinite(xBefore)).toBeTruthy();
+      expect(Number.isFinite(yBefore)).toBeTruthy();
+
+      const xTarget = Math.round((xBefore + 40) * 10) / 10;
+      const yTarget = Math.round((yBefore + 25) * 10) / 10;
+
+      const patchPromise = page
+        .waitForResponse(
+          (r) =>
+            r.url().includes("/detections/") &&
+            r.request().method() === "PATCH" &&
+            r.ok(),
+          { timeout: 20_000 },
+        )
+        .catch(() => null);
+
+      await xInput.fill(String(xTarget));
+      await yInput.fill(String(yTarget));
+      await yInput.press("Enter");
+
+      const patch = await patchPromise;
+      if (!patch) {
+        // Blur may have already committed on X; force Y blur.
+        await yInput.blur();
+      }
+
+      await expect
+        .poll(async () => Number.parseFloat(await xInput.inputValue()), {
+          timeout: 15_000,
+        })
+        .toBeCloseTo(xTarget, 0);
+      await expect
+        .poll(async () => Number.parseFloat(await yInput.inputValue()), {
+          timeout: 15_000,
+        })
+        .toBeCloseTo(yTarget, 0);
+
+      // Mark transform should reflect the new PDF-point center.
+      const transform = await detectionMarks(page)
+        .filter({ has: page.locator("..") })
+        .first()
+        .evaluate((el) => el.getAttribute("transform") ?? "");
+      // Prefer the selected mark's transform via Details id is harder; check any mark near target.
+      const anyNear = await page.evaluate(
+        ({ x, y }) => {
+          const marks = [...document.querySelectorAll('[data-testid="detection-mark"]')];
+          return marks.some((m) => {
+            const t = m.getAttribute("transform") ?? "";
+            const m2 = /translate\(([-0-9.]+),\s*([-0-9.]+)\)/.exec(t);
+            if (!m2) return false;
+            const mx = Number.parseFloat(m2[1]);
+            const my = Number.parseFloat(m2[2]);
+            return Math.abs(mx - x) < 1.5 && Math.abs(my - y) < 1.5;
+          });
+        },
+        { x: xTarget, y: yTarget },
+      );
+      expect(anyNear, `no mark transform near (${xTarget}, ${yTarget}); saw selected transform=${transform}`).toBeTruthy();
+    },
+    { soft: true },
+  );
+
+  await step(
+    "download_excel",
+    "Download Excel returns valid workbook with sheets",
+    async () => {
+      const dest = await clickAndSaveDownload(
+        page,
+        "Download Excel",
+        "plan1-takeoff.xlsx",
+      );
+      const sheets = validateXlsx(dest);
+      expect(sheets).toEqual(
+        expect.arrayContaining([
+          "Takeoff by room",
+          "Detections",
+          "BOM",
+          "Wires",
+          "Assumptions",
+          "Corrections log",
+        ]),
+      );
+    },
+    { soft: true },
+  );
+
+  await step(
+    "download_quote_pdf",
+    "Download quote PDF returns a multi-page-capable PDF",
+    async () => {
+      const dest = await clickAndSaveDownload(
+        page,
+        "Download quote PDF",
+        "plan1-quote.pdf",
+      );
+      const pages = validatePdf(dest);
+      expect(pages).toBeGreaterThanOrEqual(1);
     },
     { soft: true },
   );

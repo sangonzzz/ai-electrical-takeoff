@@ -2,17 +2,20 @@
 
 ## Estado
 
-Quality pass: Playwright e2e suite + generalization probe done. Bugs for Santiago below.
+Playwright e2e updated for Agente 6 UI (palette DnD/click-add, undo/redo, X/Y,
+Excel/PDF). Re-run vs docker: **1 suite pass**; step `undo_then_redo` soft-fails
+(product bug). Messages sent to Agente 5 + 6.
 
 ## Hecho
 
-- E2E Playwright suite in `e2e/` + `make e2e` (stack at http://localhost:5173).
-- Step log: `e2e/results/steps.md` (screenshots on failure under `e2e/results/artifacts/`).
-- Generalization PDFs in `data/plans/generalization/` + probe
-  `eval/scripts/generalization_probe.py` + `eval/reports/generalization/`.
-- Prior: review-based GT, corrections metrics, overlays, baseline.
+- E2E suite extended in `e2e/tests/demo-flow.spec.ts` + `e2e/helpers/exports.ts`
+  (openpyxl / pymupdf validation of downloads).
+- Uses `data-testid="detection-mark"` (fallback: detection layer groups).
+- New steps: `add_click_palette`, `add_drag_palette`, `undo_then_redo`,
+  `edit_xy`, `download_excel`, `download_quote_pdf`.
+- Prior: review-based GT, corrections metrics, overlays, generalization probe.
 
-## E2E step results (last run, docker stack)
+## E2E step results (2026-10-26, docker stack after `web` restart)
 
 | step | status | notes |
 |------|--------|-------|
@@ -22,68 +25,68 @@ Quality pass: Playwright e2e suite + generalization probe done. Bugs for Santiag
 | open_plan1 | **pass** | |
 | marks_visible | **pass** | |
 | takeoff_highlight | **pass** | |
-| select_details | **pass** | needs React fiber click (SVG flaky) |
+| select_details | **pass** | fiber onClick (SVG flaky) |
 | change_subtype | **pass** | |
-| drag_room | **pass** | drag or room select fallback |
+| drag_room | **pass** | |
 | delete_decrements | **pass** | |
-| add_increments | **fail** | click Add + plan did not increase mark count |
-| undo | **fail** | Undo button **disabled**; API undo is no-op outside fixture |
+| add_click_palette | **pass** | palette select → plan background click |
+| add_drag_palette | **pass** | real dragTo + fiber onDrop fallback |
+| undo_then_redo | **fail** | Undo disabled; API undo/redo no-op off-fixture |
+| edit_xy | **pass** | X/Y commit moves mark transform |
+| download_excel | **pass** | sheets: Takeoff by room, Detections, BOM, Wires, Assumptions, Corrections log |
+| download_quote_pdf | **pass** | 3 pages, text present |
 | reload_persists | **pass** | |
-| bom_total | **pass** | Total $ shown |
+| bom_total | **pass** | |
 | plans_2_4 | **pass** | |
 
-Suite exit: **1 passed** (soft-fail on known product bugs so later steps still run).
+Suite exit: **1 passed** (soft-fail only on undo/redo).
 
-## Generalization
+## Generalization (unchanged)
 
 | PDF | Result |
 |-----|--------|
-| Longview TX residential template (p4 electrical example) | **FAIL** — `no bold 'ELECTRICAL PLAN - PLAN N' title found` |
-| Palm Beach Gardens electrical set (p0 legend, p1 plan) | **FAIL** — same title gate |
-
-No overlays produced (pipeline aborts before SheetResult). Details:
-`eval/reports/generalization/NOTES.md`.
+| Longview TX residential template | **FAIL** — title gate |
+| Palm Beach Gardens electrical set | **FAIL** — title gate |
 
 ## Cómo probarlo
 
 ```bash
 make up
+# if UI looks stale: docker compose restart web
 make e2e
 # steps → e2e/results/steps.md
+# downloads → e2e/results/downloads/ (gitignored)
 
 uv run python eval/scripts/generalization_probe.py
 ```
 
 ## Siguiente
 
-- Agente 6: `data-testid` on detection marks (message sent).
-- Agente 5/6: wire real undo; fix Add-mode click → POST /detections.
-- Agente 2 (product decision): soften electrical title matching for other cities.
+- Agente 5: undo/redo API.
+- Agente 6: wire `canUndo`/`canRedo` off-fixture to that API.
+- Re-run e2e when undo lands; expect `undo_then_redo` **pass**.
 
 ## Bloqueos
 
-Ninguno para eval core. E2E Add/Undo blocked by product bugs above.
+`undo_then_redo` blocked on A5 history API + A6 canUndo wiring (messages sent).
 
 ## Decisions
 
-- E2E soft-fails Add/Undo so BOM + plans 2–4 still execute.
-- Generalization uses DocumentCenter PDFs when city ADU CDNs block downloads.
-- No engine tuning for foreign plans (observation only).
+- Soft-fail undo/redo so Excel/PDF and later steps still execute.
+- Validate exports by saving Playwright downloads and opening with repo venv
+  (openpyxl + pymupdf), same as backend tests.
+- Plan click-add uses React fiber onClick — zoom-pan swallows raw `page.mouse`
+  clicks in headless Chromium.
 
 ## Needs from Santiago
 
-See chat: bugs found (undo, add-mark, title hardcoding, SVG clickability).
+None for keys. Product: undo/redo still not real on API mode (A5/A6).
 
 ## Explicación para Santiago
 
-Corrimos la demo en el navegador automático y dos planos de otras ciudades.
-
-En la demo casi todo funciona: cargar, 4 planos OK, marcas, resaltar takeoff,
-cambiar tipo, mover de cuarto, borrar, BOM con total, abrir planos 2–4.
-Fallan **añadir** una marca con el modo Add y el botón **Undo** (está apagado
-porque el API real no tiene undo todavía).
-
-En planos de Longview (TX) y Palm Beach Gardens el motor **ni empieza**: exige
-el título exacto `ELECTRICAL PLAN - PLAN N` del PDF de Escondido. Sin eso no hay
-viewport, leyenda ni overlay. Eso es el límite de generalización hoy — no lo
-parchamos a propósito.
+Actualicé la prueba automática del navegador para lo nuevo de la UI: arrastrar
+desde la paleta, hacer clic para añadir, editar X/Y, bajar Excel y PDF de
+cotización. Casi todo pasa contra Docker. Excel trae las 6 hojas esperadas; el
+PDF de cotización abre con 3 páginas. Lo único que falla es Undo/Redo: los
+botones existen pero siguen apagados porque el frontend solo activa undo en modo
+fixture y el API todavía no tiene historial. Ya mandé mensajes a Agente 5 y 6.

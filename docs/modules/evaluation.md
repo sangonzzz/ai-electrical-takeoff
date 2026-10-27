@@ -152,6 +152,11 @@ uv run python -m eval.regression
 
 - Playwright suite: `e2e/` — `make e2e` against `http://localhost:5173` (docker stack).
   Per-step results: `e2e/results/steps.md`. Screenshots on failure.
+- Review UI coverage (Agente 6): palette click-add + drag-drop, undo/redo (soft-fail
+  until history API), Details X/Y edit, Download Excel / quote PDF. Exports are
+  saved under `e2e/results/downloads/` and opened with openpyxl (expected sheets:
+  Takeoff by room, Detections, BOM, Wires, Assumptions, Corrections log) and
+  pymupdf (page count + text).
 - Generalization probe (no engine tuning): `eval/scripts/generalization_probe.py` on
   PDFs under `data/plans/generalization/` → `eval/reports/generalization/`.
 
