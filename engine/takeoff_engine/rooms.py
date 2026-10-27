@@ -1,16 +1,20 @@
 """Room polygon detection and detection assignment (owned by Agente 3).
 
-Algorithm (SPEC section 6):
+Algorithm (SPEC section 6 + unlabeled):
 1. Collect bold ~9.5–9.6 pt labels inside the viewport (lexicon-filtered), plus
    regular-font ``IN ATTIC``.
 2. Rasterize gray wall poché + long black wall strokes; close door gaps.
 3. Flood-fill from each label; split multi-label (open-plan) regions by nearest
-   label; fill furniture holes; attic box overrides; outside footprint = Exterior.
-4. ``assign_room`` / ``assign_rooms`` for point-in-polygon with wall-device rules.
+   label; fill furniture holes; attic box overrides.
+4. Enclosed free regions inside the building with no room label become rooms:
+   ``Mech. Closet (B14)`` if a keynote tag is in/near the region, else
+   ``Unlabeled space N``. Exterior is only outside the building footprint.
+5. ``assign_room`` / ``assign_rooms`` for point-in-polygon with wall-device rules.
 """
 
 from __future__ import annotations
 
+import re
 import uuid
 from collections import defaultdict
 from collections.abc import Iterable
@@ -53,6 +57,15 @@ _AMBIGUOUS_GAP_PT = 4.0
 
 # Contour simplification epsilon in PDF points.
 _POLY_SIMPLIFY_PT = 1.5
+
+# Min area (PDF pt²) for an unlabeled enclosed pocket to become its own room.
+_UNLABELED_MIN_AREA_PT2 = 250.0
+
+# Keynote tags sit in small boxes on/near walls; associate within this radius (pt).
+_KEYNOTE_ASSOC_PT = 14.0
+
+# Keynote pattern: A01, B14, F03, … (SPEC §1). Not electrical device codes.
+_KEYNOTE_RE = re.compile(r"^[A-Z]\d{2}$")
 
 # Lexicon tokens allowed in a room label (SPEC §6). Numbers and "/" are also OK.
 _ROOM_LEXICON: frozenset[str] = frozenset(
@@ -618,8 +631,9 @@ def _flood_region(barrier: np.ndarray, seed: tuple[int, int]) -> np.ndarray | No
     if not (0 <= ix < w and 0 <= iy < h):
         return None
     if barrier[iy, ix] != 0:
+        # Labels can sit on poche / furniture; search farther before giving up.
         found = None
-        for r in range(1, 20):
+        for r in range(1, 45):
             for dy in range(-r, r + 1):
                 for dx in range(-r, r + 1):
                     x, y = ix + dx, iy + dy
@@ -825,6 +839,97 @@ def _shapely_poly(points: list[Point]) -> ShapelyPolygon | None:
     return poly
 
 
+def _keynotes_in_viewport(ctx: PageContext, viewport: BBox) -> list[tuple[str, float, float]]:
+    """Keynote tags (B14, A01, …) whose centers lie in the electrical viewport."""
+    out: list[tuple[str, float, float]] = []
+    for w in ctx.words:
+        tag = w.text.strip().upper()
+        if not _KEYNOTE_RE.match(tag):
+            continue
+        # Device codes are ~6.5 pt; keynotes in boxes are ~9.5 pt. Accept a band.
+        if w.size < 7.0 or w.size > 12.0:
+            continue
+        cx = 0.5 * (w.bbox[0] + w.bbox[2])
+        cy = 0.5 * (w.bbox[1] + w.bbox[3])
+        if _in_bbox(cx, cy, viewport):
+            out.append((tag, cx, cy))
+    return out
+
+
+def _unclaimed_components(
+    barrier: np.ndarray,
+    claimed: np.ndarray,
+    origin: tuple[float, float],
+) -> list[tuple[np.ndarray, float, float, float]]:
+    """Connected free components not claimed by any labeled room.
+
+    Returns list of ``(mask, area_pt2, cx_pt, cy_pt)`` sorted top-to-bottom,
+    left-to-right by centroid.
+    """
+    free = (barrier == 0) & (claimed == 0)
+    h, w = barrier.shape
+    visited = np.zeros((h, w), dtype=np.uint8)
+    comps: list[tuple[np.ndarray, float, float, float]] = []
+    ys, xs = np.where(free)
+    min_px = max(50, int(_UNLABELED_MIN_AREA_PT2 * _PX_PER_PT * _PX_PER_PT))
+    for y, x in zip(ys.tolist(), xs.tolist(), strict=False):
+        if visited[y, x]:
+            continue
+        seed_barrier = barrier.copy()
+        seed_barrier[~free] = 255
+        if seed_barrier[y, x] != 0:
+            continue
+        ff_mask = np.zeros((h + 2, w + 2), dtype=np.uint8)
+        fill_img = seed_barrier
+        cv2.floodFill(fill_img, ff_mask, (int(x), int(y)), 64)
+        reg = (fill_img == 64).astype(np.uint8)
+        visited[reg > 0] = 1
+        area_px = int(reg.sum())
+        if area_px < min_px:
+            continue
+        ry, rx = np.where(reg > 0)
+        cx = origin[0] + float(rx.mean()) / _PX_PER_PT
+        cy = origin[1] + float(ry.mean()) / _PX_PER_PT
+        area_pt2 = area_px / (_PX_PER_PT * _PX_PER_PT)
+        comps.append((reg, area_pt2, cx, cy))
+    comps.sort(key=lambda t: (t[3], t[2]))
+    return comps
+
+
+def _keynote_for_region(
+    reg: np.ndarray,
+    origin: tuple[float, float],
+    keynotes: list[tuple[str, float, float]],
+) -> str | None:
+    """Return a keynote tag inside or near ``reg`` (tags often sit on the wall)."""
+    h, w = reg.shape
+    r_px = max(1, int(round(_KEYNOTE_ASSOC_PT * _PX_PER_PT)))
+    # Prefer a tag whose center lands in the region; else nearest within radius.
+    best: tuple[float, str] | None = None
+    for tag, cx, cy in keynotes:
+        ix, iy = _pt_to_px(cx, cy, origin)
+        if 0 <= ix < w and 0 <= iy < h and reg[iy, ix] > 0:
+            return tag
+        # Distance to nearest region pixel (approx via local search).
+        if not (0 <= ix < w and 0 <= iy < h):
+            continue
+        found = False
+        min_d2 = float("inf")
+        for dy in range(-r_px, r_px + 1):
+            for dx in range(-r_px, r_px + 1):
+                x, y = ix + dx, iy + dy
+                if 0 <= x < w and 0 <= y < h and reg[y, x] > 0:
+                    d2 = dx * dx + dy * dy
+                    if d2 < min_d2:
+                        min_d2 = d2
+                        found = True
+        if found and min_d2 <= r_px * r_px:
+            dist = (min_d2**0.5) / _PX_PER_PT
+            if best is None or dist < best[0]:
+                best = (dist, tag)
+    return best[1] if best else None
+
+
 def detect_rooms(ctx: PageContext, viewport: BBox, sheet_id: str) -> list[Room]:
     """Build room polygons from labels + wall mask inside the viewport."""
     labels = extract_room_labels(ctx, viewport)
@@ -884,6 +989,76 @@ def detect_rooms(ctx: PageContext, viewport: BBox, sheet_id: str) -> list[Room]:
             for i, part in parts.items():
                 room_masks[i] = _fill_holes(part)
 
+    # Claim leftover enclosed free pockets inside the building.
+    claimed = np.zeros_like(mask)
+    for m in room_masks.values():
+        claimed = np.maximum(claimed, m)
+    keynotes = _keynotes_in_viewport(ctx, viewport)
+    used_keynotes: set[str] = set()
+    unlabeled_rooms: list[tuple[str, str, list[Point], Point]] = []
+    unlabeled_n = 0
+
+    # Labels whose flood failed: adopt the nearest unclaimed pocket.
+    orphan_idxs = [i for i in interior_idxs if i not in room_masks]
+    comps = _unclaimed_components(barrier, claimed, origin)
+    adopted: set[int] = set()  # component indices given to orphan labels
+    for i in orphan_idxs:
+        lb = labels[i]
+        ix, iy = seeds_px[i]
+        best_j: int | None = None
+        best_d = float("inf")
+        for j, (reg, _area, cx, cy) in enumerate(comps):
+            if j in adopted:
+                continue
+            h, w = reg.shape
+            if 0 <= ix < w and 0 <= iy < h and reg[iy, ix] > 0:
+                best_j = j
+                best_d = 0.0
+                break
+            # Distance from label to nearest pixel of the component.
+            ry, rx = np.where(reg > 0)
+            if len(rx) == 0:
+                continue
+            # Sample for speed on large masks.
+            step = max(1, len(rx) // 2000)
+            pts_x = origin[0] + rx[::step].astype(np.float64) / _PX_PER_PT
+            pts_y = origin[1] + ry[::step].astype(np.float64) / _PX_PER_PT
+            d = float(np.min(np.hypot(pts_x - lb.cx, pts_y - lb.cy)))
+            # Also consider centroid distance (roomy pockets with label at edge).
+            d = min(d, float(np.hypot(cx - lb.cx, cy - lb.cy)))
+            if d < best_d and d <= 80.0:
+                best_d = d
+                best_j = j
+        if best_j is not None:
+            room_masks[i] = _fill_holes(comps[best_j][0])
+            claimed = np.maximum(claimed, room_masks[i])
+            adopted.add(best_j)
+
+    # Remaining pockets → Mech. Closet (KEY) or Unlabeled space N.
+    for j, (reg, _area, cx, cy) in enumerate(comps):
+        if j in adopted:
+            continue
+        # Skip if somehow already covered after adoption.
+        if int(np.logical_and(reg, claimed).sum()) > 0.5 * int(reg.sum()):
+            continue
+        filled = _fill_holes(reg)
+        tag = _keynote_for_region(filled, origin, keynotes)
+        if tag is not None and tag in used_keynotes:
+            tag = None
+        poly_pts = _mask_to_polygon(filled, origin)
+        if len(poly_pts) < 3:
+            continue
+        if tag is not None:
+            used_keynotes.add(tag)
+            name = f"MECH. CLOSET ({tag})"
+            display = f"Mech. Closet ({tag})"
+        else:
+            unlabeled_n += 1
+            name = "UNLABELED SPACE"
+            display = f"Unlabeled space {unlabeled_n}"
+        unlabeled_rooms.append((name, display, poly_pts, Point(x=cx, y=cy)))
+        claimed = np.maximum(claimed, filled)
+
     rooms: list[Room] = []
     for i in interior_idxs:
         lb = labels[i]
@@ -905,6 +1080,20 @@ def detect_rooms(ctx: PageContext, viewport: BBox, sheet_id: str) -> list[Room]:
                 kind="interior",
                 polygon=poly_pts,
                 label_point=Point(x=lb.cx, y=lb.cy),
+                source="auto",
+            )
+        )
+
+    for name, display, poly_pts, label_pt in unlabeled_rooms:
+        rooms.append(
+            Room(
+                id=str(uuid.uuid4()),
+                sheet_id=sheet_id,
+                name=name,
+                display_name=display,
+                kind="interior",
+                polygon=poly_pts,
+                label_point=label_pt,
                 source="auto",
             )
         )

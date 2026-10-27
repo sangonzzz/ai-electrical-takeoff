@@ -5,7 +5,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-
 from takeoff_engine.models import BBox, Category, Detection, Point
 from takeoff_engine.pdf_context import load_page
 from takeoff_engine.rooms import (
@@ -145,3 +144,35 @@ def test_plan1_attic_has_one_light_and_one_switch(plans_pdf: Path) -> None:
     switches = [d for d in active if d.category == Category.SWITCH]
     assert len(lights) == 1, [(d.center.x, d.center.y) for d in lights]
     assert len(switches) == 1, [(d.center.x, d.center.y) for d in switches]
+
+
+def test_plan1_b14_water_heater_closet_not_exterior(plans_pdf: Path) -> None:
+    """Enclosed unlabeled B14 WH closet inside the footprint is its own room.
+
+    Decision: Exterior is only outside the building; keynoted enclosed pockets
+    become ``Mech. Closet (B14)``.
+    """
+    ctx = load_page(plans_pdf, 0)
+    vp, _ = find_electrical_viewport(ctx)
+    rooms = detect_rooms(ctx, vp, _sheet_id(0))
+    names = {r.display_name for r in rooms}
+    assert "Mech. Closet (B14)" in names
+    # Centroid of the WH closet free space on Plan 1 (~electrical viewport).
+    rid = assign_room(Point(x=1324.0, y=237.0), rooms)
+    assert rid is not None
+    room = next(r for r in rooms if r.id == rid)
+    assert room.display_name == "Mech. Closet (B14)", room.display_name
+    assert room.kind == "interior"
+    # Outside the footprint remains Exterior.
+    rid_ext = assign_room(Point(x=1000.0, y=780.0), rooms)
+    assert next(r.display_name for r in rooms if r.id == rid_ext) == "Exterior"
+
+
+def test_all_plans_emit_unlabeled_or_mech_when_needed(plans_pdf: Path) -> None:
+    """All 4 plans run unlabeled-pocket detection without crashing."""
+    for page_index in range(4):
+        ctx = load_page(plans_pdf, page_index)
+        vp, _ = find_electrical_viewport(ctx)
+        rooms = detect_rooms(ctx, vp, _sheet_id(page_index))
+        assert any(r.kind == "exterior" for r in rooms)
+        assert any(r.kind == "interior" for r in rooms)
