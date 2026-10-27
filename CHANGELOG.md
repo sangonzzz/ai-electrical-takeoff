@@ -2,6 +2,17 @@
 
 Plain-language notes for Santiago. Newest first.
 
+## v0.6.4 — B14 closet / unlabeled interior rooms (frozen)
+
+Rooms: unlabeled enclosed pockets inside the building footprint are interior rooms,
+not Exterior.
+
+- **B14 closet rule:** keynote (e.g. `B14`) in/near the pocket → `Mech. Closet (B14)`.
+- Else → `Unlabeled space N` (reading order). Exterior = outside footprint only.
+
+**Engine frozen after this tag:** no further detection/rooms/LLM/BOM/overlay changes
+without Santiago’s approval (`AGENTS.md` §14).
+
 ## v0.6.3 — wires restore + patches (frozen)
 
 Approved wires restore to v0.6.0 geometry (`6ffe668`) plus two small patches:
@@ -10,8 +21,7 @@ Approved wires restore to v0.6.0 geometry (`6ffe668`) plus two small patches:
 - **B38 exclusion:** keynote + outdoor equipment (`gfci_240v` / `B38`) ink never used as endpoints.
 - **3-way rule:** either-end `three_way` / `three_way_dimmer` → cable type `nm_14_3`.
 
-**Engine frozen after this tag:** no further detection/rooms/LLM/BOM/overlay changes
-without Santiago’s approval (`AGENTS.md` §14).
+Engine was frozen after this tag until Santiago approved the v0.6.4 rooms fix.
 
 ## v0.6.2 — engine patch (frozen)
 

@@ -2,23 +2,24 @@
 
 ## Estado
 
-**v0.6.3** tagged — engine frozen after this.
+**v0.6.4** tagged — engine frozen after this.
 
 ## Hecho
 
-- `PIPELINE_VERSION` → `0.6.3` + CHANGELOG (wires restore v0.6.0 + B38 + 3-way) + tag
-- AGENTS / DECISIONS / README: freeze at 0.6.3
-- Mensaje to-all
+- `PIPELINE_VERSION` → `0.6.4` + CHANGELOG + DECISIONS (B14 closet / unlabeled interior)
+- AGENTS / README: freeze at 0.6.4
+- Mensaje to-all; ack Agente 3
 
 ## Cómo probarlo
 
 ```bash
-uv run takeoff --version   # -> 0.6.3
-git show v0.6.3 --no-patch
+uv run takeoff --version   # -> 0.6.4
+git show v0.6.4 --no-patch
 ```
 
 ## Siguiente
 
+- Inbox: Agente 2 still requesting patch for Plan 1 disposal `$` restore (not in 0.6.4)
 - Solo backend / frontend / eval docs salvo OK de Santiago para engine
 
 ## Bloqueos
@@ -27,12 +28,15 @@ git show v0.6.3 --no-patch
 
 ## Decisions
 
-Engine frozen at v0.6.3 (wires restored to v0.6.0 geometry + B38 exclusion + 3-way → nm_14_3).
+Engine frozen at v0.6.4. Unlabeled interior pockets + B14 → Mech. Closet (see DECISIONS Rooms §5).
 
 ## Needs from Santiago
 
-- (ninguno)
+- (ninguno) — confirm if Agente 2 disposal-switch bump should be 0.6.5
 
 ## Explicación para Santiago
 
-Parche **0.6.3**: el cableado vuelve a la geometría buena de v0.6.0, más exclusión de B38/keynote y la regla de 3-way → 14/3. Desde aquí el motor queda congelado otra vez; nadie cambia detección/cuartos/LLM/BOM/overlay sin tu OK. El tag está en GitHub.
+Parche **0.6.4**: el closet del water heater (keynote B14) y otros huecos sin etiqueta
+dentro del edificio ya no van a Exterior; se llaman Mech. Closet (B14) o Unlabeled space N.
+Motor congelado otra vez. Queda pendiente el bump del switch de disposal (Agente 2)
+si lo apruebas como 0.6.5.
