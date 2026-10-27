@@ -20,18 +20,20 @@ Inside `config.APPROX_VIEWPORTS[0]`, black open strokes (width ≈ 0.24) that fo
 | Gap (median, wiring-like pairs) | **3.8 pt** |
 | Gap (typical range) | **2–4.5 pt** |
 
-Detector (v2.1): dash length **1.5–14 pt**, **gap pattern** required (`gap ∈ [1.2, 9]` — continuous glyph joints with gap < 1.2 are never wire). Documented in `data/assumptions.yaml`.
+Detector (v3): **black (0,0,0) strokes only** — never gray (~0.67) cabinet/sink/toilet/equipment dashes. Length **1.5–14 pt**, **gap pattern** required (`gap ∈ [1.2, 9]`). Documented in `data/assumptions.yaml`.
 
-## Wire algorithm (v2.1)
+## Wire algorithm (v3)
 
-1. **Collect dashed strokes only:** measured length + at least one neighbor in the dash-gap window. Drop ink inside receptacle/detector/exhaust bboxes (+2 pt) and ceiling-fan blade disks. Continuous symbol outlines never become candidates.
-2. **Link into open curves** (greedy tip growth, gap × 2 + tangent). Drop closed loops (tips nearly meet).
+1. **Collect black dashed strokes only** from `black_segments` (RGB ≤ 0.02). Never read `gray_segments`. Require a dash-gap neighbor; continuous glyph joints are out. Drop ink inside keynote boxes (A01/B38/…), receptacle/detector bboxes (+2 pt), and large gray millwork fills.
+2. **Link into open curves** (greedy tip growth, gap × 2 + tangent). Drop closed loops.
 3. **Ends at bbox boundary** of the nearest device; mid-path fixtures split the curve.
 4. **Runs** require different devices, mostly dash-covered ink, plan length ≤ 40 ft.
-5. **`nm_14_3`:** farthest distant 3-way pair on a curve, plus a traveler BFS between 3-way gangs.
+5. **Cable type (hard rule):**
+   - ``nm_14_3`` — **only** the traveler between two distant 3-way switches (subtype or codes `3`/`3D`).
+   - ``nm_14_2`` — switch→light, light→light, switch→fan, and every other hop.
 6. **Vertical allowance** from assumptions; waste in `compute_bom`.
 
-Debug PNGs: teal dash underlay + pink/green runs labeled `{cable_type} {total_ft}ft`.
+Debug PNGs: teal black-dash underlay + pink (`nm_14_2`) / green (`nm_14_3`) runs labeled `{cable_type} {total_ft}ft`.
 
 ### Routing assumption (honest limit)
 

@@ -4,20 +4,24 @@ Measured on Escondido Plan 1 (page 0) inside APPROX_VIEWPORTS[0]:
 - dash length median ≈ 7.1 pt (typical 4–10 pt; flattened curves ≈ 1.5–3 pt)
 - gap median ≈ 3.8 pt (typical 2–4.5 pt)
 
-Dashes are separate short black open strokes (width ≈ 0.24), not PDF dash
-patterns. v2 grows full curves by endpoint proximity + tangent continuity
-(gap ≤ measured_gap_median × 2), ends at the nearest device *bbox boundary*,
-and splits a curve into device-to-device runs at mid-path fixtures.
+**Wire candidates are black (0,0,0) dashed strokes only.** Gray (~0.67) dashed
+lines (cabinets, sinks, toilets, outdoor-unit outlines) are never wires.
+v3 grows open curves by endpoint gap + tangent continuity, ends at device
+bbox boundaries, and splits at mid-path fixtures.
+
+**Cable type:** ``nm_14_3`` only on the traveler between two 3-way switches.
+Switch→light, light→light, and any other hop is ``nm_14_2``.
 """
 
 from __future__ import annotations
 
 import math
+import re
 import uuid
 from typing import Any
 
 from takeoff_engine.models import BBox, Category, Detection, Point, WireRun
-from takeoff_engine.types import PageContext, Segment
+from takeoff_engine.types import FillPath, PageContext, Segment
 
 # Measured thresholds (see docs/modules/bom.md and data/assumptions.yaml).
 GAP_MEDIAN_PT = 3.8
@@ -37,10 +41,18 @@ DIR_COS_PREFER = 0.35
 
 STROKE_WIDTH_NOMINAL = 0.24
 STROKE_WIDTH_TOL = 0.08
+# Pure black only — gray 0.67 millwork must never enter the candidate set.
+_BLACK_RGB_MAX = 0.02
 
-# Exclude primitives inside detection bboxes (and fan blade disks).
+# Exclude primitives inside receptacle/detector/exhaust bboxes (+2 pt).
+# Do NOT blank the ceiling-fan bbox/disk: the D/F→fan dashed run enters that
+# region; fan *blades* are continuous glyphs rejected by the gap-pattern filter.
 BBOX_EXCLUDE_INFLATE_PT = 2.0
-FAN_BLADE_RADIUS_PAD_PT = 12.0
+KEYNOTE_BOX_PAD_PT = 8.0
+_KEYNOTE_RE = re.compile(r"^[A-Z]\d{2}$")
+# Gray fills larger than wall poche = cabinets / sinks / toilets / equipment.
+_GRAY_MILLWORK_MIN_SIDE_PT = 14.0
+_GRAY_MILLWORK_MIN_AREA_PT2 = 120.0
 
 DEVICE_BBOX_ASSOCIATE_PT = 22.0
 DEVICE_PATH_ASSOCIATE_PT = 8.0
@@ -121,23 +133,12 @@ def _seg_inside_symbol(s: Segment, b: BBox) -> bool:
     return _point_in_bbox(s.x0, s.y0, b) and _point_in_bbox(s.x1, s.y1, b)
 
 
-def _fan_blade_disks(detections: list[Detection]) -> list[tuple[float, float, float]]:
-    """(cx, cy, radius) disks covering ceiling-fan blade clusters."""
-    disks: list[tuple[float, float, float]] = []
-    for d in detections:
-        if d.status != "active" or d.category != Category.CEILING_FAN:
-            continue
-        w = d.bbox.x1 - d.bbox.x0
-        h = d.bbox.y1 - d.bbox.y0
-        r = 0.65 * max(w, h) + FAN_BLADE_RADIUS_PAD_PT
-        disks.append((d.center.x, d.center.y, r))
-    return disks
-
-
-def _seg_in_disk(s: Segment, cx: float, cy: float, r: float) -> bool:
-    """Fan-blade filter: midpoint inside the blade disk (tips-only wires kept)."""
-    mx, my = (s.x0 + s.x1) / 2.0, (s.y0 + s.y1) / 2.0
-    return math.hypot(mx - cx, my - cy) <= r
+def _is_pure_black(s: Segment) -> bool:
+    """True only for RGB near (0,0,0). Gray 0.67 millwork is never a wire."""
+    c = s.color
+    if c is None or len(c) < 3:
+        return False
+    return all(float(ch) <= _BLACK_RGB_MAX for ch in c[:3])
 
 
 def _raw_length_candidates(
@@ -147,8 +148,11 @@ def _raw_length_candidates(
     len_min: float = DASH_LEN_MIN_PT,
     len_max: float = DASH_LEN_MAX_PT,
 ) -> list[Segment]:
+    """Black open strokes only — never ``gray_segments`` (cabinets / fixtures)."""
     out: list[Segment] = []
     for s in ctx.black_segments:
+        if not _is_pure_black(s):
+            continue
         if not _seg_in_viewport(s, viewport):
             continue
         if abs(s.width - STROKE_WIDTH_NOMINAL) > STROKE_WIDTH_TOL:
@@ -159,34 +163,94 @@ def _raw_length_candidates(
     return out
 
 
-# Symbol categories whose *outlines* were being traced as wires (fan blades,
-# receptacle/SD/exhaust loops). Switches and lights are wiring endpoints/nodes —
-# excluding their bboxes punches holes in real dashed runs (incl. 3-way travelers).
+# Glyph loops we blank by bbox. Ceiling fans / exhaust omitted — approach
+# wiring enters those bboxes; continuous blade/housing ink fails the gap filter.
 _SYMBOL_OUTLINE_CATEGORIES = frozenset(
     {
-        Category.CEILING_FAN,
         Category.RECEPTACLE,
         Category.DETECTOR,
-        Category.EXHAUST_FAN,
     }
 )
 
 
-def _exclude_symbol_ink(
-    segs: list[Segment], detections: list[Detection]
+def _keynote_boxes(ctx: PageContext, viewport: BBox) -> list[BBox]:
+    """BBoxes around keynote tags (A01, B38, …) so their geometry is dropped.
+
+    Escondido keynote text is ~9.5 pt; allow up to 12 pt. Pad enough to cover
+    the small rectangle drawn around the tag.
+    """
+    boxes: list[BBox] = []
+    for w in ctx.words:
+        if not _KEYNOTE_RE.match(w.text.strip()):
+            continue
+        if w.size > 12.0:
+            continue
+        x0, y0, x1, y1 = w.bbox
+        cx, cy = 0.5 * (x0 + x1), 0.5 * (y0 + y1)
+        if not _in_viewport(cx, cy, viewport, inflate=KEYNOTE_BOX_PAD_PT):
+            continue
+        # Tag box is wider than the glyphs; pad generously around the label.
+        boxes.append(
+            BBox(
+                x0=x0 - KEYNOTE_BOX_PAD_PT,
+                y0=y0 - KEYNOTE_BOX_PAD_PT * 1.5,
+                x1=x1 + KEYNOTE_BOX_PAD_PT,
+                y1=y1 + KEYNOTE_BOX_PAD_PT * 1.5,
+            )
+        )
+    return boxes
+
+
+def _gray_millwork_fills(ctx: PageContext, viewport: BBox) -> list[FillPath]:
+    """Large gray fills = cabinets / sinks / toilets / equipment (not wall poche)."""
+    out: list[FillPath] = []
+    for f in ctx.gray_fills:
+        w = f.x1 - f.x0
+        h = f.y1 - f.y0
+        if w * h < _GRAY_MILLWORK_MIN_AREA_PT2:
+            continue
+        if min(w, h) < _GRAY_MILLWORK_MIN_SIDE_PT:
+            continue
+        # Thin wall poche / hatch.
+        if min(w, h) <= 10.0 and max(w, h) / max(min(w, h), 0.1) >= 2.5:
+            continue
+        mx, my = (f.x0 + f.x1) / 2.0, (f.y0 + f.y1) / 2.0
+        if not _in_viewport(mx, my, viewport, inflate=20.0):
+            continue
+        out.append(f)
+    return out
+
+
+def _midpoint_in_gray_millwork(s: Segment, fills: list[FillPath]) -> bool:
+    mx, my = (s.x0 + s.x1) / 2.0, (s.y0 + s.y1) / 2.0
+    pad = 2.0
+    for f in fills:
+        if f.x0 - pad <= mx <= f.x1 + pad and f.y0 - pad <= my <= f.y1 + pad:
+            return True
+    return False
+
+
+def _exclude_non_wire_ink(
+    segs: list[Segment],
+    detections: list[Detection],
+    ctx: PageContext,
+    viewport: BBox,
 ) -> list[Segment]:
-    """Drop primitives inside outline-symbol bboxes (+2 pt) or fan blade disks."""
+    """Drop symbol loops, keynote boxes, and black dashes on gray millwork."""
     boxes = [
         _inflate_bbox(d.bbox, BBOX_EXCLUDE_INFLATE_PT)
         for d in detections
         if d.status == "active" and d.category in _SYMBOL_OUTLINE_CATEGORIES
     ]
-    disks = _fan_blade_disks(detections)
+    keynotes = _keynote_boxes(ctx, viewport)
+    millwork = _gray_millwork_fills(ctx, viewport)
     kept: list[Segment] = []
     for s in segs:
         if any(_seg_inside_symbol(s, b) for b in boxes):
             continue
-        if any(_seg_in_disk(s, cx, cy, r) for cx, cy, r in disks):
+        if any(_seg_inside_symbol(s, b) for b in keynotes):
+            continue
+        if _midpoint_in_gray_millwork(s, millwork):
             continue
         kept.append(s)
     return kept
@@ -229,14 +293,15 @@ def _collect_dash_candidates(
     len_min: float = DASH_LEN_MIN_PT,
     len_max: float = DASH_LEN_MAX_PT,
 ) -> list[Segment]:
-    """Collect wiring dashes only: measured length + gap pattern, outside symbols.
+    """Collect **black** wiring dashes: length window + gap pattern, no millwork.
 
-    Continuous strokes (fan blades, receptacle/SD/exhaust outlines) are excluded:
-    they either sit inside detection/fan regions or only touch with gap < 1.2 pt.
+    Never uses ``gray_segments``. Continuous glyph joints (gap < 1.2) and ink
+    inside keynotes / receptacle-detector-exhaust bboxes / gray millwork fills
+    are dropped. Fan blades fail the gap filter; approach wiring is kept.
     """
     raw = _raw_length_candidates(ctx, viewport, len_min=len_min, len_max=len_max)
-    if detections:
-        raw = _exclude_symbol_ink(raw, detections)
+    if detections is not None:
+        raw = _exclude_non_wire_ink(raw, detections, ctx, viewport)
     return _filter_dash_gap_pattern(raw)
 
 
@@ -633,7 +698,11 @@ def _is_three_way(det: Detection) -> bool:
 
 
 def _cable_type(a: Detection, b: Detection) -> str:
-    # Co-located multi-gang 3D switches share a box — not a traveler run.
+    """Cable type rule (v3): nm_14_3 **only** for a 3-way↔3-way traveler.
+
+    Switch→light, light→light, switch→fan, etc. are always ``nm_14_2``.
+    Co-located multi-gang 3D switches share a box — not a traveler.
+    """
     if _is_three_way(a) and _is_three_way(b):
         if (
             math.hypot(a.center.x - b.center.x, a.center.y - b.center.y)
@@ -955,14 +1024,16 @@ def find_wire_runs(
     scale_pt_per_ft: float,
     assumptions: dict[str, Any],
 ) -> list[WireRun]:
-    """Grow dashed curves into device-to-device WireRun polylines (v2.1).
+    """Grow black dashed curves into device-to-device WireRun polylines (v3).
 
-    1. Collect **dashed** strokes only (measured length + gap pattern); exclude
-       ink inside detection bboxes (+2 pt) and fan blade clusters.
-    2. Link into open curves (never continuous glyph joints; drop closed loops).
-    3. Tips attach to nearest device **bbox boundary**; mid fixtures split.
-    4. Runs require different devices and mostly dash-covered ink.
-    5. ``nm_14_3`` for distant 3-way pairs (on-curve or dedicated traveler BFS).
+    1. Collect **black (0,0,0)** dashed strokes only (never gray 0.67 millwork);
+       require dash gap pattern; exclude keynotes + receptacle/detector/exhaust
+       bboxes + gray millwork fills.
+    2. Link into open curves; drop closed loops.
+    3. Tips → nearest device bbox boundary; mid fixtures split.
+    4. Runs need different devices and dash-backed ink (plan ≤ 40 ft).
+    5. ``nm_14_3`` **only** on travelers between two distant 3-way switches;
+       every other hop is ``nm_14_2``.
     """
     if scale_pt_per_ft <= 0:
         raise ValueError("scale_pt_per_ft must be positive")

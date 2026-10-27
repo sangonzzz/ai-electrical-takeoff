@@ -246,6 +246,68 @@ def test_gap_max_is_measured_gap_times_two() -> None:
     assert MAX_PLAN_LENGTH_FT == 40.0
 
 
+def test_switch_to_light_is_never_nm_14_3() -> None:
+    """Cable rule: only 3-way↔3-way travelers are nm_14_3."""
+    segs = [
+        _dash(104, 100, 112, 100),
+        _dash(116, 100, 124, 100),
+        _dash(128, 100, 136, 100),
+        _dash(140, 100, 148, 100),
+    ]
+    dets = [
+        _det("sw", Category.SWITCH, "three_way", 100, 100, codes=["3D"]),
+        _det("lt", Category.LIGHT, "recessed", 152, 100),
+    ]
+    ctx = _ctx_with_segments(segs)
+    vp = BBox(x0=50, y0=50, x1=200, y1=150)
+    runs = find_wire_runs(
+        ctx,
+        vp,
+        dets,
+        scale_pt_per_ft=18.0,
+        assumptions={"ceiling_height_ft": 8, "switch_height_in": 48, "slack_ft_per_end": 1},
+    )
+    assert len(runs) >= 1
+    assert all(r.cable_type == "nm_14_2" for r in runs)
+
+
+def test_gray_colored_dashes_are_ignored() -> None:
+    """Gray (0.67) strokes must never become wire candidates."""
+    gray = Segment(
+        x0=104, y0=100, x1=112, y1=100, width=0.24, color=(0.67, 0.67, 0.67)
+    )
+    black = [
+        _dash(116, 100, 124, 100),
+        _dash(128, 100, 136, 100),
+        _dash(140, 100, 148, 100),
+    ]
+    # Only gray near devices — should yield no run from gray ink alone.
+    dets = [
+        _det("a", Category.SWITCH, "single_pole", 100, 100),
+        _det("b", Category.LIGHT, "pendant", 112, 100),
+    ]
+    ctx = _ctx_with_segments([gray, *black])
+    # Force gray into black_segments list to prove color filter (PDF puts gray elsewhere).
+    ctx = PageContext(
+        page_index=0,
+        page_width=2592.0,
+        page_height=1728.0,
+        black_segments=[gray, *black],
+        black_fills=[],
+        gray_segments=[],
+        gray_fills=[],
+        words=[],
+        spans=[],
+        pdf_path="synthetic",
+    )
+    vp = BBox(x0=50, y0=50, x1=200, y1=150)
+    from takeoff_engine.wires import _raw_length_candidates
+
+    raw = _raw_length_candidates(ctx, vp)
+    assert all(s.color == (0.0, 0.0, 0.0) or (s.color and s.color[0] <= 0.02) for s in raw)
+    assert gray not in raw
+
+
 def test_rejects_straight_chord_without_dash_backing() -> None:
     segs = [
         _dash(104, 100, 112, 100),
