@@ -95,6 +95,22 @@ Agente 7 (`planN.detections.json`).
 - Soft-delete restore: `POST /api/detections/{id}/restore` or `PATCH` with `status=active`
 - `PATCH` accepts prior field snapshots (`category`, `subtype`, `room_id`, `room_source`,
   `center`, `bbox`, …); optional `history_action` tags the corrections row
+- Same tip undo/redo for `entity=wire_run` (soft-delete / restore / field snapshots)
+
+## Cable / wire-run edits (Agente 8 `bom_edit`)
+
+| Method | Path | Notes |
+|--------|------|-------|
+| GET | `/api/sheets/{id}/wire-runs` | Active runs; hides soft-deleted and runs tied to deleted detections |
+| POST | `/api/sheets/{id}/wire-runs` | **201** `{wire_run, bom, takeoff}` via `make_user_run` |
+| PATCH | `/api/wire-runs/{id}` | Recomputes lengths; manual `cable_type` → `source=user` (sticky) |
+| DELETE | `/api/wire-runs/{id}` | Soft-delete → `{bom, takeoff}` |
+| POST | `/api/wire-runs/{id}/restore` | → `{wire_run, bom, takeoff}` |
+
+Moving a detection (`PATCH` center) calls `reattach_runs` in the same transaction, refreshes
+geometry boxes (`compute_boxes`), and returns `{detection, wire_runs, boxes, bom, takeoff}`.
+Deleting/restoring a detection refreshes boxes/BOM; attached runs stay in DB but are hidden
+from BOM until the detection is active again.
 
 ## Exports (Excel + PDF quote)
 
