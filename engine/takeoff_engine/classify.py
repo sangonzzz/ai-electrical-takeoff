@@ -983,11 +983,75 @@ def _scan_recessed_downlight_centers(
     return centers
 
 
+def _gray_stroke_panel_around(
+    ctx: PageContext,
+    cx: float,
+    cy: float,
+) -> tuple[float, float, float, float] | None:
+    """Tight gray-stroke rectangle containing (cx, cy) — real IN ATTIC frame.
+
+    Escondido draws the attic access panel as four light-gray axis-aligned
+    strokes (~45×33 pt), not a gray fill. Prefer that over a padded text bbox
+    so hallway cans above the panel are not treated as attic devices (R7b).
+    """
+    hs: list[tuple[float, float, float]] = []  # (y, x0, x1)
+    vs: list[tuple[float, float, float]] = []  # (x, y0, y1)
+    for s in ctx.gray_segments:
+        ax = abs(s.x1 - s.x0)
+        ay = abs(s.y1 - s.y0)
+        if ay <= 1.5 and 25.0 <= ax <= 100.0:
+            y = 0.5 * (s.y0 + s.y1)
+            if abs(y - cy) > 50.0:
+                continue
+            hs.append((y, min(s.x0, s.x1), max(s.x0, s.x1)))
+        elif ax <= 1.5 and 20.0 <= ay <= 100.0:
+            x = 0.5 * (s.x0 + s.x1)
+            if abs(x - cx) > 50.0:
+                continue
+            vs.append((x, min(s.y0, s.y1), max(s.y0, s.y1)))
+    if len(hs) < 2 or len(vs) < 2:
+        return None
+    # Pair top/bottom horizontals that share an x-span covering cx.
+    best: tuple[float, float, float, float] | None = None
+    best_area = float("inf")
+    for i, (y_a, ax0, ax1) in enumerate(hs):
+        if not (ax0 - 2.0 <= cx <= ax1 + 2.0):
+            continue
+        for y_b, bx0, bx1 in hs[i + 1 :]:
+            if abs(y_b - y_a) < 18.0 or abs(y_b - y_a) > 90.0:
+                continue
+            if not (bx0 - 2.0 <= cx <= bx1 + 2.0):
+                continue
+            x0 = max(ax0, bx0)
+            x1 = min(ax1, bx1)
+            if x1 - x0 < 25.0:
+                continue
+            y0, y1 = (y_a, y_b) if y_a < y_b else (y_b, y_a)
+            if not (y0 - 2.0 <= cy <= y1 + 2.0):
+                continue
+            # Require verticals near left/right that span most of the height.
+            left_ok = any(
+                abs(vx - x0) <= 3.0 and vy0 <= y0 + 3.0 and vy1 >= y1 - 3.0
+                for vx, vy0, vy1 in vs
+            )
+            right_ok = any(
+                abs(vx - x1) <= 3.0 and vy0 <= y0 + 3.0 and vy1 >= y1 - 3.0
+                for vx, vy0, vy1 in vs
+            )
+            if not (left_ok and right_ok):
+                continue
+            area = (x1 - x0) * (y1 - y0)
+            if area < best_area:
+                best_area = area
+                best = (x0, y0, x1, y1)
+    return best
+
+
 def _attic_boxes(
     ctx: PageContext,
     bounds: tuple[float, float, float, float] | None = None,
 ) -> list[tuple[float, float, float, float]]:
-    """BBoxes of ``IN ATTIC`` panels inside the plan (R2 Fix 8)."""
+    """BBoxes of ``IN ATTIC`` panels inside the plan (R2 Fix 8 / R7b)."""
     labels: list[tuple[float, float, tuple[float, float, float, float]]] = []
     for w in ctx.words:
         raw = w.text.strip().upper()
@@ -1007,6 +1071,7 @@ def _attic_boxes(
     for cx, cy, lb in labels:
         best: tuple[float, float, float, float] | None = None
         best_area = float("inf")
+        # 1) Gray fill panel (some sheets).
         for f in ctx.gray_fills:
             fw, fh = abs(f.x1 - f.x0), abs(f.y1 - f.y0)
             # Attic access panel is a small gray rectangle (~30–80 pt).
@@ -1017,6 +1082,10 @@ def _attic_boxes(
                 if area < best_area:
                     best_area = area
                     best = (f.x0, f.y0, f.x1, f.y1)
+        # 2) Gray stroke rectangle (Escondido plan 1 — no fill).
+        if best is None:
+            best = _gray_stroke_panel_around(ctx, cx, cy)
+        # 3) Last resort: pad the label (may spill onto hallway cans).
         if best is None:
             pad = 18.0
             best = (lb[0] - pad, lb[1] - pad, lb[2] + pad, lb[3] + pad)
@@ -1864,10 +1933,11 @@ def _lights_from_attic_panels(
     usable: list[LegendEntry],
     templates: dict[str, Any],
 ) -> list[Detection]:
-    """Ensure each IN ATTIC panel has its circle-with-cross / recessed light (R7).
+    """Ensure each IN ATTIC panel has its circle-with-cross light (R7 / R7b).
 
-    The glyph sits on the gray panel; clustering can absorb it into the X or
-    skip it when a hallway can above the box already exists.
+    Prefer the circle ring inside the gray panel (below the ``IN ATTIC`` label).
+    Do not treat a hallway recessed can that only overlaps a padded label bbox
+    as the attic light.
     """
     if not attic_boxes:
         return []
@@ -1878,6 +1948,8 @@ def _lights_from_attic_panels(
         (e for e in light_entries if e.subtype == "recessed"),
         light_entries[0],
     )
+    from takeoff_engine.symbols import _circle_rings_in_seg_ids
+
     out: list[Detection] = []
     for box in attic_boxes:
         x0, y0, x1, y1 = box
@@ -1888,8 +1960,57 @@ def _lights_from_attic_panels(
             for d in detections + out
         ):
             continue
-        # Scan short-stroke rings + square frames inside the panel.
+
+        # Prefer circle-with-cross ring (no outer square) — the attic glyph.
+        seg_ids = [
+            i
+            for i, s in enumerate(ctx.black_segments)
+            if x0 <= 0.5 * (s.x0 + s.x1) <= x1
+            and y0 <= 0.5 * (s.y0 + s.y1) <= y1
+            and math.hypot(s.x1 - s.x0, s.y1 - s.y0) < 6.0
+        ]
         found = False
+        for rcx, rcy, rw, rh, _ring_ids in _circle_rings_in_seg_ids(ctx, seg_ids):
+            if not _in_attic_box(rcx, rcy, [box], shrink=2.0):
+                continue
+            if any(
+                d.category == Category.LIGHT
+                and math.hypot(d.center.x - rcx, d.center.y - rcy) < 10.0
+                for d in detections + out
+            ):
+                continue
+            out.append(
+                Detection(
+                    id=str(uuid.uuid4()),
+                    sheet_id=sheet_id,
+                    category=Category.LIGHT,
+                    subtype="recessed",
+                    codes=[],
+                    center=Point(x=rcx, y=rcy),
+                    bbox=BBox(
+                        x0=rcx - rw / 2.0,
+                        y0=rcy - rh / 2.0,
+                        x1=rcx + rw / 2.0,
+                        y1=rcy + rh / 2.0,
+                    ),
+                    rotation_deg=0,
+                    confidence=0.90,
+                    source="geometry",
+                    needs_review=False,
+                    evidence=Evidence(
+                        legend_entry_id=entry.id,
+                        match_score=0.90,
+                        text_tokens=[],
+                        notes=["attic_panel_light", "attic_circle_ring"],
+                    ),
+                )
+            )
+            found = True
+            break
+        if found:
+            continue
+
+        # Fallback: square-frame recessed scan inside the panel.
         for cx, cy in _scan_recessed_downlight_centers(ctx, (x0, y0, x1, y1)):
             if not _in_attic_box(cx, cy, [box], shrink=2.0):
                 continue
@@ -1917,53 +2038,6 @@ def _lights_from_attic_panels(
                         match_score=0.88,
                         text_tokens=[],
                         notes=["attic_panel_light", "recessed_downlight_geometry"],
-                    ),
-                )
-            )
-            found = True
-            break
-        if found:
-            continue
-        # Fallback: circle ring of short strokes (circle-with-cross, no square).
-        from takeoff_engine.symbols import _circle_rings_in_seg_ids
-
-        seg_ids = [
-            i
-            for i, s in enumerate(ctx.black_segments)
-            if x0 <= 0.5 * (s.x0 + s.x1) <= x1
-            and y0 <= 0.5 * (s.y0 + s.y1) <= y1
-            and math.hypot(s.x1 - s.x0, s.y1 - s.y0) < 6.0
-        ]
-        for rcx, rcy, rw, rh, _ring_ids in _circle_rings_in_seg_ids(ctx, seg_ids):
-            if any(
-                d.category == Category.LIGHT
-                and math.hypot(d.center.x - rcx, d.center.y - rcy) < 10.0
-                for d in detections + out
-            ):
-                continue
-            out.append(
-                Detection(
-                    id=str(uuid.uuid4()),
-                    sheet_id=sheet_id,
-                    category=Category.LIGHT,
-                    subtype="recessed",
-                    codes=[],
-                    center=Point(x=rcx, y=rcy),
-                    bbox=BBox(
-                        x0=rcx - rw / 2.0,
-                        y0=rcy - rh / 2.0,
-                        x1=rcx + rw / 2.0,
-                        y1=rcy + rh / 2.0,
-                    ),
-                    rotation_deg=0,
-                    confidence=0.86,
-                    source="geometry",
-                    needs_review=False,
-                    evidence=Evidence(
-                        legend_entry_id=entry.id,
-                        match_score=0.86,
-                        text_tokens=[],
-                        notes=["attic_panel_light", "attic_circle_ring"],
                     ),
                 )
             )

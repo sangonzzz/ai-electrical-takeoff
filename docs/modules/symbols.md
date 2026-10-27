@@ -95,7 +95,7 @@ Order matters: remove non-symbol ink **before** clustering so dashes never join 
 | False 240V (R6.5) | Drop weak uncoded receptacle IoU; gate `gfci_240v` on `240V` token | Laundry door ~1096,276 |
 | Exhaust vs half-hot (R6.6) | Wide yin-yang fill → exhaust; thin vertical fill + duplex → half-hot; sink `$` via exhaust-adjacent stem | Plan 1 kitchen |
 | Orphan letters (R6.7) | `3D`/`F`/… token without nearby switch → stem bar recovery | Plan 3 kitchen left wall |
-| Attic light lock (R7.1) | Circle+cross inside IN ATTIC panel → recessed; room Attic | Plan 1 attic can |
+| Attic light lock (R7.1/R7b) | Gray-stroke panel bbox (not padded label); circle-ring light @~(1117,436) → Attic | Plan 1 IN ATTIC box |
 | Sink half-hot (R7.2) | Thin/rotated half-fill → `afci_half_hot` (not exhaust); range yin-yang stays exhaust | Plan 1 kitchen sink ~975,323 |
 | Soft viewport/legend (R7.3) | Title/legend fallbacks; Escondido path unchanged | Longview / PBG probe no longer raises |
 
