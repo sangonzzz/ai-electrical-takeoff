@@ -33,7 +33,11 @@ pnpm dev   # VITE_USE_FIXTURE=true
 ## Siguiente
 
 - Cuando Agente 5 mergee wire-runs HTTP, quitar dependencia del mock (client ya apunta a las mismas rutas)
-- Screenshots de Edit cables si Santiago quiere assets en `out/debug/`
+
+## Screenshots (gitignored `out/debug/`)
+
+- `out/debug/edit-cables-on.png` — Edit cables ON, Wires layer, hover/label on pink run
+- `out/debug/edit-cables-details.png` — selected run + Cable run Details panel (type/from-to/lengths/delete)
 
 ## Bloqueos
 
