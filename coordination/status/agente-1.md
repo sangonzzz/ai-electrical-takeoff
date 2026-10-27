@@ -2,40 +2,43 @@
 
 ## Estado
 
-**v0.6.6** tagged — engine frozen after this.
+**v1.0.0** interview release — engine `0.6.7` + app frozen.
 
 ## Hecho
 
-- `PIPELINE_VERSION` → `0.6.6` + CHANGELOG + DECISIONS (closet + longest-boundary merge)
-- AGENTS / README: freeze at 0.6.6
-- Mensaje to-all; ack Agente 3
+- `PIPELINE_VERSION` → `0.6.7` + CHANGELOG known limits + DECISIONS / AGENTS freeze
+- Verified green: `uv run pytest` **183 passed**; web `tsc` + `pnpm build` OK
+- Tags: `v0.6.7`, **`v1.0.0`** (interview release)
+- Mensaje to-all
 
 ## Cómo probarlo
 
 ```bash
-uv run takeoff --version   # -> 0.6.6
-git show v0.6.6 --no-patch
+uv run takeoff --version   # -> 0.6.7
+git show v1.0.0 --no-patch
+uv run pytest -q
+cd web && pnpm run build
 ```
 
 ## Siguiente
 
-- Agente 7 golden refresh (may still wait on plan-3 half-hot / Santiago)
-- Solo backend / frontend / eval docs salvo OK de Santiago para engine
+- Solo docs / tests locking current behavior unless Santiago unfreezes
 
 ## Bloqueos
 
-- Token `gh` sin scope `workflow` para Actions
+- Token `gh` sin scope `workflow` para Actions (`.github/` may still be untracked)
 
 ## Decisions
 
-Engine frozen at v0.6.6. Closet + merge rules in DECISIONS Rooms §5.
+Interview freeze at v1.0.0 / PIPELINE 0.6.7. Known limits in CHANGELOG.
 
 ## Needs from Santiago
 
-- (ninguno for this bump)
+- (ninguno)
 
 ## Explicación para Santiago
 
-Parche **0.6.6**: el closet mecánico B14 se nombra bien (keynote cerca o 240V sin
-tag), los otros huecos se fusionan al vecino con más borde compartido, y ya no
-salen “Unlabeled space”. Motor congelado otra vez.
+Release de entrevista **v1.0.0** con motor **0.6.7**. Pytest y build web en verde.
+Quedan documentados los límites conocidos: half-hot del plan 3, receptáculo del
+water heater en plan 4, y millwork que a veces se traza como cable. Motor y app
+congelados; nadie cambia comportamiento sin tu OK.

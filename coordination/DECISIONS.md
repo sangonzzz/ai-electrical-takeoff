@@ -115,5 +115,7 @@ When several codes apply: `240V` > `MW` / `DW` / `H` / `FC` > `WP` > half-hot >
   `page_index`. Do not squash or rewrite git history; Cursor co-author trailers OK.
 - **Single `PIPELINE_VERSION`** in `engine/takeoff_engine/__init__.py` only; bump on any
   engine behavior change. `ENGINE=real` is the compose/.env default (`fake` for tests).
-- **Engine freeze:** current frozen tag **v0.6.6**. No engine behavior changes without
-  Santiago’s approval (AGENTS.md §14).
+- **Engine + app freeze:** interview release **v1.0.0** / `PIPELINE_VERSION` **0.6.7**.
+  No engine or app behavior changes without Santiago’s approval (AGENTS.md §14).
+  Known limits: plan 3 half-hot miss; plan 4 WH receptacle / review flags; millwork
+  dashed ink may trace as cable (see CHANGELOG v1.0.0).

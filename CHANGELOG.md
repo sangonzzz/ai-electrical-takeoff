@@ -2,6 +2,29 @@
 
 Plain-language notes for Santiago. Newest first.
 
+## v1.0.0 — interview release (`PIPELINE_VERSION` 0.6.7)
+
+Final freeze of **engine and app** for the interview demo. Git tag **`v1.0.0`**;
+engine semver **`0.6.7`**. No further detection/rooms/LLM/BOM tracing or app
+behavior changes without Santiago’s approval (`AGENTS.md` §14).
+
+Golden lock: `eval/golden/current/` (see `eval/golden/CHANGES.md` vs v0.6.4).
+
+### Known limits
+
+- **Plan 3 half-hot:** one `receptacle.afci_half_hot` (~895.8, 505.7) is not
+  detected vs earlier goldens (detections 71→70; cascading boxes/wires).
+- **Plan 4 water heater receptacle:** review-flag / WH receptacle behavior on
+  plan 4 remains imperfect (accepted `needs_review` drift on nearby GFCI /
+  240V devices; see golden CHANGES).
+- **Millwork traced as cable:** some cabinet/millwork dashed ink still becomes
+  pink wire runs (Wires layer is beta; prefer Edit cables / manual delete).
+
+## v0.6.7 — interview engine lock
+
+Pipeline bump paired with **v1.0.0**. Documents known limits above; analysis
+fingerprint locked in `eval/golden/current/`.
+
 ## v0.6.6 — Mech. Closet B14 + longest-boundary merge (frozen)
 
 Rooms closet / merge rules (final):
@@ -15,7 +38,7 @@ Rooms closet / merge rules (final):
   Never emit `Unlabeled space`.
 - **Shallow niches:** leave unclaimed → Exterior (e.g. B38 outdoor unit).
 
-**Engine frozen after this tag** (`AGENTS.md` §14).
+Engine was frozen after this tag until the v1.0.0 / 0.6.7 interview release.
 
 ## v0.6.5 — pocket rule + prices + cable-edit response (frozen)
 
