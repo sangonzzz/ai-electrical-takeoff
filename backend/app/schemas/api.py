@@ -129,8 +129,13 @@ class DetectionRestoreBody(BaseModel):
 
 
 class DetectionMutationResponse(BaseModel):
+    """Detection CRUD. Extra fields filled when move/delete/restore refreshes cables/boxes."""
+
     detection: Detection
     takeoff: Takeoff
+    wire_runs: list[WireRun] | None = None  # changed runs (reattach); omit if none
+    boxes: list[Box] | None = None  # full box list after recompute
+    bom: Bom | None = None
 
 
 class HistoryStatusResponse(BaseModel):
@@ -138,14 +143,15 @@ class HistoryStatusResponse(BaseModel):
     can_redo: bool
 
 
-
 class WireRunCreate(BaseModel):
-    points: list[Point]
+    """Preferred: from/to (+ optional points/cable_type). Legacy length fields still accepted."""
+
     from_detection_id: str | None = None
     to_detection_id: str | None = None
-    cable_type: Literal["nm_14_2", "nm_14_3"]
-    plan_length_ft: float
-    vertical_allowance_ft: float = 0.0
+    points: list[Point] | None = None
+    cable_type: Literal["nm_14_2", "nm_14_3"] | None = None
+    plan_length_ft: float | None = None
+    vertical_allowance_ft: float | None = 0.0
     total_length_ft: float | None = None
     confidence: float = Field(default=1.0, ge=0, le=1)
 
@@ -159,6 +165,12 @@ class WireRunPatch(BaseModel):
     vertical_allowance_ft: float | None = None
     total_length_ft: float | None = None
     confidence: float | None = Field(default=None, ge=0, le=1)
+    status: Literal["active", "deleted"] | None = None
+    history_action: Literal["undo", "redo"] | None = None
+
+
+class WireRunRestoreBody(BaseModel):
+    history_action: Literal["undo", "redo"] | None = None
 
 
 class BoxCreate(BaseModel):
@@ -186,7 +198,9 @@ class EntityMutationResponse(BaseModel):
     bom: Bom | None = None
     detection: Detection | None = None
     wire_run: WireRun | None = None
+    wire_runs: list[WireRun] | None = None
     box: Box | None = None
+    boxes: list[Box] | None = None
 
 
 class CorrectionOut(BaseModel):

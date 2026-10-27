@@ -198,6 +198,8 @@ class WireRunRow(Base):
     total_length_ft: Mapped[float] = mapped_column(Float, nullable=False)
     confidence: Mapped[float] = mapped_column(Float, nullable=False, default=1.0)
     source: Mapped[str] = mapped_column(String(16), nullable=False, default="user")
+    # Soft-delete (not on WireRun contract — filtered before serialization).
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="active")
 
     run: Mapped[AnalysisRun] = relationship(back_populates="wire_runs")
 

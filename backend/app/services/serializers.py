@@ -103,6 +103,13 @@ def wire_from_row(row: WireRunRow) -> WireRun:
     )
 
 
+def wire_to_dict(row: WireRunRow) -> dict:
+    """WireRun JSON plus DB-only ``status`` for the corrections log / undo."""
+    data = wire_from_row(row).model_dump(mode="json")
+    data["status"] = getattr(row, "status", "active")
+    return data
+
+
 def box_from_row(row: BoxRow) -> Box:
     return Box(
         id=row.id,
@@ -145,9 +152,20 @@ def detection_to_dict(det: Detection) -> dict:
 def load_run_entities(run: AnalysisRun) -> tuple[
     list[Room], list[Detection], list[LegendEntry], list[WireRun], list[Box]
 ]:
+    from app.services.cable_ops import filter_wires_for_bom
+
     rooms = [room_from_row(r) for r in run.rooms]
     detections = [detection_from_row(d) for d in run.detections]
     legend = [legend_from_row(e) for e in run.legend_entries]
-    wires = [wire_from_row(w) for w in run.wire_runs]
+    # Soft-deleted wire rows stay in DB; hide them and runs tied to deleted dets.
+    wires_active = [
+        wire_from_row(w) for w in run.wire_runs if getattr(w, "status", "active") == "active"
+    ]
+    wires = filter_wires_for_bom(wires_active, detections)
     boxes = [box_from_row(b) for b in run.boxes]
     return rooms, detections, legend, wires, boxes
+
+
+def load_active_wire_rows(run: AnalysisRun) -> list:
+    """ORM wire rows with status=active (includes orphaned-endpoint runs)."""
+    return [w for w in run.wire_runs if getattr(w, "status", "active") == "active"]

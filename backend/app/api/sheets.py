@@ -7,7 +7,7 @@ from typing import Annotated
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import FileResponse, PlainTextResponse, Response
 from sqlalchemy import select
-from takeoff_engine.models import Bom, Takeoff
+from takeoff_engine.models import Bom, Takeoff, WireRun
 
 from app.api.deps import AppSettings, DbSession
 from app.models import Correction, Document
@@ -26,6 +26,7 @@ from app.schemas.api import (
     SheetDetailResponse,
     WireRunCreate,
     WireRunPatch,
+    WireRunRestoreBody,
 )
 from app.services.documents import create_reanalyze_run
 from app.services.history import get_history_status, redo_sheet, undo_sheet
@@ -44,12 +45,14 @@ from app.services.sheet_ops import (
     delete_detection,
     delete_wire,
     get_sheet_or_404,
+    list_wire_runs,
     load_current_run,
     patch_box,
     patch_detection,
     patch_wire,
     require_succeeded_run,
     restore_detection,
+    restore_wire,
 )
 from app.services.takeoff_svc import sheet_bom, sheet_takeoff, takeoff_to_csv
 
@@ -257,32 +260,48 @@ async def quote_pdf(
     )
 
 
+def _detection_mutation_response(result) -> DetectionMutationResponse:
+    return DetectionMutationResponse(
+        detection=result.detection,
+        takeoff=result.takeoff,
+        wire_runs=result.changed_wires or None,
+        boxes=result.boxes or None,
+        bom=result.bom,
+    )
+
+
 @router.post(
     "/api/sheets/{sheet_id}/detections",
     response_model=DetectionMutationResponse,
 )
 async def post_detection(
-    sheet_id: str, body: DetectionCreate, session: DbSession
+    sheet_id: str,
+    body: DetectionCreate,
+    session: DbSession,
+    settings: AppSettings,
 ) -> DetectionMutationResponse:
     sheet = await get_sheet_or_404(session, sheet_id)
-    det, takeoff = await create_detection(session, sheet, body)
-    return DetectionMutationResponse(detection=det, takeoff=takeoff)
+    result = await create_detection(session, sheet, body, settings=settings)
+    return _detection_mutation_response(result)
 
 
 @router.patch("/api/detections/{detection_id}", response_model=DetectionMutationResponse)
 async def patch_detection_route(
-    detection_id: str, body: DetectionPatch, session: DbSession
+    detection_id: str,
+    body: DetectionPatch,
+    session: DbSession,
+    settings: AppSettings,
 ) -> DetectionMutationResponse:
-    det, takeoff, _sheet = await patch_detection(session, detection_id, body)
-    return DetectionMutationResponse(detection=det, takeoff=takeoff)
+    result = await patch_detection(session, detection_id, body, settings=settings)
+    return _detection_mutation_response(result)
 
 
 @router.delete("/api/detections/{detection_id}", response_model=DetectionMutationResponse)
 async def delete_detection_route(
-    detection_id: str, session: DbSession
+    detection_id: str, session: DbSession, settings: AppSettings
 ) -> DetectionMutationResponse:
-    det, takeoff, _sheet = await delete_detection(session, detection_id)
-    return DetectionMutationResponse(detection=det, takeoff=takeoff)
+    result = await delete_detection(session, detection_id, settings=settings)
+    return _detection_mutation_response(result)
 
 
 @router.post(
@@ -292,14 +311,15 @@ async def delete_detection_route(
 async def restore_detection_route(
     detection_id: str,
     session: DbSession,
+    settings: AppSettings,
     body: DetectionRestoreBody | None = None,
 ) -> DetectionMutationResponse:
     """Undelete a soft-deleted detection (undo of delete / client-driven redo)."""
     hist = body.history_action if body is not None else None
-    det, takeoff, _sheet = await restore_detection(
-        session, detection_id, history_action=hist
+    result = await restore_detection(
+        session, detection_id, history_action=hist, settings=settings
     )
-    return DetectionMutationResponse(detection=det, takeoff=takeoff)
+    return _detection_mutation_response(result)
 
 
 @router.get("/api/sheets/{sheet_id}/history", response_model=HistoryStatusResponse)
@@ -322,12 +342,23 @@ async def sheet_redo(sheet_id: str, session: DbSession) -> SheetDetailResponse:
     return await redo_sheet(session, sheet)
 
 
-@router.post("/api/sheets/{sheet_id}/wire-runs", response_model=EntityMutationResponse)
+@router.get("/api/sheets/{sheet_id}/wire-runs", response_model=list[WireRun])
+async def get_wire_runs(sheet_id: str, session: DbSession) -> list[WireRun]:
+    """Active wire runs of the current analysis (orphaned ends hidden)."""
+    sheet = await get_sheet_or_404(session, sheet_id)
+    return await list_wire_runs(session, sheet)
+
+
+@router.post(
+    "/api/sheets/{sheet_id}/wire-runs",
+    response_model=EntityMutationResponse,
+    status_code=201,
+)
 async def post_wire(
     sheet_id: str, body: WireRunCreate, session: DbSession, settings: AppSettings
 ) -> EntityMutationResponse:
     sheet = await get_sheet_or_404(session, sheet_id)
-    row, takeoff = await create_wire(session, sheet, body)
+    row, takeoff = await create_wire(session, sheet, body, settings)
     run = await load_current_run(session, sheet)
     assert run is not None
     _r, dets, _l, wires, boxes = load_run_entities(run)
@@ -342,7 +373,7 @@ async def post_wire(
 async def patch_wire_route(
     wire_id: str, body: WireRunPatch, session: DbSession, settings: AppSettings
 ) -> EntityMutationResponse:
-    row, takeoff, sheet = await patch_wire(session, wire_id, body)
+    row, takeoff, sheet = await patch_wire(session, wire_id, body, settings)
     run = await load_current_run(session, sheet)
     assert run is not None
     _r, dets, _l, wires, boxes = load_run_entities(run)
@@ -357,13 +388,35 @@ async def patch_wire_route(
 async def delete_wire_route(
     wire_id: str, session: DbSession, settings: AppSettings
 ) -> EntityMutationResponse:
-    takeoff, sheet = await delete_wire(session, wire_id)
+    takeoff, sheet, _row = await delete_wire(session, wire_id)
     run = await load_current_run(session, sheet)
     assert run is not None
     _r, dets, _l, wires, boxes = load_run_entities(run)
     return EntityMutationResponse(
         takeoff=takeoff,
         bom=sheet_bom(settings, sheet.id, dets, wires, boxes),
+    )
+
+
+@router.post(
+    "/api/wire-runs/{wire_id}/restore",
+    response_model=EntityMutationResponse,
+)
+async def restore_wire_route(
+    wire_id: str,
+    session: DbSession,
+    settings: AppSettings,
+    body: WireRunRestoreBody | None = None,
+) -> EntityMutationResponse:
+    hist = body.history_action if body is not None else None
+    row, takeoff, sheet = await restore_wire(session, wire_id, history_action=hist)
+    run = await load_current_run(session, sheet)
+    assert run is not None
+    _r, dets, _l, wires, boxes = load_run_entities(run)
+    return EntityMutationResponse(
+        takeoff=takeoff,
+        bom=sheet_bom(settings, sheet.id, dets, wires, boxes),
+        wire_run=wire_from_row(row),
     )
 
 
