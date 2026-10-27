@@ -414,31 +414,44 @@ test("demo plans quality pass", async ({ page }) => {
       const redoBtn = page.getByTitle("Redo (Ctrl+Shift+Z)");
       await expect(undoBtn).toBeVisible();
       await expect(redoBtn).toBeVisible();
-
-      if (await undoBtn.isDisabled()) {
-        throw new Error(
-          "Undo disabled — canUndo is false outside fixture; undoLastAction/redoLastAction are no-ops in web/src/api/client.ts (need Agente 5 history API + Agente 6 canUndo wiring)",
-        );
-      }
+      // Agente 6 client command stack enables after create/delete/patch.
+      await expect(undoBtn).toBeEnabled({ timeout: 15_000 });
 
       countBeforeUndo = await detectionMarks(page).count();
+      const undoNet = page.waitForResponse(
+        (r) =>
+          r.ok() &&
+          (r.request().method() === "DELETE" ||
+            r.url().includes("/restore") ||
+            r.url().includes("/undo") ||
+            r.request().method() === "PATCH"),
+        { timeout: 20_000 },
+      );
       await undoBtn.click();
+      await undoNet;
       await expect
         .poll(async () => detectionMarks(page).count(), { timeout: 15_000 })
         .not.toBe(countBeforeUndo);
       const afterUndo = await detectionMarks(page).count();
 
-      if (await redoBtn.isDisabled()) {
-        throw new Error(
-          `Undo changed count ${countBeforeUndo}→${afterUndo} but Redo stayed disabled (canRedo false)`,
-        );
-      }
+      await expect(redoBtn).toBeEnabled({ timeout: 10_000 });
+      const redoNet = page.waitForResponse(
+        (r) =>
+          r.ok() &&
+          (r.url().includes("/restore") ||
+            r.url().includes("/redo") ||
+            r.request().method() === "DELETE" ||
+            r.request().method() === "PATCH" ||
+            (r.request().method() === "POST" && r.url().includes("/detections"))),
+        { timeout: 20_000 },
+      );
       await redoBtn.click();
+      await redoNet;
       await expect
-        .poll(async () => detectionMarks(page).count(), { timeout: 15_000 })
+        .poll(async () => detectionMarks(page).count(), { timeout: 20_000 })
         .toBe(countBeforeUndo);
+      expect(afterUndo).not.toBe(countBeforeUndo);
     },
-    { soft: true },
   );
 
   await step(
