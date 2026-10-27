@@ -2,22 +2,24 @@
 
 ## Estado
 
-**v0.6.1** tagged (patch). Freeze policy unchanged.
+**v0.6.2** tagged — engine frozen after this.
 
 ## Hecho
 
-- `PIPELINE_VERSION` → `0.6.1` + CHANGELOG + tag + README
+- `PIPELINE_VERSION` → `0.6.2` + CHANGELOG + tag
+- AGENTS / DECISIONS / README: freeze at 0.6.2
+- Mensaje to-all
 
 ## Cómo probarlo
 
 ```bash
-uv run takeoff --version   # -> 0.6.1
-git show v0.6.1 --no-patch
+uv run takeoff --version   # -> 0.6.2
+git show v0.6.2 --no-patch
 ```
 
 ## Siguiente
 
-- Rebuild api/worker if needed: `docker compose up -d --build api worker`
+- Solo backend / frontend / eval docs salvo OK de Santiago para engine
 
 ## Bloqueos
 
@@ -25,7 +27,7 @@ git show v0.6.1 --no-patch
 
 ## Decisions
 
-Ninguna nueva.
+Engine frozen at v0.6.2.
 
 ## Needs from Santiago
 
@@ -33,4 +35,4 @@ Ninguna nueva.
 
 ## Explicación para Santiago
 
-Parche **0.6.1** para que el backend no reutilice análisis de 0.6.0 si el motor ya cambió después. El freeze sigue: más cambios de engine solo con tu OK.
+Parche **0.6.2** y desde aquí el motor queda congelado otra vez: nadie cambia detección/cuartos/LLM/BOM/overlay sin tu OK. El tag está en GitHub.

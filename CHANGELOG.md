@@ -2,10 +2,15 @@
 
 Plain-language notes for Santiago. Newest first.
 
+## v0.6.2 — engine patch (frozen)
+
+Patch bump for approved post-0.6.1 engine fixes. **Engine frozen after this tag:**
+no further detection/rooms/LLM/BOM/overlay changes without Santiago’s approval
+(`AGENTS.md` §14).
+
 ## v0.6.1 — engine patch
 
-Patch bump so idempotency picks up approved post-0.6.0 engine fixes. Freeze policy
-unchanged: further behavior changes still need Santiago’s approval.
+Patch bump so idempotency picks up approved post-0.6.0 engine fixes.
 
 ## v0.6.0 — final engine (frozen)
 
