@@ -1,8 +1,9 @@
-"""Guard: analyze_sheet on Escondido plans must match tag v0.6.4-stable goldens.
+"""Guard: analyze_sheet on Escondido plans must match ``eval/golden/current/``.
 
-Overnight agents must not change detection / rooms / wire tracing. This test
-re-runs ``analyze_sheet(..., use_llm=False, with_bom=True)`` on the current
-engine and compares the normalized fingerprint to ``eval/golden/v0.6.4/``.
+Re-runs ``analyze_sheet(..., use_llm=False, with_bom=True)`` on the current
+engine and compares the normalized fingerprint to the golden snapshots.
+Accepted intentional diffs vs the historical ``v0.6.4`` baseline are listed in
+``eval/golden/CHANGES.md``.
 """
 
 from __future__ import annotations
@@ -60,7 +61,7 @@ def _assert_equal(actual: object, expected: object, path: str = "$") -> None:
 
 
 @pytest.mark.parametrize("plan", PLANS)
-def test_analyze_sheet_matches_v064_golden(plan: int) -> None:
+def test_analyze_sheet_matches_current_golden(plan: int) -> None:
     golden_path = GOLDEN_DIR / f"plan{plan}.json"
     assert golden_path.is_file(), f"missing golden {golden_path}"
     assert DEFAULT_PDF.is_file(), f"missing PDF {DEFAULT_PDF}"

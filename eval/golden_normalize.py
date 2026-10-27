@@ -13,7 +13,7 @@ from typing import Any
 from takeoff_engine.models import SheetResult
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-GOLDEN_DIR = REPO_ROOT / "eval" / "golden" / "v0.6.4"
+GOLDEN_DIR = REPO_ROOT / "eval" / "golden" / "current"
 DEFAULT_PDF = REPO_ROOT / "data" / "plans" / "escondido_plans.pdf"
 
 
