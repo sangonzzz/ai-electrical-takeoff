@@ -146,30 +146,41 @@ def test_plan1_attic_has_one_light_and_one_switch(plans_pdf: Path) -> None:
     assert len(switches) == 1, [(d.center.x, d.center.y) for d in switches]
 
 
-def test_plan1_b14_water_heater_closet_not_exterior(plans_pdf: Path) -> None:
-    """Enclosed unlabeled B14 WH closet inside the footprint is its own room.
+def test_plan1_no_false_unlabeled_exterior_pockets(plans_pdf: Path) -> None:
+    """Outdoor-unit / exterior-wall niches must not become rooms.
 
-    Decision: Exterior is only outside the building; keynoted enclosed pockets
-    become ``Mech. Closet (B14)``.
+    Tightened rule: pocket fully inside building footprint, area ≥ 9 sq ft
+    (18 pt/ft), and keynote only if the tag bbox lies inside the region.
+    Plan 1 false positives were ``Unlabeled space 1`` (B38 outdoor unit) and
+    ``Mech. Closet (B32)`` (exterior wall note).
     """
     ctx = load_page(plans_pdf, 0)
     vp, _ = find_electrical_viewport(ctx)
     rooms = detect_rooms(ctx, vp, _sheet_id(0))
     names = {r.display_name for r in rooms}
-    assert "Mech. Closet (B14)" in names
-    # Centroid of the WH closet free space on Plan 1 (~electrical viewport).
+    assert "Unlabeled space 1" not in names
+    assert "Mech. Closet (B32)" not in names
+    # Outdoor-unit pocket (~B38) and B32 niche → Exterior.
+    assert next(
+        r.display_name for r in rooms if r.id == assign_room(Point(x=1150.0, y=183.0), rooms)
+    ) == "Exterior"
+    assert next(
+        r.display_name for r in rooms if r.id == assign_room(Point(x=1330.0, y=170.0), rooms)
+    ) == "Exterior"
+    # Small interior WH closet (< 9 sq ft) merges into the nearest labeled room.
     rid = assign_room(Point(x=1324.0, y=237.0), rooms)
-    assert rid is not None
     room = next(r for r in rooms if r.id == rid)
-    assert room.display_name == "Mech. Closet (B14)", room.display_name
-    assert room.kind == "interior"
-    # Outside the footprint remains Exterior.
+    assert room.kind == "interior", room.display_name
+    assert room.display_name != "Exterior"
+    assert not room.display_name.startswith("Unlabeled")
+    assert not room.display_name.startswith("Mech.")
+    # Outside the building remains Exterior.
     rid_ext = assign_room(Point(x=1000.0, y=780.0), rooms)
     assert next(r.display_name for r in rooms if r.id == rid_ext) == "Exterior"
 
 
-def test_all_plans_emit_unlabeled_or_mech_when_needed(plans_pdf: Path) -> None:
-    """All 4 plans run unlabeled-pocket detection without crashing."""
+def test_all_plans_detect_rooms_smoke(plans_pdf: Path) -> None:
+    """All 4 plans run room detection without crashing."""
     for page_index in range(4):
         ctx = load_page(plans_pdf, page_index)
         vp, _ = find_electrical_viewport(ctx)

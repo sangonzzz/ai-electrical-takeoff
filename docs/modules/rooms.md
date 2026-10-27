@@ -67,11 +67,16 @@ Debug: `out/debug/walls_pN.png` (white = barrier, red crosses = labels).
    (~45×33 pt on Plan 1: y≈419–452). Padded text is last resort only (it sat ~12 pt
    too high and stole the hallway can above the box while cutting off the `$`).
    Room `Attic` (`kind=attic`) has **priority** over the room below in `assign_room`.
-6. **Unlabeled enclosed pockets** (Decision): free space inside the building that no
-   room label can flood into becomes its own interior room. If a keynote tag
-   (`B14`, `A01`, …) sits in or within ~14 pt of the pocket (tags often ride on the
-   wall), `display_name` is `Mech. Closet (B14)`; otherwise `Unlabeled space N`
-   (reading order). Failed label floods may adopt a nearby pocket before this step.
+6. **Unlabeled enclosed pockets** (Decision, tightened): a free pocket becomes its
+   own interior room only if **all** of:
+   - it is a hole of the rooms∪walls core and sits ≥ 8 pt inside the filled
+     footprint outline (drops outdoor-unit / exterior-wall niches at ~2 pt);
+   - area ≥ **9 sq ft** at 18 pt/ft (= 2916 pt²);
+   - optional name: a keynote (`B14`, …) only if the **tag text bbox lies fully
+     inside** the pocket (wall-mounted note tags like B32 do not count).
+   Otherwise `Unlabeled space N`. Deep interior holes **under** 9 sq ft are bridged
+   into the nearest labeled room (Plan 1 WH closet → Bath). Failed label floods may
+   adopt a nearby deep hole before this step.
 7. Contours → simplified polygons in PDF points (`approxPolyDP`, ε ≈ 1.5 pt).
 8. Synthetic **Exterior** room: `kind=exterior`, empty `polygon`. Exterior means
    **outside the building footprint only** — never an enclosed interior closet.
@@ -116,9 +121,8 @@ Debug: `out/debug/rooms_pN.png` (translucent fills + names on the plan raster).
   updated.
 - Exterior has an empty polygon by contract; “inside Exterior” means “not in any other
   room / outside footprint,” not point-in-polygon on Exterior itself.
-- Aggressive door/wall sealing can leave many small interior pockets on Plans 3–4; each
-  becomes `Unlabeled space N` (or `Mech. Closet` if keynoted). Reviewers may want to
-  merge some by hand.
+- Plans 3–4 may still emit a few `Unlabeled space N` rooms (≥ 9 sq ft deep holes).
+  Reviewers may want to merge some by hand.
 - Watermark / note text is excluded by viewport + lexicon, not by a separate OCR filter.
 
 ## How to test

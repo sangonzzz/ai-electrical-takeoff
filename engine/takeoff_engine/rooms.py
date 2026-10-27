@@ -58,11 +58,17 @@ _AMBIGUOUS_GAP_PT = 4.0
 # Contour simplification epsilon in PDF points.
 _POLY_SIMPLIFY_PT = 1.5
 
-# Min area (PDF pt²) for an unlabeled enclosed pocket to become its own room.
-_UNLABELED_MIN_AREA_PT2 = 250.0
+# Min unlabeled-pocket area: 9 sq ft at SCALE 1/4" = 1'-0" → 18 pt/ft.
+# (Small exterior niches / outdoor-unit pockets are ~1–3 sq ft and must not
+# become rooms — they stay Exterior.)
+_UNLABELED_MIN_SQ_FT = 9.0
+_UNLABELED_PT_PER_FT = 18.0
+_UNLABELED_MIN_AREA_PT2 = _UNLABELED_MIN_SQ_FT * _UNLABELED_PT_PER_FT * _UNLABELED_PT_PER_FT
 
-# Keynote tags sit in small boxes on/near walls; associate within this radius (pt).
-_KEYNOTE_ASSOC_PT = 14.0
+# A building hole must sit at least this far (pt) inside the filled footprint
+# outline. Perimeter niches (outdoor unit ~2 pt, exterior-wall B32 ~2 pt) are
+# excluded; a true interior closet (Plan 1 WH ~12 pt) is kept.
+_INTERNAL_HOLE_MIN_DIST_OUT_PT = 8.0
 
 # Keynote pattern: A01, B14, F03, … (SPEC §1). Not electrical device codes.
 _KEYNOTE_RE = re.compile(r"^[A-Z]\d{2}$")
@@ -839,9 +845,11 @@ def _shapely_poly(points: list[Point]) -> ShapelyPolygon | None:
     return poly
 
 
-def _keynotes_in_viewport(ctx: PageContext, viewport: BBox) -> list[tuple[str, float, float]]:
-    """Keynote tags (B14, A01, …) whose centers lie in the electrical viewport."""
-    out: list[tuple[str, float, float]] = []
+def _keynotes_in_viewport(
+    ctx: PageContext, viewport: BBox
+) -> list[tuple[str, tuple[float, float, float, float]]]:
+    """Keynote tags (B14, A01, …) with text bboxes inside the electrical viewport."""
+    out: list[tuple[str, tuple[float, float, float, float]]] = []
     for w in ctx.words:
         tag = w.text.strip().upper()
         if not _KEYNOTE_RE.match(tag):
@@ -852,26 +860,89 @@ def _keynotes_in_viewport(ctx: PageContext, viewport: BBox) -> list[tuple[str, f
         cx = 0.5 * (w.bbox[0] + w.bbox[2])
         cy = 0.5 * (w.bbox[1] + w.bbox[3])
         if _in_bbox(cx, cy, viewport):
-            out.append((tag, cx, cy))
+            out.append((tag, w.bbox))
+    return out
+
+
+def _building_core_and_solid(
+    wall_mask: np.ndarray, claimed: np.ndarray
+) -> tuple[np.ndarray, np.ndarray]:
+    """Return ``(keep, solid)`` for the rooms∪walls component touching labels."""
+    core = ((wall_mask > 0) | (claimed > 0)).astype(np.uint8)
+    n_labels, cc, _stats, _cents = cv2.connectedComponentsWithStats(core, connectivity=8)
+    keep = np.zeros_like(core)
+    for i in range(1, n_labels):
+        comp = cc == i
+        if np.logical_and(comp, claimed > 0).any():
+            keep[comp] = 1
+    solid = _fill_holes(keep)
+    return keep, solid
+
+
+def _hole_is_deep_interior(reg: np.ndarray, solid: np.ndarray) -> bool:
+    """True if every hole pixel is ≥ ``_INTERNAL_HOLE_MIN_DIST_OUT_PT`` inside.
+
+    Perimeter niches hug the footprint outline (~2 pt); interior closets sit
+    deeper (~12 pt on Plan 1 WH).
+    """
+    dist = cv2.distanceTransform(solid.astype(np.uint8), cv2.DIST_L2, 5)
+    dist_pt = dist / _PX_PER_PT
+    return float(dist_pt[reg > 0].min()) >= _INTERNAL_HOLE_MIN_DIST_OUT_PT
+
+
+def _bridge_mask_regions(base: np.ndarray, add: np.ndarray) -> np.ndarray:
+    """Union ``base`` and ``add``, connecting them with a short thick stroke.
+
+    Needed so a small closet hole merged into a labeled room stays one connected
+    component for ``_mask_to_polygon`` (which keeps only the largest contour).
+    """
+    out = np.maximum(base, add).astype(np.uint8)
+    if int(base.sum()) == 0 or int(add.sum()) == 0:
+        return out
+    # Closest pixel pair between the two regions.
+    add_dt = cv2.distanceTransform((1 - add).astype(np.uint8), cv2.DIST_L2, 5)
+    by, bx = np.where(base > 0)
+    if len(bx) == 0:
+        return out
+    step = max(1, len(bx) // 3000)
+    bx_s, by_s = bx[::step], by[::step]
+    dists = add_dt[by_s, bx_s]
+    k = int(np.argmin(dists))
+    x0, y0 = int(bx_s[k]), int(by_s[k])
+    # Nearest add pixel to (x0,y0).
+    ay, ax = np.where(add > 0)
+    d2 = (ax.astype(np.int64) - x0) ** 2 + (ay.astype(np.int64) - y0) ** 2
+    j = int(np.argmin(d2))
+    x1, y1 = int(ax[j]), int(ay[j])
+    thick = max(3, int(round(2.5 * _PX_PER_PT)))
+    cv2.line(out, (x0, y0), (x1, y1), 1, thickness=thick)
     return out
 
 
 def _unclaimed_components(
     barrier: np.ndarray,
     claimed: np.ndarray,
+    wall_mask: np.ndarray,
     origin: tuple[float, float],
+    *,
+    min_area_pt2: float = 0.0,
+    internal_only: bool = True,
 ) -> list[tuple[np.ndarray, float, float, float]]:
-    """Connected free components not claimed by any labeled room.
+    """Connected free pockets of the rooms∪walls building core.
 
-    Returns list of ``(mask, area_pt2, cx_pt, cy_pt)`` sorted top-to-bottom,
-    left-to-right by centroid.
+    When ``internal_only`` is True (default), perimeter niches that touch the
+    outside of the filled building outline are dropped (outdoor unit, exterior
+    wall note boxes). ``min_area_pt2`` filters tiny noise. Returns reading-order
+    ``(mask, area_pt2, cx_pt, cy_pt)``.
     """
-    free = (barrier == 0) & (claimed == 0)
+    keep, solid = _building_core_and_solid(wall_mask, claimed)
+    inside = (solid > 0) & (keep == 0)
+    free = (barrier == 0) & (claimed == 0) & inside
     h, w = barrier.shape
     visited = np.zeros((h, w), dtype=np.uint8)
     comps: list[tuple[np.ndarray, float, float, float]] = []
     ys, xs = np.where(free)
-    min_px = max(50, int(_UNLABELED_MIN_AREA_PT2 * _PX_PER_PT * _PX_PER_PT))
+    min_px = max(20, int(min_area_pt2 * _PX_PER_PT * _PX_PER_PT))
     for y, x in zip(ys.tolist(), xs.tolist(), strict=False):
         if visited[y, x]:
             continue
@@ -884,6 +955,8 @@ def _unclaimed_components(
         cv2.floodFill(fill_img, ff_mask, (int(x), int(y)), 64)
         reg = (fill_img == 64).astype(np.uint8)
         visited[reg > 0] = 1
+        if internal_only and not _hole_is_deep_interior(reg, solid):
+            continue
         area_px = int(reg.sum())
         if area_px < min_px:
             continue
@@ -899,35 +972,24 @@ def _unclaimed_components(
 def _keynote_for_region(
     reg: np.ndarray,
     origin: tuple[float, float],
-    keynotes: list[tuple[str, float, float]],
+    keynotes: list[tuple[str, tuple[float, float, float, float]]],
 ) -> str | None:
-    """Return a keynote tag inside or near ``reg`` (tags often sit on the wall)."""
+    """Return a keynote only if its text bbox lies fully inside ``reg``.
+
+    Tags on the exterior wall (B32) or outside the pocket must not name a room.
+    """
     h, w = reg.shape
-    r_px = max(1, int(round(_KEYNOTE_ASSOC_PT * _PX_PER_PT)))
-    # Prefer a tag whose center lands in the region; else nearest within radius.
-    best: tuple[float, str] | None = None
-    for tag, cx, cy in keynotes:
-        ix, iy = _pt_to_px(cx, cy, origin)
-        if 0 <= ix < w and 0 <= iy < h and reg[iy, ix] > 0:
+
+    def _inside(px: float, py: float) -> bool:
+        ix, iy = _pt_to_px(px, py, origin)
+        return 0 <= ix < w and 0 <= iy < h and reg[iy, ix] > 0
+
+    for tag, bbox in keynotes:
+        x0, y0, x1, y1 = bbox
+        corners = ((x0, y0), (x1, y0), (x1, y1), (x0, y1))
+        if all(_inside(x, y) for x, y in corners):
             return tag
-        # Distance to nearest region pixel (approx via local search).
-        if not (0 <= ix < w and 0 <= iy < h):
-            continue
-        found = False
-        min_d2 = float("inf")
-        for dy in range(-r_px, r_px + 1):
-            for dx in range(-r_px, r_px + 1):
-                x, y = ix + dx, iy + dy
-                if 0 <= x < w and 0 <= y < h and reg[y, x] > 0:
-                    d2 = dx * dx + dy * dy
-                    if d2 < min_d2:
-                        min_d2 = d2
-                        found = True
-        if found and min_d2 <= r_px * r_px:
-            dist = (min_d2**0.5) / _PX_PER_PT
-            if best is None or dist < best[0]:
-                best = (dist, tag)
-    return best[1] if best else None
+    return None
 
 
 def detect_rooms(ctx: PageContext, viewport: BBox, sheet_id: str) -> list[Room]:
@@ -998,16 +1060,17 @@ def detect_rooms(ctx: PageContext, viewport: BBox, sheet_id: str) -> list[Room]:
     unlabeled_rooms: list[tuple[str, str, list[Point], Point]] = []
     unlabeled_n = 0
 
-    # Labels whose flood failed: adopt the nearest unclaimed pocket.
+    # Labels whose flood failed: adopt the nearest interior building pocket
+    # (any size — recovery before the 9 sq ft room filter).
     orphan_idxs = [i for i in interior_idxs if i not in room_masks]
-    comps = _unclaimed_components(barrier, claimed, origin)
-    adopted: set[int] = set()  # component indices given to orphan labels
+    all_pockets = _unclaimed_components(barrier, claimed, mask, origin, min_area_pt2=0.0)
+    adopted: set[int] = set()
     for i in orphan_idxs:
         lb = labels[i]
         ix, iy = seeds_px[i]
         best_j: int | None = None
         best_d = float("inf")
-        for j, (reg, _area, cx, cy) in enumerate(comps):
+        for j, (reg, _area, cx, cy) in enumerate(all_pockets):
             if j in adopted:
                 continue
             h, w = reg.shape
@@ -1015,33 +1078,45 @@ def detect_rooms(ctx: PageContext, viewport: BBox, sheet_id: str) -> list[Room]:
                 best_j = j
                 best_d = 0.0
                 break
-            # Distance from label to nearest pixel of the component.
             ry, rx = np.where(reg > 0)
             if len(rx) == 0:
                 continue
-            # Sample for speed on large masks.
             step = max(1, len(rx) // 2000)
             pts_x = origin[0] + rx[::step].astype(np.float64) / _PX_PER_PT
             pts_y = origin[1] + ry[::step].astype(np.float64) / _PX_PER_PT
             d = float(np.min(np.hypot(pts_x - lb.cx, pts_y - lb.cy)))
-            # Also consider centroid distance (roomy pockets with label at edge).
             d = min(d, float(np.hypot(cx - lb.cx, cy - lb.cy)))
             if d < best_d and d <= 80.0:
                 best_d = d
                 best_j = j
         if best_j is not None:
-            room_masks[i] = _fill_holes(comps[best_j][0])
+            room_masks[i] = _fill_holes(all_pockets[best_j][0])
             claimed = np.maximum(claimed, room_masks[i])
             adopted.add(best_j)
 
-    # Remaining pockets → Mech. Closet (KEY) or Unlabeled space N.
-    for j, (reg, _area, cx, cy) in enumerate(comps):
+    # Remaining interior holes: ≥ 9 sq ft → own room; smaller → merge into the
+    # nearest labeled room so WH closets etc. are not left as Exterior.
+    for j, (reg, area_pt2, cx, cy) in enumerate(all_pockets):
         if j in adopted:
             continue
-        # Skip if somehow already covered after adoption.
         if int(np.logical_and(reg, claimed).sum()) > 0.5 * int(reg.sum()):
             continue
         filled = _fill_holes(reg)
+        if area_pt2 < _UNLABELED_MIN_AREA_PT2:
+            best_i: int | None = None
+            best_d = float("inf")
+            for i in room_masks:
+                lb = labels[i]
+                d = float(np.hypot(cx - lb.cx, cy - lb.cy))
+                if d < best_d:
+                    best_d = d
+                    best_i = i
+            if best_i is not None:
+                # Bridge through the wall so findContours keeps one exterior ring
+                # (detached blobs are dropped by _mask_to_polygon's largest-only).
+                room_masks[best_i] = _bridge_mask_regions(room_masks[best_i], filled)
+                claimed = np.maximum(claimed, room_masks[best_i])
+            continue
         tag = _keynote_for_region(filled, origin, keynotes)
         if tag is not None and tag in used_keynotes:
             tag = None
@@ -1198,24 +1273,38 @@ def save_rooms_debug_png(
 
 
 def _footprint_from_rooms(rooms: list[Room]) -> ShapelyPolygon | None:
+    """Building footprint for assignment: buffered room union with holes filled.
+
+    Buffer (~wall thickness) merges rooms across poche so small interior closets
+    under the 9 sq ft threshold stay *inside* the footprint and assign to the
+    nearest interior room instead of Exterior. Exterior-wall niches outside the
+    buffered outline remain Exterior.
+    """
     polys = []
     for r in rooms:
         if r.kind == "exterior":
             continue
         sp = _shapely_poly(r.polygon)
         if sp is not None and sp.area > 0:
-            polys.append(sp)
+            polys.append(sp.buffer(8.0))
     if not polys:
         return None
-    u = unary_union(polys)
-    if u.geom_type == "MultiPolygon":
-        u = unary_union([g.buffer(2.0) for g in u.geoms]).buffer(0)
+    u = unary_union(polys).buffer(0)
     if u.is_empty:
         return None
-    if u.geom_type != "Polygon":
-        # Take convex hull of union as approximate footprint.
-        u = u.convex_hull
-    return u if isinstance(u, ShapelyPolygon) else None
+    if u.geom_type == "Polygon":
+        return ShapelyPolygon(u.exterior)
+    if u.geom_type == "MultiPolygon":
+        filled = [ShapelyPolygon(g.exterior) for g in u.geoms]
+        merged = unary_union(filled)
+        if merged.geom_type == "Polygon":
+            return ShapelyPolygon(merged.exterior)
+        if merged.geom_type == "MultiPolygon":
+            return max(
+                (ShapelyPolygon(g.exterior) for g in merged.geoms),
+                key=lambda g: g.area,
+            )
+    return None
 
 
 def _point_in_room(point: Point, room: Room) -> bool:
