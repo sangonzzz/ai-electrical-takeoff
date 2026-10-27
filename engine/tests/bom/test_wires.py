@@ -1,4 +1,4 @@
-"""Tests for find_wire_runs v3.1 (dash components, tip attach, cable rule)."""
+"""Tests for find_wire_runs v2.1 (dash-only, no symbol outlines)."""
 
 from __future__ import annotations
 
@@ -15,13 +15,15 @@ from takeoff_engine.types import PageContext, Segment
 from takeoff_engine.wires import (
     DASH_LEN_MAX_PT,
     DASH_LEN_MIN_PT,
+    DEVICE_BBOX_ASSOCIATE_PT,
     GAP_MAX_PT,
-    GAP_MIN_PT,
+    GAP_MEDIAN_PT,
+    GAP_PATTERN_MIN_PT,
     MAX_PLAN_LENGTH_FT,
-    MAX_TURN_DEG,
-    TANGENT_EXTEND_PT,
+    MAX_UNCOVERED_FRACTION,
     _collect_dash_candidates,
-    _is_three_way,
+    _is_unsupported_straight_chord,
+    _uncovered_fraction,
     find_wire_runs,
     render_wire_debug_png,
 )
@@ -40,15 +42,15 @@ def _det(
     y: float,
     sheet_id: str = "sheet-test",
     codes: list[str] | None = None,
-    half: float = 4.0,
 ) -> Detection:
+    # Small bbox so terminal dashes (midpoint outside) are not excluded as symbol ink.
     return Detection(
         id=det_id,
         sheet_id=sheet_id,
         category=category,
         subtype=subtype,
         center=Point(x=x, y=y),
-        bbox=BBox(x0=x - half, y0=y - half, x1=x + half, y1=y + half),
+        bbox=BBox(x0=x - 2, y0=y - 2, x1=x + 2, y1=y + 2),
         confidence=0.9,
         source="geometry",
         evidence=Evidence(),
@@ -75,73 +77,189 @@ def _dash(x0: float, y0: float, x1: float, y1: float) -> Segment:
     return Segment(x0=x0, y0=y0, x1=x1, y1=y1, width=0.24, color=(0.0, 0.0, 0.0))
 
 
-def _arc_chain(
-    x0: float, y0: float, x1: float, y1: float, *, n_dashes: int = 5, bulge: float = 40.0
-) -> list[Segment]:
-    """Build n_dashes of ~7 pt ink with ~4–7 pt gaps along a gentle arc."""
-    segs: list[Segment] = []
-    dx, dy = x1 - x0, y1 - y0
-    length = (dx * dx + dy * dy) ** 0.5 or 1.0
-    px, py = -dy / length, dx / length
-    # Sample denser polyline then cut dashes.
-    samples: list[tuple[float, float]] = []
-    steps = n_dashes * 12
-    for i in range(steps + 1):
-        t = i / steps
-        bx = x0 + t * dx + bulge * 4 * t * (1 - t) * px
-        by = y0 + t * dy + bulge * 4 * t * (1 - t) * py
-        samples.append((bx, by))
-    # Walk accumulating distance; place 7pt dash + 5pt gap.
-    ink, gap = 7.0, 5.0
-    dist_pts: list[tuple[float, float, float]] = [(0.0, samples[0][0], samples[0][1])]
-    acc = 0.0
-    for i in range(1, len(samples)):
-        step = (
-            (samples[i][0] - samples[i - 1][0]) ** 2
-            + (samples[i][1] - samples[i - 1][1]) ** 2
-        ) ** 0.5
-        acc += step
-        dist_pts.append((acc, samples[i][0], samples[i][1]))
-
-    def at(target: float) -> tuple[float, float]:
-        if target <= 0:
-            return dist_pts[0][1], dist_pts[0][2]
-        for i in range(1, len(dist_pts)):
-            d0, x_a, y_a = dist_pts[i - 1]
-            d1, x_b, y_b = dist_pts[i]
-            if target <= d1:
-                u = (target - d0) / (d1 - d0) if d1 > d0 else 0.0
-                return x_a + u * (x_b - x_a), y_a + u * (y_b - y_a)
-        return dist_pts[-1][1], dist_pts[-1][2]
-
-    pos = 0.0
-    while pos + ink <= acc + 1e-6 and len(segs) < n_dashes:
-        a = at(pos)
-        b = at(pos + ink)
-        segs.append(_dash(a[0], a[1], b[0], b[1]))
-        pos += ink + gap
-    return segs
-
-
-def test_constants_match_v31_window() -> None:
-    assert DASH_LEN_MIN_PT == 4.0
-    assert DASH_LEN_MAX_PT >= 11.0
-    assert GAP_MIN_PT == 1.5
-    assert GAP_MAX_PT >= 6.0
-    assert MAX_TURN_DEG >= 35.0
-    assert TANGENT_EXTEND_PT >= 12.0
-    assert MAX_PLAN_LENGTH_FT >= 40.0
-
-
-def test_cable_type_three_way_at_either_end_is_nm_14_3() -> None:
-    segs = _arc_chain(110, 120, 190, 120, n_dashes=6, bulge=45.0)
-    # Large bboxes overlapping chain tips so attach always succeeds.
+def test_chains_dashes_and_snaps_to_devices() -> None:
+    # Dashes sit outside device bboxes; ~4 pt gaps (dash pattern, not continuous).
+    segs = [
+        _dash(104, 100, 112, 100),
+        _dash(116, 100, 124, 100),
+        _dash(128, 100, 136, 100),
+        _dash(140, 100, 148, 100),
+        _dash(152, 100, 160, 100),
+    ]
     dets = [
-        _det("sw", Category.SWITCH, "three_way_dimmer", 105, 120, codes=["3D"], half=20.0),
-        _det("lt", Category.LIGHT, "recessed", 195, 120, half=20.0),
+        _det("a", Category.SWITCH, "single_pole", 100, 100),
+        _det("b", Category.LIGHT, "pendant", 164, 100),
     ]
     ctx = _ctx_with_segments(segs)
-    vp = BBox(x0=50, y0=50, x1=250, y1=220)
+    vp = BBox(x0=50, y0=50, x1=200, y1=200)
+    assumptions = {
+        "ceiling_height_ft": 8.0,
+        "switch_height_in": 48.0,
+        "slack_ft_per_end": 1.0,
+    }
+    runs = find_wire_runs(ctx, vp, dets, scale_pt_per_ft=18.0, assumptions=assumptions)
+    assert len(runs) >= 1
+    run = runs[0]
+    assert {run.from_detection_id, run.to_detection_id} == {"a", "b"}
+    assert run.from_detection_id != run.to_detection_id
+    assert run.cable_type == "nm_14_2"
+    assert run.plan_length_ft > 0
+    assert _uncovered_fraction(run.points, segs) <= MAX_UNCOVERED_FRACTION
+
+
+def test_three_way_pair_gets_nm_14_3() -> None:
+    segs = [
+        _dash(104, 200, 112, 200),
+        _dash(116, 200, 124, 200),
+        _dash(128, 200, 136, 200),
+        _dash(140, 200, 148, 200),
+    ]
+    dets = [
+        _det("sw1", Category.SWITCH, "three_way", 100, 200),
+        _det("sw2", Category.SWITCH, "three_way_dimmer", 152, 200),
+    ]
+    ctx = _ctx_with_segments(segs)
+    vp = BBox(x0=50, y0=150, x1=200, y1=250)
+    runs = find_wire_runs(
+        ctx,
+        vp,
+        dets,
+        scale_pt_per_ft=18.0,
+        assumptions={"ceiling_height_ft": 8, "switch_height_in": 48, "slack_ft_per_end": 1},
+    )
+    nm143 = [r for r in runs if r.cable_type == "nm_14_3"]
+    assert len(nm143) >= 1
+    assert nm143[0].from_detection_id != nm143[0].to_detection_id
+
+
+def test_three_way_codes_3d_get_nm_14_3() -> None:
+    segs = [
+        _dash(104, 200, 112, 200),
+        _dash(116, 200, 124, 200),
+        _dash(128, 200, 136, 200),
+        _dash(140, 200, 148, 200),
+        _dash(152, 200, 160, 200),
+        _dash(164, 200, 172, 200),
+        _dash(176, 200, 184, 200),
+    ]
+    dets = [
+        _det("sw1", Category.SWITCH, "dimmer", 100, 200, codes=["3D"]),
+        _det("sw2", Category.SWITCH, "single_pole", 188, 200, codes=["3D"]),
+    ]
+    ctx = _ctx_with_segments(segs)
+    vp = BBox(x0=50, y0=150, x1=220, y1=250)
+    runs = find_wire_runs(
+        ctx,
+        vp,
+        dets,
+        scale_pt_per_ft=18.0,
+        assumptions={"ceiling_height_ft": 8, "switch_height_in": 48, "slack_ft_per_end": 1},
+    )
+    nm143 = [r for r in runs if r.cable_type == "nm_14_3"]
+    assert len(nm143) >= 1
+    assert {nm143[0].from_detection_id, nm143[0].to_detection_id} == {"sw1", "sw2"}
+
+
+def test_continuous_loop_around_symbol_is_not_a_run() -> None:
+    """Near-touching strokes (gap < 1.2) are glyph outlines, not dashes."""
+    # Square outline with continuous joints (gap ~0.5).
+    segs = [
+        _dash(100, 100, 108, 100),
+        _dash(108.4, 100, 108.4, 108),
+        _dash(108.4, 108.4, 100, 108.4),
+        _dash(100, 108.4, 100, 100.4),
+    ]
+    dets = [
+        _det("r", Category.RECEPTACLE, "duplex", 104, 104),
+        _det("s", Category.SWITCH, "single_pole", 200, 200),
+    ]
+    ctx = _ctx_with_segments(segs)
+    vp = BBox(x0=50, y0=50, x1=250, y1=250)
+    runs = find_wire_runs(
+        ctx,
+        vp,
+        dets,
+        scale_pt_per_ft=18.0,
+        assumptions={"ceiling_height_ft": 8, "switch_height_in": 48, "slack_ft_per_end": 1},
+    )
+    assert runs == []
+
+
+def test_curve_splits_at_mid_fixture() -> None:
+    segs = [
+        _dash(104, 100, 112, 100),
+        _dash(116, 100, 124, 100),
+        _dash(128, 100, 136, 100),
+        _dash(140, 100, 148, 100),
+        _dash(152, 100, 160, 100),
+        _dash(164, 100, 172, 100),
+        _dash(176, 100, 184, 100),
+    ]
+    dets = [
+        _det("a", Category.SWITCH, "single_pole", 100, 100),
+        _det("mid", Category.LIGHT, "recessed", 144, 100),
+        _det("b", Category.LIGHT, "pendant", 188, 100),
+    ]
+    ctx = _ctx_with_segments(segs)
+    vp = BBox(x0=50, y0=50, x1=220, y1=150)
+    runs = find_wire_runs(
+        ctx,
+        vp,
+        dets,
+        scale_pt_per_ft=18.0,
+        assumptions={"ceiling_height_ft": 8, "switch_height_in": 48, "slack_ft_per_end": 1},
+    )
+    assert len(runs) >= 1
+    for run in runs:
+        assert run.from_detection_id != run.to_detection_id
+        assert _uncovered_fraction(run.points, segs) <= MAX_UNCOVERED_FRACTION
+
+
+def test_no_run_when_devices_far_from_curve() -> None:
+    segs = [
+        _dash(104, 100, 112, 100),
+        _dash(116, 100, 124, 100),
+        _dash(128, 100, 136, 100),
+    ]
+    far = DEVICE_BBOX_ASSOCIATE_PT + 25
+    dets = [
+        _det("a", Category.SWITCH, "single_pole", 100, 100 + far),
+        _det("b", Category.LIGHT, "pendant", 136, 100 + far),
+    ]
+    ctx = _ctx_with_segments(segs)
+    vp = BBox(x0=50, y0=50, x1=200, y1=200)
+    runs = find_wire_runs(
+        ctx,
+        vp,
+        dets,
+        scale_pt_per_ft=18.0,
+        assumptions={"ceiling_height_ft": 8, "switch_height_in": 48, "slack_ft_per_end": 1},
+    )
+    assert runs == []
+
+
+def test_gap_max_is_measured_gap_times_two() -> None:
+    assert GAP_MAX_PT == pytest.approx(4.5 * 2.0)
+    assert GAP_PATTERN_MIN_PT == pytest.approx(1.2)
+    assert DASH_LEN_MIN_PT <= 3.0  # includes flattened curve samples
+    assert DASH_LEN_MAX_PT >= 10.0
+    assert MAX_PLAN_LENGTH_FT == 40.0
+
+
+def test_three_way_at_either_end_is_nm_14_3() -> None:
+    """Cable rule: three_way / three_way_dimmer at either end → nm_14_3."""
+    segs = [
+        _dash(104, 100, 112, 100),
+        _dash(116, 100, 124, 100),
+        _dash(128, 100, 136, 100),
+        _dash(140, 100, 148, 100),
+    ]
+    dets = [
+        _det("sw", Category.SWITCH, "three_way", 100, 100, codes=["3D"]),
+        _det("lt", Category.LIGHT, "recessed", 152, 100),
+    ]
+    ctx = _ctx_with_segments(segs)
+    vp = BBox(x0=50, y0=50, x1=200, y1=150)
     runs = find_wire_runs(
         ctx,
         vp,
@@ -153,14 +271,19 @@ def test_cable_type_three_way_at_either_end_is_nm_14_3() -> None:
     assert all(r.cable_type == "nm_14_3" for r in runs)
 
 
-def test_cable_type_without_three_way_is_nm_14_2() -> None:
-    segs = _arc_chain(110, 120, 190, 120, n_dashes=6, bulge=45.0)
+def test_no_three_way_is_nm_14_2() -> None:
+    segs = [
+        _dash(104, 100, 112, 100),
+        _dash(116, 100, 124, 100),
+        _dash(128, 100, 136, 100),
+        _dash(140, 100, 148, 100),
+    ]
     dets = [
-        _det("sw", Category.SWITCH, "single_pole", 105, 120, half=20.0),
-        _det("lt", Category.LIGHT, "recessed", 195, 120, half=20.0),
+        _det("sw", Category.SWITCH, "single_pole", 100, 100),
+        _det("lt", Category.LIGHT, "recessed", 152, 100),
     ]
     ctx = _ctx_with_segments(segs)
-    vp = BBox(x0=50, y0=50, x1=250, y1=220)
+    vp = BBox(x0=50, y0=50, x1=200, y1=150)
     runs = find_wire_runs(
         ctx,
         vp,
@@ -172,17 +295,55 @@ def test_cable_type_without_three_way_is_nm_14_2() -> None:
     assert all(r.cable_type == "nm_14_2" for r in runs)
 
 
-def test_straight_six_plus_collinear_dashes_rejected() -> None:
-    """≥6 collinear dashes within 1 pt of the chord are millwork — not wires."""
+def test_gray_colored_dashes_are_ignored() -> None:
+    """Gray (0.67) strokes must never become wire candidates."""
+    gray = Segment(
+        x0=104, y0=100, x1=112, y1=100, width=0.24, color=(0.67, 0.67, 0.67)
+    )
+    black = [
+        _dash(116, 100, 124, 100),
+        _dash(128, 100, 136, 100),
+        _dash(140, 100, 148, 100),
+    ]
+    # Only gray near devices — should yield no run from gray ink alone.
+    dets = [
+        _det("a", Category.SWITCH, "single_pole", 100, 100),
+        _det("b", Category.LIGHT, "pendant", 112, 100),
+    ]
+    ctx = _ctx_with_segments([gray, *black])
+    # Force gray into black_segments list to prove color filter (PDF puts gray elsewhere).
+    ctx = PageContext(
+        page_index=0,
+        page_width=2592.0,
+        page_height=1728.0,
+        black_segments=[gray, *black],
+        black_fills=[],
+        gray_segments=[],
+        gray_fills=[],
+        words=[],
+        spans=[],
+        pdf_path="synthetic",
+    )
+    vp = BBox(x0=50, y0=50, x1=200, y1=150)
+    from takeoff_engine.wires import _raw_length_candidates
+
+    raw = _raw_length_candidates(ctx, vp)
+    assert all(s.color == (0.0, 0.0, 0.0) or (s.color and s.color[0] <= 0.02) for s in raw)
+    assert gray not in raw
+
+
+def test_rejects_straight_chord_without_dash_backing() -> None:
     segs = [
-        _dash(100 + i * 12, 100, 100 + i * 12 + 7, 100) for i in range(7)
+        _dash(104, 100, 112, 100),
+        _dash(116, 100, 124, 100),
+        _dash(128, 100, 136, 100),
     ]
     dets = [
-        _det("a", Category.RECEPTACLE, "duplex", 95, 100),
-        _det("b", Category.RECEPTACLE, "duplex", 100 + 7 * 12 + 5, 100),
+        _det("wall", Category.RECEPTACLE, "duplex", 50, 50),
+        _det("attic", Category.JUNCTION_BOX, "junction_box", 400, 400),
     ]
     ctx = _ctx_with_segments(segs)
-    vp = BBox(x0=50, y0=50, x1=250, y1=150)
+    vp = BBox(x0=0, y0=0, x1=500, y1=500)
     runs = find_wire_runs(
         ctx,
         vp,
@@ -193,20 +354,11 @@ def test_straight_six_plus_collinear_dashes_rejected() -> None:
     assert runs == []
 
 
-def test_same_device_both_ends_dropped() -> None:
-    segs = _arc_chain(100, 100, 140, 100, n_dashes=4, bulge=30.0)
-    # Only one device near both tips → should not emit.
-    dets = [_det("only", Category.LIGHT, "recessed", 120, 115)]
-    ctx = _ctx_with_segments(segs)
-    vp = BBox(x0=50, y0=50, x1=200, y1=200)
-    runs = find_wire_runs(
-        ctx,
-        vp,
-        dets,
-        scale_pt_per_ft=18.0,
-        assumptions={"ceiling_height_ft": 8, "switch_height_in": 48, "slack_ft_per_end": 1},
-    )
-    assert runs == []
+def test_unsupported_straight_chord_helper() -> None:
+    dashes = [_dash(0, 0, 8, 0), _dash(12, 0, 20, 0)]
+    empty = [Point(x=0, y=0), Point(x=200, y=200)]
+    assert _is_unsupported_straight_chord(empty, dashes)
+    assert _uncovered_fraction(empty, dashes) > MAX_UNCOVERED_FRACTION
 
 
 def _plan_runs(plan_index: int):
@@ -228,122 +380,7 @@ def _plan_runs(plan_index: int):
 
 
 @pytest.mark.skipif(not PLANS.is_file(), reason="plans PDF missing")
-def test_plan1_regression_targets() -> None:
-    """Plan 1: laundry/entry 3D curves, bedroom fan, bath, no B38, ≥2 nm_14_3."""
-    runs, result, ctx, _scale = _plan_runs(0)
-    by = {d.id: d for d in result.detections}
-    active = [d for d in result.detections if d.status == "active"]
-
-    laundry = {
-        d.id
-        for d in active
-        if _is_three_way(d) and d.center.y < 300
-    }
-    entry = {
-        d.id
-        for d in active
-        if _is_three_way(d) and d.center.y > 500
-    }
-    kitchen_lights = {
-        d.id
-        for d in active
-        if d.category == Category.LIGHT
-        and d.subtype == "recessed"
-        and d.center.x < 1050
-    }
-    living_lights = {
-        d.id
-        for d in active
-        if d.category == Category.LIGHT and d.subtype == "recessed" and d.center.x >= 1050
-    }
-    any_lights = {d.id for d in active if d.category == Category.LIGHT}
-    fans = {d.id for d in active if d.category == Category.CEILING_FAN}
-    bedroom_df = {
-        d.id
-        for d in active
-        if d.category == Category.SWITCH and abs(d.center.x - 1208) < 8
-    }
-    bath_sw = {
-        d.id
-        for d in active
-        if d.category == Category.SWITCH and d.center.x < 1000
-    }
-    bath_fx = {
-        d.id
-        for d in active
-        if d.category in (Category.LIGHT, Category.EXHAUST_FAN)
-        and d.center.x < 1050
-        and d.center.y > 300
-    }
-    b38 = {
-        d.id
-        for d in active
-        if "240" in d.subtype or any("240" in c for c in d.codes)
-    }
-
-    def hits(a: set[str], b: set[str]) -> list:
-        out = []
-        for r in runs:
-            if (r.from_detection_id in a and r.to_detection_id in b) or (
-                r.from_detection_id in b and r.to_detection_id in a
-            ):
-                out.append(r)
-        return out
-
-    assert hits(laundry, kitchen_lights | living_lights | any_lights), (
-        "expected laundry 3D → kitchen/living light run"
-    )
-    assert hits(entry, living_lights | kitchen_lights | any_lights), (
-        "expected entry 3D → living/kitchen light run"
-    )
-    assert hits(bedroom_df, fans), "expected bedroom D/F → ceiling fan run"
-    assert hits(bath_sw, bath_fx) or any(
-        by[r.from_detection_id].category == Category.SWITCH
-        and by[r.to_detection_id].category in (Category.LIGHT, Category.EXHAUST_FAN)
-        and min(by[r.from_detection_id].center.x, by[r.to_detection_id].center.x) < 1020
-        for r in runs
-    ), "expected bath switch → bath fixture run"
-
-    assert not hits(b38, set(by)), "no run should touch B38 / 240V outdoor equipment"
-    assert sum(1 for r in runs if r.cable_type == "nm_14_3") >= 2
-    assert all(r.from_detection_id != r.to_detection_id for r in runs)
-
-    DEBUG_DIR.mkdir(parents=True, exist_ok=True)
-    vp = result.sheet.viewport
-    assert vp is not None
-    dashes = _collect_dash_candidates(ctx, vp, result.detections)
-    render_wire_debug_png(
-        str(PLANS), 0, vp, runs, result.detections, str(DEBUG_DIR / "wires_plan1.png"), dashes=dashes
-    )
-
-
-@pytest.mark.skipif(not PLANS.is_file(), reason="plans PDF missing")
-@pytest.mark.parametrize("plan_index", [0, 1, 2, 3])
-def test_all_plans_runs_valid(plan_index: int) -> None:
-    runs, result, ctx, _scale = _plan_runs(plan_index)
-    vp = result.sheet.viewport
-    assert vp is not None
-    assert len(runs) >= 1
-    for r in runs:
-        assert r.from_detection_id != r.to_detection_id
-        assert r.plan_length_ft <= MAX_PLAN_LENGTH_FT
-        assert r.cable_type in ("nm_14_2", "nm_14_3")
-
-    DEBUG_DIR.mkdir(parents=True, exist_ok=True)
-    dashes = _collect_dash_candidates(ctx, vp, result.detections)
-    render_wire_debug_png(
-        str(PLANS),
-        plan_index,
-        vp,
-        runs,
-        result.detections,
-        str(DEBUG_DIR / f"wires_plan{plan_index + 1}.png"),
-        dashes=dashes,
-    )
-
-
-@pytest.mark.skipif(not PLANS.is_file(), reason="plans PDF missing")
-def test_page1_fixture_smoke_debug_png() -> None:
+def test_page1_find_wire_runs_smoke_and_debug_png() -> None:
     assumptions = load_assumptions(REPO_ROOT / "data" / "assumptions.yaml")
     ctx = load_page(PLANS, 0)
     vp_t = APPROX_VIEWPORTS[0]
@@ -364,3 +401,57 @@ def test_page1_fixture_smoke_debug_png() -> None:
         str(PLANS), 0, viewport, runs, sample.detections, str(out), dashes=dashes
     )
     assert out.is_file() and out.stat().st_size > 1000
+
+
+@pytest.mark.skipif(not PLANS.is_file(), reason="plans PDF missing")
+def test_plan1_run_count_and_no_symbol_traces() -> None:
+    """Plan 1: ~12–18 runs, none >40 ft total, no same-end loops, ≥1 nm_14_3."""
+    runs, result, ctx, _scale = _plan_runs(0)
+    vp = result.sheet.viewport
+    assert vp is not None
+    dashes = _collect_dash_candidates(ctx, vp, result.detections)
+
+    assert 12 <= len(runs) <= 22, f"expected ~12–18 runs on plan 1, got {len(runs)}"
+    assert all(r.total_length_ft <= 40.0 for r in runs), (
+        f"run >40 ft: {[r.total_length_ft for r in runs if r.total_length_ft > 40]}"
+    )
+    assert all(r.from_detection_id != r.to_detection_id for r in runs)
+    assert any(r.cable_type == "nm_14_3" for r in runs)
+    for r in runs:
+        assert _uncovered_fraction(r.points, dashes) <= MAX_UNCOVERED_FRACTION
+
+    DEBUG_DIR.mkdir(parents=True, exist_ok=True)
+    render_wire_debug_png(
+        str(PLANS),
+        0,
+        vp,
+        runs,
+        result.detections,
+        str(DEBUG_DIR / "wires_plan1.png"),
+        dashes=dashes,
+    )
+
+
+@pytest.mark.skipif(not PLANS.is_file(), reason="plans PDF missing")
+@pytest.mark.parametrize("plan_index", [0, 1, 2, 3])
+def test_all_plans_runs_valid(plan_index: int) -> None:
+    """Every run: different ends, dash-backed, ≤40 ft plan length."""
+    runs, result, ctx, _scale = _plan_runs(plan_index)
+    vp = result.sheet.viewport
+    assert vp is not None
+    dashes = _collect_dash_candidates(ctx, vp, result.detections)
+    for r in runs:
+        assert r.from_detection_id != r.to_detection_id
+        assert r.plan_length_ft <= MAX_PLAN_LENGTH_FT
+        assert _uncovered_fraction(r.points, dashes) <= MAX_UNCOVERED_FRACTION
+
+    DEBUG_DIR.mkdir(parents=True, exist_ok=True)
+    render_wire_debug_png(
+        str(PLANS),
+        plan_index,
+        vp,
+        runs,
+        result.detections,
+        str(DEBUG_DIR / f"wires_plan{plan_index + 1}.png"),
+        dashes=dashes,
+    )

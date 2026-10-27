@@ -20,18 +20,20 @@ Inside `config.APPROX_VIEWPORTS[0]`, black open strokes (width ≈ 0.24) that fo
 | Gap (median, wiring-like pairs) | **3.8 pt** |
 | Gap (typical range) | **2–4.5 pt** |
 
-Detector (v3.1): **black (0,0,0) strokes only**. Visual dash ≈ **7 pt** / gap ≈ **3.8 pt**. After PDF flatten-join, collect open polyline components **4–14 pt**; link gaps **1.5–10 pt** with turn ≤ **45°** (nominal product window was 4–11 / 1.5–6 / 35° — Escondido tips need the wider window).
+Detector (v3): **black (0,0,0) strokes only** — never gray (~0.67) cabinet/sink/toilet/equipment dashes. Length **1.5–14 pt**, **gap pattern** required (`gap ∈ [1.2, 9]`). Documented in `data/assumptions.yaml`.
 
-## Wire algorithm (v3.1)
+## Wire algorithm (v3)
 
-1. **Dash** = open black stroke polyline (RGB ≤ 0.02, width ≈ 0.24), arc length 4–14 pt, after dropping primitives inside receptacle/detector (+ outdoor 240V) bboxes inflated **+2 pt**. Switch/light/fan bboxes are **not** carved so tip attach can still hit them. Continuous flatten joints (≤ 0.5 pt) merge into one dash; longer open paths are kept as whole curves.
-2. **Link** dash A→B when nearest endpoints are 1.5–10 pt apart and direction change &lt; 45°.
-3. A chain of **≥3** dashes is a wire. Reject only if it has **≥6** dashes **and** every point is within **1 pt** of the straight chord (millwork). Long continuous paths use the same chord test with virtual dash count ≈ length/7.
-4. **Extend** each chain tip along its tangent up to **36 pt** (nominal 12; Escondido needs ~36 to bridge carved approaches); attach when the ray hits a device bbox. Drop chains that do not attach at both ends, or whose ends attach to the **same** device. Never attach to outdoor 240V / B38 equipment.
-5. **Cable type (simple estimator):** any run with `three_way` / `three_way_dimmer` at **either** end → `nm_14_3`; everything else → `nm_14_2`.
-6. **Known limit:** residual millwork can still leak; UI may keep Wires **beta** (Agente 6).
+1. **Collect black dashed strokes only** from `black_segments` (RGB ≤ 0.02). Never read `gray_segments`. Require a dash-gap neighbor; continuous glyph joints are out. Drop ink inside keynote boxes (A01/B38/…), outdoor equipment detection bboxes (+2 pt), receptacle/detector bboxes (+2 pt), and large gray millwork fills.
+2. **Link into open curves** (greedy tip growth, gap × 2 + tangent). Drop closed loops.
+3. **Ends at bbox boundary** of the nearest device; mid-path fixtures split the curve. Outdoor 240V / B38 equipment is never an endpoint.
+4. **Runs** require different devices, mostly dash-covered ink, plan length ≤ 40 ft.
+5. **Cable type (hard rule):**
+   - ``nm_14_3`` — any run with `three_way` / `three_way_dimmer` (or codes `3`/`3D`) at **either** end.
+   - ``nm_14_2`` — everything else.
+6. **Vertical allowance** from assumptions; waste in `compute_bom`.
 
-Debug PNGs: teal dash underlay + pink (`nm_14_2`) / green (`nm_14_3`) runs → `out/debug/wires_plan{1..4}.png`.
+Debug PNGs: teal black-dash underlay + pink (`nm_14_2`) / green (`nm_14_3`) runs labeled `{cable_type} {total_ft}ft`.
 
 ### Routing assumption (honest limit)
 
@@ -68,12 +70,11 @@ Verified examples (2026-10-25): 14/2 250 ft roll $125; 14/3 250 ft $165; 1-gang 
 
 | Name | Value | Why |
 |------|-------|-----|
-| `DASH_LEN_*` | 4–14 pt | Spec 4–11; flatten-join lands ~4–13.5 |
-| `GAP_*` | 1.5–10 pt | Spec 1.5–6; Escondido tip gaps ~6.7–10 |
-| `MAX_TURN_DEG` | 45 | Spec 35; real arcs turn more after flatten |
-| `TANGENT_EXTEND_PT` | 36 | Spec 12; bridge tip → device bbox |
-| `STRAIGHT_CHORD_TOL_PT` | 1.0 | Millwork reject (≥6 dashes, all pts ≤1 pt of chord) |
-| `BBOX_EXCLUDE_INFLATE_PT` | 2.0 | Carve receptacle/detector glyphs |
+| `GAP_MAX_PT` / aligned | 9.0 / ~12 | Typical gap 4.5 × 2; farther if cos high |
+| `DASH_LEN_*` | 1.5–14 pt | Median ~7.1; include flattened arcs |
+| `DIR_COS_MIN` / prefer | −0.35 / 0.35 | Tangent continuity; prefer aligned |
+| `DEVICE_BBOX_ASSOCIATE_PT` | 22 | Curve end → nearest bbox boundary |
+| `DEVICE_PATH_ASSOCIATE_PT` | 8 | Mid-path fixture split (tight) |
 | `GANG_GROUP_DIST_PT` | 10 | Spec multi-gang grouping (boxes) |
 | `ceiling_height_ft` | 8 | Stated routing assumption |
 | `switch_height_in` | 48 | AFF for switch vertical |

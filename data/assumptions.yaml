@@ -11,14 +11,13 @@ cable_roll_ft: 250
 
 # Measured on Escondido Plan 1 (page index 0), electrical viewport, 2026-10-25:
 # short black open strokes that form dashed wiring chains.
-# v3.1: black (0,0,0) only; dash components 4–14 pt after flatten-join;
-# link gap 1.5–10 pt / turn ≤45°; tip extend ≤36 pt; millwork = ≥6 dashes
-# within 1 pt of chord. Cable: nm_14_3 if either end is three_way / three_way_dimmer.
+# v3: black (0,0,0) dashes only — never gray (~0.67) millwork.
+# Dash length [1.5, 14] pt; gap pattern [1.2, gap_max]; continuous joints are out.
+# Cable: nm_14_3 if either end is three_way / three_way_dimmer; else nm_14_2.
 dash_length_pt_median: 7.1
-dash_length_pt_range: [4.0, 14.0]
+dash_length_pt_range: [4.0, 10.0]
 gap_pt_median: 3.8
 gap_pt_range: [2.0, 4.5]
-gap_pattern_min_pt: 1.5
-gap_pattern_max_pt: 10.0
+gap_pattern_min_pt: 1.2
+gap_max_pt: 9.0  # gap_pt_range[1] × 2
 wire_stroke_rgb: [0.0, 0.0, 0.0]
-wires_layer_beta: true  # residual millwork false-positives possible
