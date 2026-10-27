@@ -113,7 +113,7 @@ def build_sheet_detail(sheet: Sheet, run: AnalysisRun | None) -> SheetDetailResp
     )
 
 
-def _append_correction(
+def append_correction(
     session: AsyncSession,
     *,
     sheet_id: str,
@@ -192,7 +192,7 @@ async def create_detection(
     # Validate via engine model
     det = detection_from_row(row)
     session.add(row)
-    _append_correction(
+    append_correction(
         session,
         sheet_id=sheet.id,
         run_id=run.id,
@@ -219,7 +219,13 @@ async def patch_detection(
         select(DetectionRow).where(DetectionRow.id == detection_id)
     )
     row = result.scalar_one_or_none()
-    if row is None or row.status == "deleted":
+    if row is None:
+        raise HTTPException(status_code=404, detail="detection not found")
+
+    data = body.model_dump(exclude_unset=True)
+    history_action = data.pop("history_action", None)
+    restoring = data.get("status") == "active"
+    if row.status == "deleted" and not restoring:
         raise HTTPException(status_code=404, detail="detection not found")
 
     sheet = await get_sheet_or_404(session, row.sheet_id)
@@ -230,9 +236,10 @@ async def patch_detection(
     before = detection_to_dict(detection_from_row(row))
     rooms = [room_from_row(r) for r in run.rooms]
 
-    data = body.model_dump(exclude_unset=True)
     center_moved = "center" in data
-    manual_room = "room_id" in data or data.get("room_source") == "manual"
+    # Exact field restore for undo: if room_id is present, apply it literally
+    # and do not re-run auto room assignment.
+    exact_room = "room_id" in data
 
     if "category" in data and data["category"] is not None:
         cat = data["category"]
@@ -258,10 +265,17 @@ async def patch_detection(
     if "evidence" in data and data["evidence"] is not None:
         ev = data["evidence"]
         row.evidence = ev.model_dump() if hasattr(ev, "model_dump") else ev
+    if "status" in data and data["status"] is not None:
+        row.status = data["status"]
 
-    if manual_room and "room_id" in data:
+    if exact_room:
         row.room_id = data["room_id"]
+        if "room_source" in data and data["room_source"] is not None:
+            row.room_source = data["room_source"]
+    elif "room_source" in data and data["room_source"] == "manual":
         row.room_source = "manual"
+        if "room_id" in data:
+            row.room_id = data["room_id"]
     elif center_moved and row.room_source == "auto":
         point = Point(**row.center)
         row.room_id = assign_room(point, rooms)
@@ -269,13 +283,16 @@ async def patch_detection(
         row.room_source = data["room_source"]
 
     after_det = detection_from_row(row)
-    _append_correction(
+    action = history_action or ("delete" if after_det.status == "deleted" else "update")
+    if restoring and history_action is None and before.get("status") == "deleted":
+        action = "update"
+    append_correction(
         session,
         sheet_id=sheet.id,
         run_id=run.id,
         entity="detection",
         entity_id=row.id,
-        action="update",
+        action=action,
         before=before,
         after=detection_to_dict(after_det),
     )
@@ -286,8 +303,52 @@ async def patch_detection(
     return after_det, sheet_takeoff(rooms_m, dets_m), sheet
 
 
+async def restore_detection(
+    session: AsyncSession,
+    detection_id: str,
+    *,
+    history_action: str | None = None,
+) -> tuple[Detection, Takeoff, Sheet]:
+    """Undelete a soft-deleted detection (for undo of delete / redo of create)."""
+    result = await session.execute(
+        select(DetectionRow).where(DetectionRow.id == detection_id)
+    )
+    row = result.scalar_one_or_none()
+    if row is None:
+        raise HTTPException(status_code=404, detail="detection not found")
+    if row.status != "deleted":
+        raise HTTPException(status_code=409, detail="detection is not deleted")
+
+    sheet = await get_sheet_or_404(session, row.sheet_id)
+    run = await require_succeeded_run(session, sheet)
+    if row.analysis_run_id != run.id:
+        raise HTTPException(status_code=409, detail="detection not on current run")
+
+    before = detection_to_dict(detection_from_row(row))
+    row.status = "active"
+    after = detection_from_row(row)
+    append_correction(
+        session,
+        sheet_id=sheet.id,
+        run_id=run.id,
+        entity="detection",
+        entity_id=row.id,
+        action=history_action or "update",
+        before=before,
+        after=detection_to_dict(after),
+    )
+    await session.commit()
+    run = await load_current_run(session, sheet)
+    assert run is not None
+    rooms_m, dets_m, *_ = load_run_entities(run)
+    return after, sheet_takeoff(rooms_m, dets_m), sheet
+
+
 async def delete_detection(
-    session: AsyncSession, detection_id: str
+    session: AsyncSession,
+    detection_id: str,
+    *,
+    history_action: str | None = None,
 ) -> tuple[Detection, Takeoff, Sheet]:
     result = await session.execute(
         select(DetectionRow).where(DetectionRow.id == detection_id)
@@ -303,13 +364,13 @@ async def delete_detection(
     before = detection_to_dict(detection_from_row(row))
     row.status = "deleted"
     after = detection_from_row(row)
-    _append_correction(
+    append_correction(
         session,
         sheet_id=sheet.id,
         run_id=run.id,
         entity="detection",
         entity_id=row.id,
-        action="delete",
+        action=history_action or "delete",
         before=before,
         after=detection_to_dict(after),
     )
@@ -344,7 +405,7 @@ async def create_wire(
     )
     session.add(row)
     after = wire_from_row(row).model_dump(mode="json")
-    _append_correction(
+    append_correction(
         session,
         sheet_id=sheet.id,
         run_id=run.id,
@@ -390,7 +451,7 @@ async def patch_wire(
     ):
         row.total_length_ft = row.plan_length_ft + row.vertical_allowance_ft
     after = wire_from_row(row).model_dump(mode="json")
-    _append_correction(
+    append_correction(
         session,
         sheet_id=sheet.id,
         run_id=run.id,
@@ -417,7 +478,7 @@ async def delete_wire(
     sheet = await get_sheet_or_404(session, row.sheet_id)
     run = await require_succeeded_run(session, sheet)
     before = wire_from_row(row).model_dump(mode="json")
-    _append_correction(
+    append_correction(
         session,
         sheet_id=sheet.id,
         run_id=run.id,
@@ -455,7 +516,7 @@ async def create_box(
     )
     session.add(row)
     after = box_from_row(row).model_dump(mode="json")
-    _append_correction(
+    append_correction(
         session,
         sheet_id=sheet.id,
         run_id=run.id,
@@ -493,7 +554,7 @@ async def patch_box(
         if key in data and data[key] is not None:
             setattr(row, key, data[key])
     after = box_from_row(row).model_dump(mode="json")
-    _append_correction(
+    append_correction(
         session,
         sheet_id=sheet.id,
         run_id=run.id,
@@ -520,7 +581,7 @@ async def delete_box(
     sheet = await get_sheet_or_404(session, row.sheet_id)
     run = await require_succeeded_run(session, sheet)
     before = box_from_row(row).model_dump(mode="json")
-    _append_correction(
+    append_correction(
         session,
         sheet_id=sheet.id,
         run_id=run.id,

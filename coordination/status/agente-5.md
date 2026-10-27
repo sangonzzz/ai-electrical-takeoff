@@ -2,44 +2,43 @@
 
 ## Estado
 
-Exports Excel/PDF listos. Pedido a Agente 1: `openpyxl` + `reportlab` en `backend/pyproject.toml`.
+Undo/redo API lista (restore + PATCH + `/undo` `/redo` `/history`). Mensaje a Agente 6.
 
 ## Hecho
 
-- API completa (upload, jobs, CRUD, review, file_hash, job fields en document)
-- **Exports:** `export.xlsx` / `quote.pdf` a nivel sheet y document
-- Tests unitarios abren xlsx/pdf; mensaje a Agente 6
+- Upload/jobs/CRUD/BOM/exports/file_hash/document job fields
+- **Undo/redo:** restore endpoint, PATCH `status` + exact fields, server undo/redo
+  invirtiendo el tip del corrections log, `history` para can_undo/can_redo
+- Tests en `backend/tests/test_undo_redo.py`
 
 ## Cómo probarlo
 
 ```bash
-# Tras Agente 1: uv sync (openpyxl, reportlab)
-uv run pytest backend/tests/test_exports.py -q -k "not endpoints"
-# Con Postgres:
-uv run pytest backend/tests/test_exports.py -q
+uv run pytest backend/tests/test_undo_redo.py -q
+# Manual:
+# POST detection → GET .../history → POST .../undo → POST .../redo
 ```
 
 ## Siguiente
 
-- Confirmar deps de Agente 1 en pyproject
-- Agente 6: botones de descarga
+- Agente 6 cablea `client.ts` a `/undo` `/redo` `/history` (e2e `undo_then_redo`)
 
 ## Bloqueos
 
-- `openpyxl` / `reportlab` aún no están en `backend/pyproject.toml` (pedido a Agente 1);
-  instalados localmente con `uv pip` para desarrollo
+- Ninguno en backend; e2e verde cuando Agente 6 consuma los endpoints
 
 ## Decisions
 
-- Document workbook: una sola pestaña por tipo con columna `Plan`
-- Quote PDF: una sección/página por hoja; overlay a 72 dpi
+- Undo tip = última corrección `create|update|delete|redo`; redo tip = `undo`
+- Nueva edición tras undos invalida redo (tip deja de ser `undo`)
 
 ## Needs from Santiago
 
-- Ninguno urgente
+- (ninguno)
 
 ## Explicación para Santiago
 
-Ahora puedes bajar un Excel con el takeoff por cuarto, detecciones, BOM, cables,
-supuestos y correcciones, y un PDF de cotización limpio con totales y una imagen del
-plano. También hay exportación de las 4 hojas juntas (un Excel y un PDF).
+Para que Deshacer/Rehacer funcionen con la API real: el backend puede restaurar una
+detección borrada (soft delete) y aceptar un PATCH con los valores anteriores. Además
+hay `/undo` y `/redo` que invierten la última corrección y lo anotan en el log. El front
+solo tiene que llamar esos endpoints y leer `/history` para habilitar los botones.

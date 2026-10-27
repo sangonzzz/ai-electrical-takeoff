@@ -118,11 +118,25 @@ class DetectionPatch(BaseModel):
     confidence: float | None = Field(default=None, ge=0, le=1)
     needs_review: bool | None = None
     evidence: Evidence | None = None
+    # Soft-delete restore / undo: set status back to "active"
+    status: Literal["active", "deleted"] | None = None
+    # When the client drives undo/redo, tag the corrections log entry
+    history_action: Literal["undo", "redo"] | None = None
+
+
+class DetectionRestoreBody(BaseModel):
+    history_action: Literal["undo", "redo"] | None = None
 
 
 class DetectionMutationResponse(BaseModel):
     detection: Detection
     takeoff: Takeoff
+
+
+class HistoryStatusResponse(BaseModel):
+    can_undo: bool
+    can_redo: bool
+
 
 
 class WireRunCreate(BaseModel):

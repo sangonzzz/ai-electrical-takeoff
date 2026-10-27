@@ -18,7 +18,9 @@ from app.schemas.api import (
     DetectionCreate,
     DetectionMutationResponse,
     DetectionPatch,
+    DetectionRestoreBody,
     EntityMutationResponse,
+    HistoryStatusResponse,
     ReanalyzeResponse,
     ReviewCompleteResponse,
     SheetDetailResponse,
@@ -26,6 +28,7 @@ from app.schemas.api import (
     WireRunPatch,
 )
 from app.services.documents import create_reanalyze_run
+from app.services.history import get_history_status, redo_sheet, undo_sheet
 from app.services.image import render_sheet_png
 from app.services.serializers import (
     box_from_row,
@@ -46,6 +49,7 @@ from app.services.sheet_ops import (
     patch_detection,
     patch_wire,
     require_succeeded_run,
+    restore_detection,
 )
 from app.services.takeoff_svc import sheet_bom, sheet_takeoff, takeoff_to_csv
 
@@ -266,6 +270,43 @@ async def delete_detection_route(
 ) -> DetectionMutationResponse:
     det, takeoff, _sheet = await delete_detection(session, detection_id)
     return DetectionMutationResponse(detection=det, takeoff=takeoff)
+
+
+@router.post(
+    "/api/detections/{detection_id}/restore",
+    response_model=DetectionMutationResponse,
+)
+async def restore_detection_route(
+    detection_id: str,
+    session: DbSession,
+    body: DetectionRestoreBody | None = None,
+) -> DetectionMutationResponse:
+    """Undelete a soft-deleted detection (undo of delete / client-driven redo)."""
+    hist = body.history_action if body is not None else None
+    det, takeoff, _sheet = await restore_detection(
+        session, detection_id, history_action=hist
+    )
+    return DetectionMutationResponse(detection=det, takeoff=takeoff)
+
+
+@router.get("/api/sheets/{sheet_id}/history", response_model=HistoryStatusResponse)
+async def sheet_history(sheet_id: str, session: DbSession) -> HistoryStatusResponse:
+    await get_sheet_or_404(session, sheet_id)
+    return await get_history_status(session, sheet_id)
+
+
+@router.post("/api/sheets/{sheet_id}/undo", response_model=SheetDetailResponse)
+async def sheet_undo(sheet_id: str, session: DbSession) -> SheetDetailResponse:
+    """Invert the tip of the corrections log; appends action=undo."""
+    sheet = await get_sheet_or_404(session, sheet_id)
+    return await undo_sheet(session, sheet)
+
+
+@router.post("/api/sheets/{sheet_id}/redo", response_model=SheetDetailResponse)
+async def sheet_redo(sheet_id: str, session: DbSession) -> SheetDetailResponse:
+    """Re-apply the last undo; appends action=redo."""
+    sheet = await get_sheet_or_404(session, sheet_id)
+    return await redo_sheet(session, sheet)
 
 
 @router.post("/api/sheets/{sheet_id}/wire-runs", response_model=EntityMutationResponse)

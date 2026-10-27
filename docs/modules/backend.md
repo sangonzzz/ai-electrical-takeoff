@@ -71,6 +71,14 @@ Human review: `POST /api/sheets/{id}/review-complete` sets `human_reviewed` on t
 current run; `GET /api/sheets/{id}/ground-truth.json` exports active detections for
 Agente 7 (`planN.detections.json`).
 
+## Undo / redo
+
+- `GET /api/sheets/{id}/history` → `{ can_undo, can_redo }`
+- `POST /api/sheets/{id}/undo` / `redo` → full sheet detail; logs `action=undo|redo`
+- Soft-delete restore: `POST /api/detections/{id}/restore` or `PATCH` with `status=active`
+- `PATCH` accepts prior field snapshots (`category`, `subtype`, `room_id`, `room_source`,
+  `center`, `bbox`, …); optional `history_action` tags the corrections row
+
 ## Exports (Excel + PDF quote)
 
 Requires `openpyxl` and `reportlab` (ask Agente 1 if missing from `backend/pyproject.toml`).
