@@ -150,13 +150,14 @@ uv run python -m eval.regression
 
 ## Quality pass (E2E + generalization)
 
-- Playwright suite: `e2e/` — `make e2e` against `http://localhost:5173` (docker stack).
-  Per-step results: `e2e/results/steps.md`. Screenshots on failure.
-- Review UI coverage (Agente 6): palette click-add + drag-drop, undo/redo (soft-fail
-  until history API), Details X/Y edit, Download Excel / quote PDF. Exports are
-  saved under `e2e/results/downloads/` and opened with openpyxl (expected sheets:
-  Takeoff by room, Detections, BOM, Wires, Assumptions, Corrections log) and
-  pymupdf (page count + text).
+- Playwright suite: `e2e/` — **isolated** stack only (`e2e/docker-compose.yml`,
+  project `takeoff-e2e`, DB **`takeoff_e2e`**, web `:5174`, API `:8001`).
+  See `e2e/README.md`. Never run against Santiago’s `:5173` / DB `takeoff`
+  (demo upload is idempotent and would pollute his review document).
+  Run: `cd e2e && npm test`. Per-step results: `e2e/results/steps.md`.
+- Review UI coverage (Agente 6): palette click-add + drag-drop, undo/redo,
+  Details X/Y edit, Download Excel / quote PDF. Exports under
+  `e2e/results/downloads/` validated with openpyxl + pymupdf.
 - Generalization probe (no engine tuning): `eval/scripts/generalization_probe.py` on
   PDFs under `data/plans/generalization/` → `eval/reports/generalization/`.
 

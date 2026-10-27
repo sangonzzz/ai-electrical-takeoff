@@ -1,6 +1,7 @@
 /**
- * Full demo quality pass against the docker stack at http://localhost:5173.
- * Requires: `make up` with healthy api/web/worker.
+ * Full demo quality pass against the **isolated** e2e stack
+ * (http://localhost:5174 → API :8001 → Postgres DB `takeoff_e2e`).
+ * See e2e/README.md — never run this against Santiago's :5173 / DB `takeoff`.
  *
  * Covers Agente 6 review UI: palette click-add + drag-drop, undo/redo,
  * X/Y position fields, Download Excel / quote PDF (files opened via openpyxl/pymupdf).

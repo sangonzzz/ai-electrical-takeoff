@@ -18,7 +18,8 @@ export default defineConfig({
     ["html", { open: "never", outputFolder: path.join(root, "results", "html") }],
   ],
   use: {
-    baseURL: process.env.E2E_BASE_URL ?? "http://localhost:5173",
+    // Default = isolated e2e stack (see e2e/README.md). Never default to :5173.
+    baseURL: process.env.E2E_BASE_URL ?? "http://localhost:5174",
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
     video: "retain-on-failure",

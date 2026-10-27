@@ -1,0 +1,142 @@
+# Isolated e2e stack (Agente 7). Never shares the default `takeoff` database.
+# Ports: web :5174 → api :8001 → postgres :5433 (db takeoff_e2e) · redis :6380
+#
+#   docker compose -f e2e/docker-compose.yml -p takeoff-e2e up -d --build --wait
+#   E2E_BASE_URL=http://localhost:5174 npx playwright test
+#
+# Or: cd e2e && npm test   (scripts/run.mjs)
+
+name: takeoff-e2e
+
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: takeoff
+      POSTGRES_PASSWORD: takeoff
+      POSTGRES_DB: takeoff_e2e
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata_e2e:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U takeoff -d takeoff_e2e"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    image: redis:7
+    ports:
+      - "6380:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  api:
+    image: takeoff-backend:local
+    build:
+      context: ..
+      dockerfile: backend/Dockerfile
+    working_dir: /app
+    ports:
+      - "8001:8000"
+    volumes:
+      - storage_e2e:/app/storage
+      - ../.cache:/app/.cache
+    env_file:
+      - path: ../.env
+        required: false
+    environment:
+      DATABASE_URL: postgresql+asyncpg://takeoff:takeoff@db:5432/takeoff_e2e
+      REDIS_URL: redis://redis:6379/0
+      ENGINE: real
+      INLINE_JOBS: "false"
+      # Entrypoint already runs alembic from /app/backend; lifespan auto_migrate
+      # resolves script_location relative to cwd=/app and breaks (Agente 5).
+      AUTO_MIGRATE: "false"
+      # JSON list — pydantic-settings
+      CORS_ORIGINS: '["http://localhost:5174","http://127.0.0.1:5174"]'
+      PYTHONPATH: /app/backend
+      PATH: /opt/venv/bin:/usr/local/bin:/usr/bin:/bin
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health')\"",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 50s
+    restart: unless-stopped
+
+  worker:
+    image: takeoff-backend:local
+    build:
+      context: ..
+      dockerfile: backend/Dockerfile
+    working_dir: /app
+    entrypoint: ["arq"]
+    command: ["app.worker.WorkerSettings"]
+    volumes:
+      - storage_e2e:/app/storage
+      - ../.cache:/app/.cache
+    env_file:
+      - path: ../.env
+        required: false
+    environment:
+      DATABASE_URL: postgresql+asyncpg://takeoff:takeoff@db:5432/takeoff_e2e
+      REDIS_URL: redis://redis:6379/0
+      ENGINE: real
+      PYTHONPATH: /app/backend
+      PATH: /opt/venv/bin:/usr/local/bin:/usr/bin:/bin
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      api:
+        condition: service_started
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import os,signal; os.kill(1,0)\""]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  web:
+    image: node:22-alpine
+    working_dir: /app
+    command: sh -c "corepack enable && pnpm install && pnpm dev --host 0.0.0.0 --port 5173"
+    volumes:
+      - ../web:/app
+      - ../contracts:/contracts:ro
+      - web_node_modules:/app/node_modules
+      - web_pnpm_store:/app/.pnpm-store
+    ports:
+      - "5174:5173"
+    environment:
+      VITE_API_BASE_URL: http://localhost:8001
+      VITE_USE_FIXTURE: "false"
+      PNPM_STORE_DIR: /app/.pnpm-store
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  pgdata_e2e:
+  storage_e2e:
+  web_node_modules:
+  web_pnpm_store:

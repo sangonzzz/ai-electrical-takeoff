@@ -3,11 +3,14 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "Playwright end-to-end suite against the docker stack (Agente 7)",
+  "description": "Playwright e2e against isolated takeoff_e2e stack (Agente 7)",
   "scripts": {
-    "test": "playwright test",
-    "test:headed": "playwright test --headed",
-    "report": "playwright show-report"
+    "test": "node scripts/run.mjs test",
+    "test:headed": "node scripts/run.mjs test --headed",
+    "stack:up": "node scripts/run.mjs up",
+    "stack:down": "node scripts/run.mjs down",
+    "stack:reset": "node scripts/run.mjs reset",
+    "report": "playwright show-report results/html"
   },
   "devDependencies": {
     "@playwright/test": "^1.55.0"
