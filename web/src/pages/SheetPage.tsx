@@ -14,6 +14,13 @@ import { ErrorState } from "@/components/ui/ErrorState";
 import { SheetSkeleton } from "@/components/ui/Skeleton";
 import { useUiStore } from "@/store/uiStore";
 import { defaultSubtype } from "@/lib/subtypes";
+import { planLengthFt, straightRunPoints, totalLengthFt } from "@/lib/wires";
+
+function defaultCableType(fromSubtype: string, toSubtype: string): "nm_14_2" | "nm_14_3" {
+  const threeWay = (s: string) =>
+    s === "three_way" || s === "three_way_dimmer" || s.includes("3way");
+  return threeWay(fromSubtype) || threeWay(toSubtype) ? "nm_14_3" : "nm_14_2";
+}
 
 export function SheetPage() {
   const { documentId = "", sheetId = "" } = useParams();
@@ -27,6 +34,9 @@ export function SheetPage() {
     createDetection,
     patchDetection,
     deleteDetection,
+    createWireRun,
+    patchWireRun,
+    deleteWireRun,
     undo,
     redo,
     canUndo,
@@ -41,7 +51,13 @@ export function SheetPage() {
   });
 
   const selectedId = useUiStore((s) => s.selectedDetectionId);
+  const selectedWireId = useUiStore((s) => s.selectedWireId);
+  const selectedBoxId = useUiStore((s) => s.selectedBoxId);
   const selectDetection = useUiStore((s) => s.selectDetection);
+  const selectWire = useUiStore((s) => s.selectWire);
+  const selectBox = useUiStore((s) => s.selectBox);
+  const highlightDevices = useUiStore((s) => s.highlightDevices);
+  const setWireCreateFromId = useUiStore((s) => s.setWireCreateFromId);
   const mode = useUiStore((s) => s.mode);
   const addCategory = useUiStore((s) => s.addCategory);
   const addSubtype = useUiStore((s) => s.addSubtype);
@@ -53,6 +69,10 @@ export function SheetPage() {
   const result = sheetQuery.data?.result;
   const selected =
     result?.detections.find((d) => d.id === selectedId && d.status !== "deleted") ?? null;
+  const selectedWire =
+    result?.wire_runs?.find((w) => w.id === selectedWireId) ?? null;
+  const selectedBox =
+    result?.boxes?.find((b) => b.id === selectedBoxId) ?? null;
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -72,16 +92,24 @@ export function SheetPage() {
       if (e.key === "v" || e.key === "V") {
         e.preventDefault();
         setMode("select");
+        setWireCreateFromId(null);
       }
       if (e.key === "a" || e.key === "A") {
         e.preventDefault();
         setMode("add");
+        setWireCreateFromId(null);
       }
       if (e.key === "f" || e.key === "F") {
         e.preventDefault();
         planRef.current?.fitToScreen();
       }
       if (e.key === "Delete" || e.key === "Backspace") {
+        if (selectedWireId) {
+          e.preventDefault();
+          deleteWireRun(selectedWireId);
+          selectWire(null);
+          return;
+        }
         if (selectedId) {
           e.preventDefault();
           deleteDetection(selectedId);
@@ -99,7 +127,10 @@ export function SheetPage() {
       }
       if (e.key === "Escape") {
         setMode("select");
+        setWireCreateFromId(null);
         selectDetection(null);
+        selectWire(null);
+        selectBox(null);
         setShortcutsOpen(false);
       }
     }
@@ -107,8 +138,13 @@ export function SheetPage() {
     return () => window.removeEventListener("keydown", onKey);
   }, [
     selectedId,
+    selectedWireId,
     deleteDetection,
+    deleteWireRun,
     selectDetection,
+    selectWire,
+    selectBox,
+    setWireCreateFromId,
     undo,
     redo,
     setMode,
@@ -151,6 +187,11 @@ export function SheetPage() {
         status: "succeeded" as const,
       },
     ];
+
+  const ptPerFt =
+    typeof result.sheet.scale_pt_per_ft === "number" && result.sheet.scale_pt_per_ft > 0
+      ? result.sheet.scale_pt_per_ft
+      : 18;
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-[var(--surface-2)]">
@@ -209,11 +250,35 @@ export function SheetPage() {
             onDragEnd={(id, x, y) => {
               patchDetection(id, { center: { x, y } });
             }}
+            onWireCreatePair={(fromId, toId) => {
+              const from = result.detections.find((d) => d.id === fromId);
+              const to = result.detections.find((d) => d.id === toId);
+              if (!from || !to) return;
+              const points = straightRunPoints(from.center, to.center);
+              const plan = planLengthFt(points, ptPerFt);
+              const vertical = 0;
+              createWireRun({
+                points,
+                from_detection_id: fromId,
+                to_detection_id: toId,
+                cable_type: defaultCableType(from.subtype, to.subtype),
+                plan_length_ft: plan,
+                vertical_allowance_ft: vertical,
+                total_length_ft: totalLengthFt(plan, vertical),
+                confidence: 1,
+              });
+              setMode("select");
+              setWireCreateFromId(null);
+            }}
           />
           <RightPanel
             rooms={result.rooms}
             detections={result.detections}
+            wires={result.wire_runs}
+            boxes={result.boxes}
             selected={selected}
+            selectedWire={selectedWire}
+            selectedBox={selectedBox}
             bom={bomQuery.data}
             corrections={correctionsQuery.data ?? []}
             onPatch={(patch) => {
@@ -225,6 +290,16 @@ export function SheetPage() {
               deleteDetection(selected.id);
               selectDetection(null);
             }}
+            onPatchWire={(patch) => {
+              if (!selectedWire) return;
+              patchWireRun(selectedWire.id, patch);
+            }}
+            onDeleteWire={() => {
+              if (!selectedWire) return;
+              deleteWireRun(selectedWire.id);
+              selectWire(null);
+            }}
+            onHighlightDevices={(ids) => highlightDevices(ids)}
           />
         </div>
       </div>
@@ -234,6 +309,11 @@ export function SheetPage() {
       {mode === "add" && (
         <div className="pointer-events-none fixed bottom-4 left-1/2 z-40 -translate-x-1/2 rounded-full bg-[var(--ink)] px-3 py-1.5 text-[12px] font-semibold text-white shadow-[var(--shadow-md)]">
           Add mode — click the plan · Esc to cancel
+        </div>
+      )}
+      {mode === "wire_create" && (
+        <div className="pointer-events-none fixed bottom-4 left-1/2 z-40 -translate-x-1/2 rounded-full bg-pink-600 px-3 py-1.5 text-[12px] font-semibold text-white shadow-[var(--shadow-md)]">
+          New cable — click device A, then B · Esc to cancel
         </div>
       )}
     </div>

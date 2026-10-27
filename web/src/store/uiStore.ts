@@ -60,6 +60,8 @@ interface UiState {
   setEditCables: (on: boolean) => void;
   setWireCreateFromId: (id: string | null) => void;
   setHighlight: (highlight: TakeoffHighlight | null) => void;
+  /** Highlight devices on the plan without leaving Details (wire/box from/to). */
+  highlightDevices: (ids: string[]) => void;
   toggleLayer: (layer: keyof LayerVisibility) => void;
   toggleCategory: (category: Category) => void;
   setAllCategories: (on: boolean) => void;
@@ -133,7 +135,16 @@ export const useUiStore = create<UiState>((set) => ({
       highlight,
       selectedDetectionId: null,
       selectedWireId: null,
+      selectedBoxId: null,
       panelTab: "takeoff",
+    }),
+  highlightDevices: (ids) =>
+    set({
+      highlight: {
+        detectionIds: ids,
+        key: `devices:${ids.join(",")}`,
+        roomId: null,
+      },
     }),
   toggleLayer: (layer) =>
     set((s) => ({

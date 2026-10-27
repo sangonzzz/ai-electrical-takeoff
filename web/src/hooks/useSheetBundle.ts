@@ -2,33 +2,50 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   createDetection,
+  createWireRun,
   deleteDetection,
+  deleteWireRun,
   getSheet,
   getSheetBom,
   getSheetCorrections,
   isFixtureMode,
   patchDetection,
+  patchWireRun,
   redoLastAction,
   restoreDetection,
+  restoreWireRun,
   sheetImageUrl,
   undoLastAction,
 } from "@/api/client";
-import type { SheetBundle } from "@/api/types";
-import type { Detection, SheetResult, Takeoff } from "@/types/contracts";
+import type {
+  EntityMutationResponse,
+  SheetBundle,
+  WireRunCreateBody,
+  WireRunPatchBody,
+} from "@/api/types";
+import type { Bom, Box, Detection, SheetResult, Takeoff, WireRun } from "@/types/contracts";
 import {
   emptyStack,
   inversePatchFrom,
+  inverseWirePatchFrom,
   popRedo,
   popUndo,
   pushCommand,
   type CommandStackState,
   type DetectionPatchBody,
   type HistoryCommand,
+  type WirePatchBody,
 } from "@/lib/commandStack";
+import { wiresAfterDetectionMove } from "@/lib/wires";
 import { useCanRedo, useCanUndo } from "./fixtureFlags";
 
 export function sheetQueryKey(sheetId: string) {
   return ["sheet", sheetId] as const;
+}
+
+function ptPerFtOf(result: SheetResult): number {
+  const s = result.sheet.scale_pt_per_ft;
+  return typeof s === "number" && s > 0 ? s : 18;
 }
 
 export function useSheetBundle(sheetId: string) {
@@ -86,6 +103,25 @@ export function useSheetBundle(sheetId: string) {
     );
   }
 
+  function applyBom(bom: Bom | null | undefined) {
+    if (bom === undefined) return;
+    queryClient.setQueryData(["bom", sheetId], bom);
+  }
+
+  /** Merge optional derived fields from an entity mutation into the sheet cache. */
+  function applyEntityMutation(data: EntityMutationResponse | DetectionMutationLike) {
+    applyTakeoff(data.takeoff);
+    if ("wire_runs" in data && data.wire_runs) {
+      setResult((r) => ({ ...r, wire_runs: data.wire_runs as WireRun[] }));
+    }
+    if ("boxes" in data && data.boxes) {
+      setResult((r) => ({ ...r, boxes: data.boxes as Box[] }));
+    }
+    if ("bom" in data && data.bom !== undefined) {
+      applyBom(data.bom);
+    }
+  }
+
   async function refreshDerived() {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: sheetQueryKey(sheetId) }),
@@ -116,6 +152,24 @@ export function useSheetBundle(sheetId: string) {
           } else {
             await deleteDetection(cmd.detectionId);
           }
+        } else if (cmd.kind === "wire_create") {
+          if (direction === "undo") {
+            await deleteWireRun(cmd.wireId);
+          } else {
+            await restoreWireRun(cmd.wireId, { history_action: "redo" });
+          }
+        } else if (cmd.kind === "wire_delete") {
+          if (direction === "undo") {
+            await restoreWireRun(cmd.wireId, { history_action: "undo" });
+          } else {
+            await deleteWireRun(cmd.wireId);
+          }
+        } else if (cmd.kind === "wire_update") {
+          const body: WireRunPatchBody =
+            direction === "undo"
+              ? { ...cmd.before, history_action: "undo" }
+              : { ...cmd.after, history_action: "redo" };
+          await patchWireRun(cmd.wireId, body);
         } else {
           const body =
             direction === "undo"
@@ -128,7 +182,6 @@ export function useSheetBundle(sheetId: string) {
         applyingHistory.current = false;
       }
     },
-    // refreshDerived closes over sheetId/queryClient — recreate when sheet changes
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [sheetId, queryClient],
   );
@@ -191,9 +244,9 @@ export function useSheetBundle(sheetId: string) {
         | undefined;
       const beforeDet = previous?.result.detections.find((d) => d.id === id);
       const beforePatch = beforeDet ? inversePatchFrom(beforeDet, patch) : {};
-      setResult((r) => ({
-        ...r,
-        detections: r.detections.map((d) => {
+      const prevBom = queryClient.getQueryData(["bom", sheetId]) as Bom | null | undefined;
+      setResult((r) => {
+        const detections = r.detections.map((d) => {
           if (d.id !== id) return d;
           let next = { ...d, ...patch } as Detection;
           if (patch.center) {
@@ -211,19 +264,30 @@ export function useSheetBundle(sheetId: string) {
             };
           }
           return next;
-        }),
-      }));
-      return { previous, beforePatch, afterPatch: patch };
+        });
+        let wire_runs = r.wire_runs ?? [];
+        if (patch.center) {
+          wire_runs = wiresAfterDetectionMove(wire_runs, id, patch.center, ptPerFtOf(r));
+        }
+        return { ...r, detections, wire_runs };
+      });
+      return { previous, beforePatch, afterPatch: patch, prevBom };
     },
     onError: (_err, _vars, ctx) => {
       if (ctx?.previous) queryClient.setQueryData(sheetQueryKey(sheetId), ctx.previous);
+      if (ctx?.prevBom !== undefined) {
+        queryClient.setQueryData(["bom", sheetId], ctx.prevBom);
+      }
     },
     onSuccess: (data, { id }, ctx) => {
       setResult((r) => ({
         ...r,
         detections: r.detections.map((d) => (d.id === id ? data.detection : d)),
+        ...(data.wire_runs ? { wire_runs: data.wire_runs } : {}),
+        ...(data.boxes ? { boxes: data.boxes } : {}),
       }));
       applyTakeoff(data.takeoff);
+      if (data.bom !== undefined) applyBom(data.bom);
       if (ctx?.beforePatch && ctx.afterPatch) {
         recordCommand({
           kind: "update",
@@ -233,7 +297,9 @@ export function useSheetBundle(sheetId: string) {
         });
       }
       void queryClient.invalidateQueries({ queryKey: ["corrections", sheetId] });
-      void queryClient.invalidateQueries({ queryKey: ["bom", sheetId] });
+      if (data.bom === undefined) {
+        void queryClient.invalidateQueries({ queryKey: ["bom", sheetId] });
+      }
     },
   });
 
@@ -260,6 +326,139 @@ export function useSheetBundle(sheetId: string) {
       recordCommand({ kind: "delete", detectionId: id });
       void queryClient.invalidateQueries({ queryKey: ["corrections", sheetId] });
       void queryClient.invalidateQueries({ queryKey: ["bom", sheetId] });
+    },
+  });
+
+  const createWireMut = useMutation({
+    mutationFn: (body: WireRunCreateBody) => createWireRun(sheetId, body),
+    onMutate: async (body) => {
+      await queryClient.cancelQueries({ queryKey: sheetQueryKey(sheetId) });
+      const previous = queryClient.getQueryData(sheetQueryKey(sheetId)) as
+        | SheetBundle
+        | undefined;
+      const prevBom = queryClient.getQueryData(["bom", sheetId]) as Bom | null | undefined;
+      const optimisticId = `optimistic-wire-${crypto.randomUUID()}`;
+      const vertical = body.vertical_allowance_ft ?? 0;
+      const optimistic: WireRun = {
+        id: optimisticId,
+        sheet_id: sheetId,
+        points: body.points,
+        from_detection_id: body.from_detection_id ?? null,
+        to_detection_id: body.to_detection_id ?? null,
+        cable_type: body.cable_type,
+        plan_length_ft: body.plan_length_ft,
+        vertical_allowance_ft: vertical,
+        total_length_ft: body.total_length_ft ?? body.plan_length_ft + vertical,
+        confidence: body.confidence ?? 1,
+        source: "user",
+      };
+      setResult((r) => ({
+        ...r,
+        wire_runs: [...(r.wire_runs ?? []), optimistic],
+      }));
+      return { previous, prevBom, optimisticId };
+    },
+    onError: (_err, _body, ctx) => {
+      if (ctx?.previous) queryClient.setQueryData(sheetQueryKey(sheetId), ctx.previous);
+      if (ctx?.prevBom !== undefined) {
+        queryClient.setQueryData(["bom", sheetId], ctx.prevBom);
+      }
+    },
+    onSuccess: (data, _body, ctx) => {
+      if (data.wire_run && ctx?.optimisticId) {
+        setResult((r) => ({
+          ...r,
+          wire_runs: (r.wire_runs ?? []).map((w) =>
+            w.id === ctx.optimisticId ? (data.wire_run as WireRun) : w,
+          ),
+        }));
+        recordCommand({ kind: "wire_create", wireId: data.wire_run.id });
+      }
+      applyEntityMutation(data);
+      void queryClient.invalidateQueries({ queryKey: ["corrections", sheetId] });
+      if (data.bom === undefined) {
+        void queryClient.invalidateQueries({ queryKey: ["bom", sheetId] });
+      }
+    },
+  });
+
+  const patchWireMut = useMutation({
+    mutationFn: ({ id, patch }: { id: string; patch: WireRunPatchBody }) =>
+      patchWireRun(id, patch),
+    onMutate: async ({ id, patch }) => {
+      await queryClient.cancelQueries({ queryKey: sheetQueryKey(sheetId) });
+      const previous = queryClient.getQueryData(sheetQueryKey(sheetId)) as
+        | SheetBundle
+        | undefined;
+      const prevBom = queryClient.getQueryData(["bom", sheetId]) as Bom | null | undefined;
+      const beforeWire = previous?.result.wire_runs?.find((w) => w.id === id);
+      const beforePatch = beforeWire
+        ? inverseWirePatchFrom(beforeWire, patch as WirePatchBody)
+        : {};
+      setResult((r) => ({
+        ...r,
+        wire_runs: (r.wire_runs ?? []).map((w) =>
+          w.id === id ? ({ ...w, ...patch } as WireRun) : w,
+        ),
+      }));
+      return { previous, prevBom, beforePatch, afterPatch: patch as WirePatchBody };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.previous) queryClient.setQueryData(sheetQueryKey(sheetId), ctx.previous);
+      if (ctx?.prevBom !== undefined) {
+        queryClient.setQueryData(["bom", sheetId], ctx.prevBom);
+      }
+    },
+    onSuccess: (data, { id }, ctx) => {
+      if (data.wire_run) {
+        setResult((r) => ({
+          ...r,
+          wire_runs: (r.wire_runs ?? []).map((w) => (w.id === id ? data.wire_run! : w)),
+        }));
+      }
+      applyEntityMutation(data);
+      if (ctx?.beforePatch && ctx.afterPatch) {
+        recordCommand({
+          kind: "wire_update",
+          wireId: id,
+          before: ctx.beforePatch,
+          after: ctx.afterPatch,
+        });
+      }
+      void queryClient.invalidateQueries({ queryKey: ["corrections", sheetId] });
+      if (data.bom === undefined) {
+        void queryClient.invalidateQueries({ queryKey: ["bom", sheetId] });
+      }
+    },
+  });
+
+  const deleteWireMut = useMutation({
+    mutationFn: (id: string) => deleteWireRun(id),
+    onMutate: async (id) => {
+      await queryClient.cancelQueries({ queryKey: sheetQueryKey(sheetId) });
+      const previous = queryClient.getQueryData(sheetQueryKey(sheetId)) as
+        | SheetBundle
+        | undefined;
+      const prevBom = queryClient.getQueryData(["bom", sheetId]) as Bom | null | undefined;
+      setResult((r) => ({
+        ...r,
+        wire_runs: (r.wire_runs ?? []).filter((w) => w.id !== id),
+      }));
+      return { previous, prevBom };
+    },
+    onError: (_err, _id, ctx) => {
+      if (ctx?.previous) queryClient.setQueryData(sheetQueryKey(sheetId), ctx.previous);
+      if (ctx?.prevBom !== undefined) {
+        queryClient.setQueryData(["bom", sheetId], ctx.prevBom);
+      }
+    },
+    onSuccess: (data, id) => {
+      applyEntityMutation(data);
+      recordCommand({ kind: "wire_delete", wireId: id });
+      void queryClient.invalidateQueries({ queryKey: ["corrections", sheetId] });
+      if (data.bom === undefined) {
+        void queryClient.invalidateQueries({ queryKey: ["bom", sheetId] });
+      }
     },
   });
 
@@ -319,15 +518,18 @@ export function useSheetBundle(sheetId: string) {
     patchDetection: (id: string, patch: DetectionPatchBody) =>
       patchMut.mutate({ id, patch }),
     deleteDetection: deleteMut.mutate,
+    createWireRun: createWireMut.mutate,
+    patchWireRun: (id: string, patch: WireRunPatchBody) =>
+      patchWireMut.mutate({ id, patch }),
+    deleteWireRun: deleteWireMut.mutate,
     undo,
     redo,
     canUndo,
     canRedo,
-    /** Local-only move for drag frames (no network). */
+    /** Local-only move for drag frames (no network); snaps attached wire tips. */
     applyLocalMove: (id: string, x: number, y: number) => {
-      setResult((r) => ({
-        ...r,
-        detections: r.detections.map((d) => {
+      setResult((r) => {
+        const detections = r.detections.map((d) => {
           if (d.id !== id) return d;
           const dx = x - d.center.x;
           const dy = y - d.center.y;
@@ -341,8 +543,23 @@ export function useSheetBundle(sheetId: string) {
               y1: d.bbox.y1 + dy,
             },
           };
-        }),
-      }));
+        });
+        const wire_runs = wiresAfterDetectionMove(
+          r.wire_runs ?? [],
+          id,
+          { x, y },
+          ptPerFtOf(r),
+        );
+        return { ...r, detections, wire_runs };
+      });
     },
   };
 }
+
+/** Shape shared by detection PATCH and entity mutation responses. */
+type DetectionMutationLike = {
+  takeoff: Takeoff;
+  wire_runs?: WireRun[];
+  boxes?: Box[];
+  bom?: Bom | null;
+};

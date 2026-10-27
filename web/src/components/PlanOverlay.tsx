@@ -1,6 +1,7 @@
 import type { DragEvent, MouseEvent, ReactNode } from "react";
 import { PALETTE_MIME, parsePaletteDrag } from "@/lib/palette";
-import type { Category, SheetResult } from "@/types/contracts";
+import { WIRE_COLOR } from "@/lib/colors";
+import type { Category, Point, SheetResult } from "@/types/contracts";
 import type { CategoryVisibility, LayerVisibility } from "@/store/uiStore";
 import { BoxLayer } from "./overlay/BoxLayer";
 import { DetectionLayer } from "./overlay/DetectionLayer";
@@ -12,13 +13,22 @@ interface Props {
   layers: LayerVisibility;
   categoryVisibility: CategoryVisibility;
   selectedId: string | null;
+  selectedWireId?: string | null;
+  selectedBoxId?: string | null;
   highlightedIds: Set<string>;
   imageUrl: string | null;
+  /** Cable edit mode: selectable runs + wider hit targets. */
+  editCables?: boolean;
+  /** Preview line while creating A→B (from center → cursor). */
+  wirePreview?: { from: Point; to: Point } | null;
   onBackgroundClick: (pdfX: number, pdfY: number) => void;
   onSelect: (id: string) => void;
+  onSelectWire?: (id: string) => void;
+  onSelectBox?: (id: string) => void;
   onDragStart: (id: string, e: MouseEvent) => void;
   onPaletteDrop?: (category: Category, subtype: string, x: number, y: number) => void;
   onPaletteDragOverChange?: (over: boolean) => void;
+  onPointerMovePdf?: (pdfX: number, pdfY: number) => void;
 }
 
 function clientToPdf(svg: SVGSVGElement, clientX: number, clientY: number) {
@@ -40,13 +50,20 @@ export function PlanOverlay({
   layers,
   categoryVisibility,
   selectedId,
+  selectedWireId = null,
+  selectedBoxId = null,
   highlightedIds,
   imageUrl,
+  editCables = false,
+  wirePreview = null,
   onBackgroundClick,
   onSelect,
+  onSelectWire,
+  onSelectBox,
   onDragStart,
   onPaletteDrop,
   onPaletteDragOverChange,
+  onPointerMovePdf,
 }: Props) {
   const { viewport } = result.sheet;
   const width = viewport.x1 - viewport.x0;
@@ -57,6 +74,13 @@ export function PlanOverlay({
     const local = clientToPdf(e.currentTarget, e.clientX, e.clientY);
     if (!local) return;
     onBackgroundClick(local.x, local.y);
+  }
+
+  function handlePointerMove(e: MouseEvent<SVGSVGElement>) {
+    if (!onPointerMovePdf) return;
+    const local = clientToPdf(e.currentTarget, e.clientX, e.clientY);
+    if (!local) return;
+    onPointerMovePdf(local.x, local.y);
   }
 
   function handleDragOver(e: DragEvent<SVGSVGElement>) {
@@ -91,6 +115,7 @@ export function PlanOverlay({
       preserveAspectRatio="xMidYMid meet"
       className="block h-full w-full"
       onClick={handleClick}
+      onMouseMove={handlePointerMove}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
@@ -111,8 +136,42 @@ export function PlanOverlay({
       )}
 
       {layers.rooms && <RoomLayer rooms={result.rooms} />}
-      {layers.wires && <WireLayer wires={result.wire_runs ?? []} />}
-      {layers.boxes && <BoxLayer boxes={result.boxes ?? []} />}
+      {layers.wires && (
+        <WireLayer
+          wires={result.wire_runs ?? []}
+          selectedWireId={selectedWireId}
+          editable={editCables}
+          onSelect={onSelectWire}
+        />
+      )}
+      {wirePreview && (
+        <g data-layer="wire-preview" style={{ pointerEvents: "none" }}>
+          <line
+            x1={wirePreview.from.x}
+            y1={wirePreview.from.y}
+            x2={wirePreview.to.x}
+            y2={wirePreview.to.y}
+            stroke={WIRE_COLOR}
+            strokeWidth={2}
+            strokeDasharray="6 4"
+            opacity={0.85}
+          />
+          <circle
+            cx={wirePreview.from.x}
+            cy={wirePreview.from.y}
+            r={4}
+            fill={WIRE_COLOR}
+            opacity={0.9}
+          />
+        </g>
+      )}
+      {layers.boxes && (
+        <BoxLayer
+          boxes={result.boxes ?? []}
+          selectedBoxId={selectedBoxId}
+          onSelect={onSelectBox}
+        />
+      )}
       {layers.detections && (
         <DetectionLayer
           detections={result.detections}
@@ -120,14 +179,13 @@ export function PlanOverlay({
           categoryVisibility={categoryVisibility}
           selectedId={selectedId}
           highlightedIds={highlightedIds}
-            onSelect={onSelect}
-            onDragStart={onDragStart}
-          />
-        )}
+          onSelect={onSelect}
+          onDragStart={onDragStart}
+        />
+      )}
     </svg>
   );
 }
-
 
 function PlaceholderGrid({
   viewport,

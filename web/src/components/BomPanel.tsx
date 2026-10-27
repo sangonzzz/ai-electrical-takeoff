@@ -1,4 +1,6 @@
+import { useEffect, useRef } from "react";
 import type { Bom, BomLine } from "@/types/contracts";
+import { useUiStore } from "@/store/uiStore";
 import { EmptyState } from "./ui/EmptyState";
 
 interface Props {
@@ -25,6 +27,16 @@ const SECTION_LABEL: Record<Section, string> = {
 };
 
 export function BomPanel({ bom, loading }: Props) {
+  const bomBaselineUsd = useUiStore((s) => s.bomBaselineUsd);
+  const setBomBaselineUsd = useUiStore((s) => s.setBomBaselineUsd);
+  const seeded = useRef(false);
+
+  useEffect(() => {
+    if (!bom || seeded.current) return;
+    setBomBaselineUsd(bom.total_usd);
+    seeded.current = true;
+  }, [bom, setBomBaselineUsd]);
+
   if (loading) {
     return <p className="p-4 text-[13px] text-[var(--muted)]">Loading BOM…</p>;
   }
@@ -44,15 +56,32 @@ export function BomPanel({ bom, loading }: Props) {
     }))
     .filter((g) => g.lines.length > 0);
 
+  const delta = bomBaselineUsd != null ? bom.total_usd - bomBaselineUsd : 0;
+  const showDelta = Math.abs(delta) >= 0.005;
+
   return (
     <div className="flex h-full flex-col">
       <div className="border-b border-[var(--border)] px-3 py-2">
         <h2 className="text-sm font-semibold text-[var(--ink)]">Bill of materials</h2>
-        <p className="text-[11px] text-[var(--muted)]">
-          Total{" "}
-          <span className="font-mono font-semibold text-[var(--ink)]">
-            ${bom.total_usd.toFixed(2)}
+        <p className="flex flex-wrap items-center gap-2 text-[11px] text-[var(--muted)]">
+          <span>
+            Total{" "}
+            <span className="font-mono font-semibold text-[var(--ink)]">
+              ${bom.total_usd.toFixed(2)}
+            </span>
           </span>
+          {showDelta && (
+            <span
+              className={`rounded-md px-1.5 py-0.5 font-mono text-[10px] font-bold ${
+                delta > 0
+                  ? "bg-emerald-50 text-emerald-700"
+                  : "bg-rose-50 text-rose-700"
+              }`}
+              title="Change vs when this sheet was opened"
+            >
+              {delta > 0 ? "+" : ""}${delta.toFixed(2)}
+            </span>
+          )}
         </p>
       </div>
 

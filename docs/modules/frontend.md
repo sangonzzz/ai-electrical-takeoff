@@ -30,12 +30,23 @@ radius 10 px, transitions ~150 ms. Light theme default.
 
 - **Undo / Redo** — labeled header buttons; Ctrl+Z / Ctrl+Shift+Z.
   Fixture: snapshot stacks. Real API: client command stack
-  (create↔delete/restore, update/move↔PATCH previous values); clears redo on new
-  action; refreshes sheet/BOM/corrections after each step.
+  (create↔delete/restore, update/move↔PATCH previous values; wire create/delete/restore
+  and wire PATCH previous values); clears redo on new action; refreshes sheet/BOM/corrections.
 - **Component palette** — drag subtypes onto the plan (ghost + “Drop on the plan”);
   click-to-add still works in Add mode. Room auto-assigned on create.
 - **Details** — editable X/Y in PDF points (also drag marks on the plan).
-- Detection marks expose `data-testid="detection-mark"` for e2e.
+- **Edit cables** (toolbar toggle, off by default) — turns Wires layer on; runs selectable
+  with wide hit target; hover label `14/2 - 12.4 ft`. Details panel: type, from/to
+  (click highlights devices), plan/vertical/total length, source, delete. Optimistic
+  BOM from mutation response; rollback on error.
+- **New cable** — click device A then B; dashed preview follows cursor; Esc cancels;
+  straight run via `POST .../wire-runs` (fixture mock until Agente 5 ships).
+- **Move device** — drag updates attached run tips live; commit on drop returns
+  `wire_runs` / `boxes` / `bom`; BOM panel shows total + delta badge vs open baseline.
+- **Boxes** — layer shows `1G`/`2G`/`3G` marks (`data-testid="box-mark"`); click opens
+  derived box details and highlights member devices (no direct box edit).
+- Detection marks expose `data-testid="detection-mark"`; wires `wire-run`,
+  `wire-run-type-select`, `wire-run-delete`, `wire-create-mode` for e2e.
 
 ## Plan canvas
 
@@ -44,8 +55,8 @@ radius 10 px, transitions ~150 ms. Light theme default.
 - Rooms: subtle dashed outlines; open-plan shared edges as thinner “auto boundary”
   dashes with hover label (detected client-side from shared polygon edges).
 - Wires: **off by default**, beta badge + tooltip about dashed-line tracing limits;
-  when on, labels only on hover or when wire count ≤ 14.
-- Boxes off by default. Floating toolbar: select / add / fit / layers.
+  when on, labels only on hover or when wire count ≤ 14 (always on hover in Edit cables).
+- Boxes off by default. Floating toolbar: select / add / fit / **Edit cables** / layers.
 - BOM cable section labeled “Cable (estimated)” with per-line estimated badge.
 - **Re-run fresh analysis** → confirm → `POST /api/sheets/{id}/reanalyze`, poll job, reload.
 
@@ -56,10 +67,10 @@ radius 10 px, transitions ~150 ms. Light theme default.
 | V | Select |
 | A | Add |
 | F | Fit |
-| Del | Delete selected |
+| Del | Delete selected mark or cable |
 | Ctrl+Z | Undo |
 | Ctrl+Shift+Z | Redo |
-| Esc | Clear / exit add |
+| Esc | Clear / exit add or New cable |
 | ? | Cheat sheet |
 
 ## Exports / review API

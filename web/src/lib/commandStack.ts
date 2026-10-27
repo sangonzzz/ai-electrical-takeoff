@@ -24,6 +24,18 @@ export type DetectionPatchBody = {
   history_action?: HistoryAction;
 };
 
+export type WirePatchBody = {
+  points?: { x: number; y: number }[];
+  from_detection_id?: string | null;
+  to_detection_id?: string | null;
+  cable_type?: "nm_14_2" | "nm_14_3";
+  plan_length_ft?: number;
+  vertical_allowance_ft?: number;
+  total_length_ft?: number;
+  confidence?: number;
+  history_action?: HistoryAction;
+};
+
 export type HistoryCommand =
   | { kind: "create"; detectionId: string }
   | { kind: "delete"; detectionId: string }
@@ -32,6 +44,14 @@ export type HistoryCommand =
       detectionId: string;
       before: DetectionPatchBody;
       after: DetectionPatchBody;
+    }
+  | { kind: "wire_create"; wireId: string }
+  | { kind: "wire_delete"; wireId: string }
+  | {
+      kind: "wire_update";
+      wireId: string;
+      before: WirePatchBody;
+      after: WirePatchBody;
     };
 
 export interface CommandStackState {
@@ -70,6 +90,36 @@ export function popRedo(
   const redo = [...state.redo];
   const cmd = redo.pop()!;
   return { state: { undo: [...state.undo, cmd], redo }, cmd };
+}
+
+/**
+ * Build the wire PATCH that restores fields touched by `after`
+ * from the run snapshot before the edit.
+ */
+export function inverseWirePatchFrom(
+  beforeWire: {
+    points: { x: number; y: number }[];
+    from_detection_id?: string | null;
+    to_detection_id?: string | null;
+    cable_type: "nm_14_2" | "nm_14_3";
+    plan_length_ft: number;
+    vertical_allowance_ft: number;
+    total_length_ft: number;
+    confidence: number;
+  },
+  after: WirePatchBody,
+): WirePatchBody {
+  const before: WirePatchBody = {};
+  if ("points" in after) before.points = beforeWire.points.map((p) => ({ ...p }));
+  if ("from_detection_id" in after) before.from_detection_id = beforeWire.from_detection_id ?? null;
+  if ("to_detection_id" in after) before.to_detection_id = beforeWire.to_detection_id ?? null;
+  if ("cable_type" in after) before.cable_type = beforeWire.cable_type;
+  if ("plan_length_ft" in after) before.plan_length_ft = beforeWire.plan_length_ft;
+  if ("vertical_allowance_ft" in after)
+    before.vertical_allowance_ft = beforeWire.vertical_allowance_ft;
+  if ("total_length_ft" in after) before.total_length_ft = beforeWire.total_length_ft;
+  if ("confidence" in after) before.confidence = beforeWire.confidence;
+  return before;
 }
 
 /**

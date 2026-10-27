@@ -12,7 +12,7 @@ import {
   TransformWrapper,
   type ReactZoomPanPinchContentRef,
 } from "react-zoom-pan-pinch";
-import type { Category, SheetResult } from "@/types/contracts";
+import type { Category, Point, SheetResult } from "@/types/contracts";
 import { useUiStore } from "@/store/uiStore";
 import { CategoryFilter } from "./CategoryFilter";
 import { FloatingToolbar } from "./FloatingToolbar";
@@ -31,6 +31,8 @@ interface Props {
   onPaletteDrop: (category: Category, subtype: string, x: number, y: number) => void;
   onDragMove: (id: string, x: number, y: number) => void;
   onDragEnd: (id: string, x: number, y: number) => void;
+  /** Second click in New cable mode (from already picked). */
+  onWireCreatePair?: (fromId: string, toId: string) => void;
 }
 
 function fitPlanToCanvas(
@@ -58,15 +60,23 @@ function fitPlanToCanvas(
 }
 
 export const PlanViewer = forwardRef<PlanViewerHandle, Props>(function PlanViewer(
-  { result, imageUrl, onAddAt, onPaletteDrop, onDragMove, onDragEnd },
+  { result, imageUrl, onAddAt, onPaletteDrop, onDragMove, onDragEnd, onWireCreatePair },
   ref,
 ) {
   const mode = useUiStore((s) => s.mode);
   const layers = useUiStore((s) => s.layers);
   const categoryVisibility = useUiStore((s) => s.categoryVisibility);
   const selectedId = useUiStore((s) => s.selectedDetectionId);
+  const selectedWireId = useUiStore((s) => s.selectedWireId);
+  const selectedBoxId = useUiStore((s) => s.selectedBoxId);
+  const editCables = useUiStore((s) => s.editCables);
+  const wireCreateFromId = useUiStore((s) => s.wireCreateFromId);
+  const setWireCreateFromId = useUiStore((s) => s.setWireCreateFromId);
   const highlight = useUiStore((s) => s.highlight);
   const selectDetection = useUiStore((s) => s.selectDetection);
+  const selectWire = useUiStore((s) => s.selectWire);
+  const selectBox = useUiStore((s) => s.selectBox);
+  const highlightDevices = useUiStore((s) => s.highlightDevices);
   const paletteDrag = useUiStore((s) => s.paletteDrag);
   const setPaletteDrag = useUiStore((s) => s.setPaletteDrag);
   const transformRef = useRef<ReactZoomPanPinchContentRef>(null);
@@ -80,6 +90,7 @@ export const PlanViewer = forwardRef<PlanViewerHandle, Props>(function PlanViewe
   } | null>(null);
   const [ghostPos, setGhostPos] = useState<{ x: number; y: number } | null>(null);
   const [overPlan, setOverPlan] = useState(false);
+  const [cursorPdf, setCursorPdf] = useState<Point | null>(null);
 
   const highlightedIds = new Set(highlight?.detectionIds ?? []);
   const fitKey = `${result.sheet.id}:${imageUrl ?? "none"}`;
@@ -136,9 +147,48 @@ export const PlanViewer = forwardRef<PlanViewerHandle, Props>(function PlanViewe
         onAddAt(pdfX, pdfY);
         return;
       }
+      if (mode === "wire_create") {
+        // Background click does not cancel; Esc cancels. Keep preview.
+        return;
+      }
       selectDetection(null);
+      selectWire(null);
+      selectBox(null);
     },
-    [mode, onAddAt, selectDetection],
+    [mode, onAddAt, selectDetection, selectWire, selectBox],
+  );
+
+  const onSelectDetection = useCallback(
+    (id: string) => {
+      if (mode === "wire_create") {
+        if (!wireCreateFromId) {
+          setWireCreateFromId(id);
+          selectDetection(id);
+          return;
+        }
+        if (wireCreateFromId === id) return;
+        onWireCreatePair?.(wireCreateFromId, id);
+        setWireCreateFromId(null);
+        return;
+      }
+      selectDetection(id);
+    },
+    [
+      mode,
+      wireCreateFromId,
+      setWireCreateFromId,
+      selectDetection,
+      onWireCreatePair,
+    ],
+  );
+
+  const onSelectBoxMark = useCallback(
+    (boxId: string) => {
+      const box = result.boxes?.find((b) => b.id === boxId);
+      selectBox(boxId);
+      if (box) highlightDevices([...box.detection_ids]);
+    },
+    [result.boxes, selectBox, highlightDevices],
   );
 
   const onDragStart = useCallback(
@@ -188,6 +238,27 @@ export const PlanViewer = forwardRef<PlanViewerHandle, Props>(function PlanViewe
     [mode, onDragEnd, onDragMove, result.detections, selectDetection],
   );
 
+  const fromDet = wireCreateFromId
+    ? result.detections.find((d) => d.id === wireCreateFromId)
+    : null;
+  const wirePreview =
+    mode === "wire_create" && fromDet && cursorPdf
+      ? { from: fromDet.center, to: cursorPdf }
+      : null;
+
+  const hint =
+    paletteDrag
+      ? "Drop on the plan to place"
+      : mode === "add"
+        ? "Click the plan to place a mark"
+        : mode === "wire_create"
+          ? wireCreateFromId
+            ? "Click the second device · Esc to cancel"
+            : "Click the first device · Esc to cancel"
+          : editCables
+            ? "Edit cables on — select a pink run or New cable"
+            : "Scroll zoom · drag pan · drag components from the palette";
+
   return (
     <div className="card relative flex h-full min-h-0 flex-col overflow-hidden">
       <div className="flex items-center justify-between gap-2 border-b border-[var(--border)] px-3 py-2">
@@ -195,13 +266,7 @@ export const PlanViewer = forwardRef<PlanViewerHandle, Props>(function PlanViewe
           <div className="truncate text-sm font-semibold text-[var(--ink)]">
             {result.sheet.title ?? result.sheet.sheet_number ?? "Sheet"}
           </div>
-          <div className="text-[11px] text-[var(--muted)]">
-            {paletteDrag
-              ? "Drop on the plan to place"
-              : mode === "add"
-                ? "Click the plan to place a mark"
-                : "Scroll zoom · drag pan · drag components from the palette"}
-          </div>
+          <div className="text-[11px] text-[var(--muted)]">{hint}</div>
         </div>
         <CategoryFilter />
       </div>
@@ -215,7 +280,7 @@ export const PlanViewer = forwardRef<PlanViewerHandle, Props>(function PlanViewe
           limitToBounds={false}
           doubleClick={{ disabled: true }}
           wheel={{ step: 0.12 }}
-          panning={{ disabled: !!paletteDrag }}
+          panning={{ disabled: !!paletteDrag || mode === "wire_create" }}
         >
           <TransformComponent
             wrapperClass="!h-full !w-full"
@@ -228,13 +293,22 @@ export const PlanViewer = forwardRef<PlanViewerHandle, Props>(function PlanViewe
                   layers={layers}
                   categoryVisibility={categoryVisibility}
                   selectedId={selectedId}
+                  selectedWireId={selectedWireId}
+                  selectedBoxId={selectedBoxId}
                   highlightedIds={highlightedIds}
                   imageUrl={imageUrl}
+                  editCables={editCables}
+                  wirePreview={wirePreview}
                   onBackgroundClick={onBackgroundClick}
-                  onSelect={selectDetection}
+                  onSelect={onSelectDetection}
+                  onSelectWire={editCables ? selectWire : undefined}
+                  onSelectBox={onSelectBoxMark}
                   onDragStart={onDragStart}
                   onPaletteDrop={onPaletteDrop}
                   onPaletteDragOverChange={setOverPlan}
+                  onPointerMovePdf={
+                    mode === "wire_create" ? (x, y) => setCursorPdf({ x, y }) : undefined
+                  }
                 />
               </div>
             </div>
