@@ -70,8 +70,9 @@ Debug: `out/debug/walls_pN.png` (white = barrier, red crosses = labels).
 6. **Enclosed unlabeled pockets** (never emit `Unlabeled space`):
    - Shallow perimeter niches (< 8 pt inside the filled footprint) stay unclaimed
      → Exterior (outdoor unit B38, exterior-wall notes).
-   - Deep holes with a keynote within ~14 pt (tags sit on wall poche) →
-     `Mech. Closet (<tag>)` any size (Plan 1 B14 WH closet).
+   - Deep holes with a keynote within ~14 pt → `Mech. Closet (<tag>)` only if
+     the sheet KEYNOTES table description contains WATER HEATER, TANK, PANEL,
+     or MECHANICAL (B14 qualifies; A01 range does not — merge to Kitchen).
    - Deep holes with a `240V` text label and no keynote → `Mech. Closet (B14)`
      when B14 is off-viewport (plans 2/3); prefer the candidate nearest Laundry.
    - Remaining deep holes → merge into the labeled neighbor with the longest

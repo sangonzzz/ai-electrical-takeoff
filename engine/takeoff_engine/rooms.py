@@ -7,9 +7,10 @@ Algorithm (SPEC section 6 + unlabeled):
 3. Flood-fill from each label; split multi-label (open-plan) regions by nearest
    label; fill furniture holes; attic box overrides.
 4. Enclosed free pockets inside the building with no room label:
-   keynote tag inside → ``Mech. Closet (<tag>)`` (any size, even on an exterior
-   wall); otherwise merge into the labeled neighbor with the longest shared
-   boundary. Never emit ``Unlabeled space``. Exterior is only outside the
+   keynote tag inside → ``Mech. Closet (<tag>)`` only if the sheet KEYNOTES
+   description contains WATER HEATER / TANK / PANEL / MECHANICAL; otherwise
+   merge into the labeled neighbor (kitchen appliances like A01 range →
+   Kitchen). Never emit ``Unlabeled space``. Exterior is only outside the
    building footprint.
 5. ``assign_room`` / ``assign_rooms`` for point-in-polygon with wall-device rules.
 """
@@ -75,6 +76,12 @@ _INTERNAL_HOLE_MIN_DIST_OUT_PT = 8.0
 
 # Keynote pattern: A01, B14, F03, … (SPEC §1). Not electrical device codes.
 _KEYNOTE_RE = re.compile(r"^[A-Z]\d{2}$")
+
+# KEYNOTES table: only these description tokens make a tag a Mech. Closet
+# (B14 = "40 GALLON TANK WATER HEATER"; A01 = range does not qualify).
+_MECH_CLOSET_DESC_RE = re.compile(
+    r"WATER\s+HEATER|\bTANK\b|\bPANEL\b|\bMECHANICAL\b", re.IGNORECASE
+)
 
 # Lexicon tokens allowed in a room label (SPEC §6). Numbers and "/" are also OK.
 _ROOM_LEXICON: frozenset[str] = frozenset(
@@ -867,6 +874,80 @@ def _keynotes_in_viewport(
     return out
 
 
+def _keynote_legend_descriptions(ctx: PageContext) -> dict[str, str]:
+    """Parse the sheet KEYNOTES table into ``{tag: description text}``.
+
+    Looks for the large ``KEYNOTES`` heading, then rows whose left column is a
+    tag (A01, B14, …) with description words to its right until the next tag.
+    """
+    title: Word | None = None
+    for w in ctx.words:
+        if w.text.strip().upper() == "KEYNOTES" and w.size >= 14.0:
+            title = w
+            break
+    if title is None:
+        return {}
+    title_cx = 0.5 * (title.bbox[0] + title.bbox[2])
+    title_cy = 0.5 * (title.bbox[1] + title.bbox[3])
+
+    # Left-column tags under the heading (same band as A01/B14 on Escondido).
+    tag_rows: list[tuple[float, float, str]] = []
+    seen: set[str] = set()
+    for w in ctx.words:
+        tag = w.text.strip().upper()
+        if not _KEYNOTE_RE.match(tag) or tag in seen:
+            continue
+        if w.size < 7.0 or w.size > 12.0:
+            continue
+        cx = 0.5 * (w.bbox[0] + w.bbox[2])
+        cy = 0.5 * (w.bbox[1] + w.bbox[3])
+        if cy < title_cy + 8.0 or cy > title_cy + 350.0:
+            continue
+        if cx < title_cx - 120.0 or cx > title_cx + 30.0:
+            continue
+        seen.add(tag)
+        tag_rows.append((cy, cx, tag))
+    tag_rows.sort()
+    if not tag_rows:
+        return {}
+
+    # Description words sit to the right of the tag column, left of notes cols.
+    desc_words: list[tuple[float, float, str]] = []
+    x_left = min(t[1] for t in tag_rows) + 15.0
+    x_right = x_left + 320.0
+    y_top = tag_rows[0][0] - 4.0
+    y_bot = tag_rows[-1][0] + 80.0
+    for w in ctx.words:
+        cx = 0.5 * (w.bbox[0] + w.bbox[2])
+        cy = 0.5 * (w.bbox[1] + w.bbox[3])
+        if not (x_left <= cx <= x_right and y_top <= cy <= y_bot):
+            continue
+        if _KEYNOTE_RE.match(w.text.strip().upper()):
+            continue
+        desc_words.append((cy, cx, w.text.strip()))
+    desc_words.sort()
+
+    out: dict[str, str] = {}
+    for i, (ty, _tx, tag) in enumerate(tag_rows):
+        y1 = tag_rows[i + 1][0] - 2.0 if i + 1 < len(tag_rows) else ty + 55.0
+        parts = [t for cy, _cx, t in desc_words if ty - 3.0 <= cy < y1 and t]
+        out[tag] = " ".join(parts)
+    return out
+
+
+def _mech_closet_keynote_tags(ctx: PageContext) -> frozenset[str]:
+    """Tags whose KEYNOTES description is a mechanical closet (WH / tank / panel)."""
+    legend = _keynote_legend_descriptions(ctx)
+    return frozenset(
+        tag for tag, desc in legend.items() if _MECH_CLOSET_DESC_RE.search(desc)
+    )
+
+
+def _keynote_is_kitchen_appliance(desc: str) -> bool:
+    """True if KEYNOTES text is a kitchen appliance (range/oven), not a closet."""
+    return bool(re.search(r"\bRANGE\b|\bOVEN\b|\bCOOKTOP\b", desc, re.IGNORECASE))
+
+
 def _volt_240_labels_in_viewport(
     ctx: PageContext, viewport: BBox
 ) -> list[tuple[float, float]]:
@@ -1202,6 +1283,8 @@ def detect_rooms(ctx: PageContext, viewport: BBox, sheet_id: str) -> list[Room]:
     for m in room_masks.values():
         claimed = np.maximum(claimed, m)
     keynotes = _keynotes_in_viewport(ctx, viewport)
+    legend = _keynote_legend_descriptions(ctx)
+    mech_tags = _mech_closet_keynote_tags(ctx)
     labels_240 = _volt_240_labels_in_viewport(ctx, viewport)
     used_keynotes: set[str] = set()
     keynote_rooms: list[tuple[str, str, list[Point], Point]] = []
@@ -1286,10 +1369,11 @@ def detect_rooms(ctx: PageContext, viewport: BBox, sheet_id: str) -> list[Room]:
                     cv2.circle(fat, (ax, ay), pad_px, 1, thickness=-1)
         return _mask_to_polygon(fat, origin)
 
-    # Pass 1: real keynote tags on/near the pocket.
+    # Pass 1: KEYNOTES-table mech tags only (WATER HEATER / TANK / PANEL /
+    # MECHANICAL). Range keynotes like A01 merge as ordinary pockets.
     for j, filled, cx, cy in deep_pending:
         tag = _keynote_for_region(filled, origin, keynotes)
-        if tag is None or tag in used_keynotes:
+        if tag is None or tag in used_keynotes or tag not in mech_tags:
             continue
         poly_pts = _mech_polygon(filled)
         if len(poly_pts) < 3:
@@ -1348,13 +1432,28 @@ def detect_rooms(ctx: PageContext, viewport: BBox, sheet_id: str) -> list[Room]:
     # Decide all targets against the *original* labeled masks so an earlier
     # merge cannot pull a later pocket into the wrong room via centroid drift.
     label_xy = {i: (labels[i].cx, labels[i].cy) for i in room_masks}
+    kitchen_idxs = [
+        i
+        for i in room_masks
+        if "KITCHEN" in labels[i].raw.upper()
+    ]
     merge_plan: list[tuple[int, np.ndarray]] = []
     for j, filled, _cx, _cy in deep_pending:
         if j in claimed_idx:
             continue
-        best_i = _merge_into_longest_neighbor(
-            filled, room_masks, label_xy=label_xy, origin=origin
-        )
+        # Non-mech keynote on a kitchen appliance (A01 range) → Kitchen, not Bath.
+        tag = _keynote_for_region(filled, origin, keynotes)
+        if (
+            tag is not None
+            and tag not in mech_tags
+            and _keynote_is_kitchen_appliance(legend.get(tag, ""))
+            and kitchen_idxs
+        ):
+            best_i = kitchen_idxs[0]
+        else:
+            best_i = _merge_into_longest_neighbor(
+                filled, room_masks, label_xy=label_xy, origin=origin
+            )
         if best_i is None:
             continue
         merge_plan.append((best_i, filled))

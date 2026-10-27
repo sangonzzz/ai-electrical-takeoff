@@ -208,6 +208,38 @@ def test_all_plans_mech_closet_b14_no_unlabeled(plans_pdf: Path) -> None:
         )
 
 
+def test_plan3_a01_range_not_mech_closet(plans_pdf: Path) -> None:
+    """A01 is a range keynote (KEYNOTES table), not Mech. Closet; 240V → Kitchen."""
+    from takeoff_engine.pipeline import analyze_sheet
+
+    result = analyze_sheet(plans_pdf, 2, use_llm=False)
+    names = {r.display_name for r in result.rooms}
+    assert "Mech. Closet (A01)" not in names
+    assert "Mech. Closet (B14)" in names
+    kit = next(r for r in result.rooms if r.display_name == "Kitchen / Dining")
+    range_240 = [
+        d
+        for d in result.detections
+        if d.status == "active"
+        and d.subtype == "gfci_240v"
+        and abs(d.center.x - 978.3) < 2
+        and abs(d.center.y - 401.4) < 2
+    ]
+    assert len(range_240) == 1
+    assert range_240[0].room_id == kit.id
+
+
+def test_all_plans_keep_mech_closet_b14(plans_pdf: Path) -> None:
+    """B14 (WATER HEATER in KEYNOTES) remains Mech. Closet on every plan."""
+    from takeoff_engine.pipeline import analyze_sheet
+
+    for page_index in range(4):
+        result = analyze_sheet(plans_pdf, page_index, use_llm=False)
+        names = {r.display_name for r in result.rooms}
+        assert "Mech. Closet (B14)" in names, sorted(names)
+        assert "Mech. Closet (A01)" not in names
+
+
 def test_plan4_bath2_and_hallway_fixture_pockets(plans_pdf: Path) -> None:
     """Fixture-split pockets merge into Bath 2 / Hallway (never Unlabeled space)."""
     from takeoff_engine.pipeline import analyze_sheet
