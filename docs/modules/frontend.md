@@ -40,8 +40,10 @@ radius 10 px, transitions ~150 ms. Light theme default.
 
 - SVG `viewBox` = electrical viewport (PDF points).
 - Marks: filled circle + letter; selected pulse; highlight dims others.
-- Wires: paths always on; labels only on hover or when wire count ≤ 14.
+- Wires: **off by default**, beta badge + tooltip about dashed-line tracing limits;
+  when on, labels only on hover or when wire count ≤ 14.
 - Boxes off by default. Floating toolbar: select / add / fit / layers.
+- BOM cable section labeled “Cable (estimated)” with per-line estimated badge.
 
 ## Keyboard
 

@@ -66,7 +66,7 @@ export const useUiStore = create<UiState>((set) => ({
   layers: {
     rooms: true,
     detections: true,
-    wires: true,
+    wires: false, // beta — dashed-line traces; review before quoting
     boxes: false, // off by default — clutter; toggle when reviewing gangs
   },
   categoryVisibility: allCategoriesOn(),

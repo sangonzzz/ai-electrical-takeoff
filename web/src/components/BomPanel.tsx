@@ -20,7 +20,7 @@ function sectionOf(line: BomLine): Section {
 const SECTION_LABEL: Record<Section, string> = {
   devices: "Devices",
   boxes: "Boxes & plates",
-  cable: "Cable",
+  cable: "Cable (estimated)",
   other: "Other",
 };
 
@@ -67,7 +67,17 @@ export function BomPanel({ bom, loading }: Props) {
                 {g.lines.map((line) => (
                   <tr key={line.item_key} className="takeoff-row align-top">
                     <td className="border-b border-[var(--border)]/70 px-3 py-1.5">
-                      <div className="font-medium text-[var(--ink)]">{line.description}</div>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="font-medium text-[var(--ink)]">{line.description}</span>
+                        {g.section === "cable" && (
+                          <span
+                            className="rounded bg-[var(--warn-soft)] px-1 py-px text-[9px] font-semibold uppercase tracking-wide text-[var(--warn)]"
+                            title="Lengths traced from dashed plan lines — review before quoting"
+                          >
+                            estimated
+                          </span>
+                        )}
+                      </div>
                       <div className="font-mono text-[10px] text-[var(--muted)]">
                         {line.item_key}
                       </div>

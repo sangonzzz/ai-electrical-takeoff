@@ -2,10 +2,18 @@ import type { ReactNode } from "react";
 import { Layers, Maximize2, MousePointer2, Plus } from "lucide-react";
 import { useUiStore, type LayerVisibility } from "@/store/uiStore";
 
-const LAYER_KEYS: { key: keyof LayerVisibility; label: string }[] = [
+const WIRES_TOOLTIP =
+  "Cable runs are traced from the dashed plan lines; known limit: some cabinet/millwork lines are traced. Review before quoting.";
+
+const LAYER_KEYS: {
+  key: keyof LayerVisibility;
+  label: string;
+  beta?: boolean;
+  title?: string;
+}[] = [
   { key: "rooms", label: "Rooms" },
   { key: "detections", label: "Marks" },
-  { key: "wires", label: "Wires" },
+  { key: "wires", label: "Wires", beta: true, title: WIRES_TOOLTIP },
   { key: "boxes", label: "Boxes" },
 ];
 
@@ -43,12 +51,13 @@ export function FloatingToolbar({ onFit }: Props) {
           <Layers size={11} /> Layers
         </div>
         <div className="flex flex-wrap gap-1">
-          {LAYER_KEYS.map(({ key, label }) => (
+          {LAYER_KEYS.map(({ key, label, beta, title }) => (
             <button
               key={key}
               type="button"
               onClick={() => toggleLayer(key)}
-              className={`rounded-md px-2 py-1 text-[11px] font-semibold transition ${
+              title={title}
+              className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-semibold transition ${
                 layers[key]
                   ? "bg-[var(--ink)] text-white"
                   : "bg-[var(--surface-3)] text-[var(--muted)]"
@@ -56,6 +65,17 @@ export function FloatingToolbar({ onFit }: Props) {
               aria-pressed={layers[key]}
             >
               {label}
+              {beta && (
+                <span
+                  className={`rounded px-1 py-px text-[8px] font-bold uppercase tracking-wide ${
+                    layers[key]
+                      ? "bg-white/20 text-white"
+                      : "bg-[var(--warn-soft)] text-[var(--warn)]"
+                  }`}
+                >
+                  beta
+                </span>
+              )}
             </button>
           ))}
         </div>
