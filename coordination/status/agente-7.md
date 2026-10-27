@@ -2,89 +2,84 @@
 
 ## Estado
 
-Golden refresh **bloqueado**. Plan 1–2 solo cambian cuartos (pocket rule de A3);
-plan 3 pierde una detección; plan 4 cambia `needs_review`. No reescribí
-`eval/golden/v0.6.4/`.
+Golden refresh **no hecho**. Re-diff vs `eval/golden/v0.6.4` (2026-10-27 ~13:41):
+plans 1–2 rooms-only; plan 3 still missing a detection; plan 4 only `needs_review`.
 
-## Diff vs golden v0.6.4 (current code, `use_llm=False`, `with_bom=True`)
+## Diff re-run (current vs v0.6.4 golden)
 
-Script: `eval/scripts/diff_golden_vs_current.py` → report
-`out/debug/golden_room_diff_report.md` (gitignored).
+Command: `uv run python eval/scripts/diff_golden_vs_current.py`  
+(`use_llm=False`, `with_bom=True`, normalized fingerprint)
 
-### Non-room fingerprint (dets without room_id, wires, boxes, sheet)
+### Gate: detections / wires / boxes identical except room fields?
 
-| plan | non-room equal? | notes |
-|------|-----------------|-------|
-| 1 | **yes** | |
-| 2 | **yes** | |
-| 3 | **no** | −1 det, −1 box, wire set changes |
-| 4 | **no*** | *equal if `needs_review` ignored; 2 flags flip True→False |
+| plan | pass? | detail |
+|------|-------|--------|
+| 1 | **yes** | non-room fingerprint identical |
+| 2 | **yes** | non-room fingerprint identical |
+| 3 | **no** | see exact deltas below |
+| 4 | **no** | only `needs_review` on 3 receptacles (geometry/wires/boxes match if that field ignored) |
 
-### Plan 1 — rooms only (OK to refresh when unblocked)
+→ **Did not refresh** `eval/golden/v0.6.4/*.json`.
 
-- Room count **12 → 9**
-- Removed rooms: `Mech. Closet (B14)`, `Mech. Closet (B32)`, `Unlabeled space 1`
-- Detection reassignments (2):
-  - `receptacle.gfci_240v` @ (1151.94, 197.46): `Unlabeled space 1` → `Exterior`
-  - `receptacle.gfci_240v` @ (1322.22, 222.06): `Mech. Closet (B14)` → `Bath`
+### Plan 1 — rooms only (summary)
 
-### Plan 2 — rooms only
+- Rooms **12 → 10**; removed `Mech. Closet (B32)`, `Unlabeled space 1`
+- Still present: `Mech. Closet (B14)` (A3 final rule)
+- Reassignment (1): `receptacle.gfci_240v` @ (1151.94, 197.46): `Unlabeled space 1` → `Exterior`
 
-- Room count **16 → 12**
-- Removed: `Mech. Closet (B32)`, `Unlabeled space 1`, `Unlabeled space 2`, `Unlabeled space 3`
-- Reassignment (1):
-  - `receptacle.gfci_240v` @ (1050.42, 223.14): `Unlabeled space 3` → `Laundry`
+### Plan 2 — rooms only (summary)
 
-### Plan 3 — **extra non-room delta (blocks refresh)**
+- Rooms **16 → 13**; removed B32 + Unlabeled 1–3; **added** `Mech. Closet (B14)`
+- Reassignment (1): `receptacle.gfci_240v` @ (1050.42, 223.14): `Unlabeled space 3` → `Mech. Closet (B14)`
 
-- Rooms: **33 → 14**; many `Unlabeled space N` + `Mech. Closet (A01)` removed; 22 room reassignments (samples in debug report).
-- **Also:** missing `receptacle.afci_half_hot` @ **(895.8, 505.68)** vs golden; box at same center gone; wire fingerprints −2/+1.
-- Messaged Agente 2 / 3 / 1.
+### Plan 3 — exact non-room deltas (blocker)
 
-### Plan 4 — rooms + needs_review
+- **Missing detection** vs golden: `receptacle.afci_half_hot` center **(895.8, 505.68)** (`needs_review=False`)
+- Counts: detections **71 → 70**, boxes **69 → 68**, wire_runs **51 → 50** (geometry set also shifts: −2/+1 by polyline key)
+- Cascading box remaps (stable ids renumber after the missing det); first missing box was 1-gang device at same center as the half-hot
+- Room side (also changed, expected): rooms **33 → 16**; many `Unlabeled space N` removed; added `Mech. Closet (B14)`; 22 detection `room_id` reassignments
 
-- Rooms: **37 → 16**; many unlabeled pockets removed; 25 room reassignments.
-- Geometry of dets/wires/boxes match golden; `needs_review` flips on:
-  - `receptacle.gfci_240v` @ (1820.82, 296.94): True → False
-  - `receptacle.gfci_weatherproof` @ (1345.98, 567.42): True → False
+### Plan 4 — exact non-room deltas
+
+- Dets/wires/boxes geometry **identical** to golden except:
+  - `receptacle.gfci` @ (1369.14, 156.42): `needs_review` **True → False**
+  - `receptacle.gfci_240v` @ (1820.82, 296.94): `needs_review` **True → False**
+  - `receptacle.gfci_weatherproof` @ (1345.98, 567.42): `needs_review` **True → False**
+- Rooms **37 → 15**; Unlabeled pockets gone; added `Mech. Closet (B14)`; 25 room reassignments
 
 ## Hecho
 
-- Diff harness `eval/scripts/diff_golden_vs_current.py`
-- Messages to A1/A2/A3; **no golden rewrite** (rule not met)
+- Re-ran diff; status updated; **no golden rewrite**
+- A3 message `refresh-golden-mech-b14` ack’d: same plan3 classify blocker they noted
 
 ## Cómo probarlo
 
 ```bash
 uv run python eval/scripts/diff_golden_vs_current.py
-uv run pytest engine/tests/eval/test_golden.py -q   # expect fail until refresh
+uv run pytest engine/tests/eval/test_golden.py -q
 ```
 
 ## Siguiente
 
-- Wait for A2 on plan3 half-hot, or Santiago OK to absorb that + needs_review into new golden.
-- Then regenerate all four `eval/golden/v0.6.4/planN.json` from current code and commit.
+Refresh goldens when plan3 half-hot is restored (A2) **or** Santiago allows absorbing that + plan4 `needs_review` into the snapshot.
 
 ## Bloqueos
 
-Cannot refresh goldens under Santiago’s rooms-only gate until plan3 det delta is resolved.
+Plan 3 missing `afci_half_hot` @ (895.8, 505.68).
 
 ## Decisions
 
-- Treat missing detection / wire / box as hard blocker (not “pocket rename”).
-- `needs_review` alone would not block if Santiago confirms it is out of golden scope;
-  still held with plan3.
+Strict gate: any det/wire/box content change (including `needs_review`) blocks refresh unless Santiago widens the rule.
 
 ## Needs from Santiago
 
-Confirm whether to absorb plan3 half-hot loss (+ plan4 needs_review) into the new golden,
-or require A2 restore first.
+OK to absorb plan3 half-hot loss + plan4 `needs_review` flips, or wait for A2?
 
 ## Explicación para Santiago
 
-Agente 3 apretó la regla de “bolsillos” sin etiqueta. Comparé el motor actual con el
-golden v0.6.4: en **planos 1 y 2** solo cambian nombres/asignaciones de cuartos (como
-pediste). En **plan 3** además **desaparece un tomacorriente half-hot** (y su caja/cables).
-En **plan 4** dos marcas cambian `needs_review`. Por eso **no regeneré** el golden: el
-candado seguiría siendo honesto. Cuando digas que absorbemos ese delta (o A2 restaure
-el half-hot), regenero los 4 JSON y dejo `test_golden` en verde otra vez.
+Volví a comparar el motor actual con el golden v0.6.4. En planos 1 y 2 solo
+cambian cuartos (regla Mech. Closet B14 / sin Unlabeled). En el **plan 3** sigue
+faltando un tomacorriente half-hot en la cocina (~896, 506) y con eso una caja y
+cables. En el **plan 4** las marcas son las mismas pero tres receptáculos pasan
+`needs_review` de sí a no. Por eso **no actualicé** el golden: el candado pedía
+que detecciones/cables/cajas fueran iguales salvo el cuarto.
