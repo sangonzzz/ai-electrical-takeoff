@@ -2,42 +2,53 @@
 
 ## Estado
 
-**Round 6 done** (engine unfreeze this round only). Switch letters, 240V, attic, FC, false 240V, kitchen exhaust/half-hot, P3 kitchen 3D + P4 sink light. Ask A1 to bump patch.
+**Round 7 done** (last engine round). Attic light→Attic; sink half-hot by legend+geometry; viewport/legend generalization. Ask A1 to bump patch.
 
 ## Hecho
 
 | Fix | Behavior | Commit |
 |-----|----------|--------|
-| R6.1 | Multi-gang letter 1:1; `3D`→`three_way_dimmer`; mount filter keeps `3D`/`240V` | `baad716` |
-| R6.2 | SPEC 240V → `gfci_240v` + test | `329861c` |
-| R6.3 | IN ATTIC `$` from bar; drop left wiring dash | `b3970e8` |
-| R6.4 | Laundry FC via `FC` token + duplex glyph | `5b9801b` |
-| R6.5 | Drop false `gfci_240v` ~1096,276 (no 240V code) | `f012f0a` |
-| R6.6 | Kitchen yin-yang=exhaust; sink `$`; half-hot=thin fill | `e7cef06` |
-| R6.7 | Plan 3 kitchen `3D`; plan 4 sink light | `ca5ea8d` |
+| R7.1–2 | Attic circle+cross light locked to Attic; sink ~975,323 → `afci_half_hot`; range yin-yang stays exhaust | `273d3e7` |
+| R7.3 | Soft titles (`ELECTRICAL\|POWER\|LIGHTING PLAN`); largest-drawing viewport + warning; builtin legend + warning; Escondido unchanged | *(this commit)* |
 
-### Counts (`--no-llm --no-bom`)
+### Plan 1 kitchen sink — legend template scores (~975, 323)
 
-| plan | light | fan | sw | rec | exhaust |
-|------|-------|-----|----|-----|---------|
-| 1 | 9 | 1 | 13 | 25 | 4 |
-| 2 | 13 | 2 | 11 | 31 | 4 |
-| 3 | 13 | 2 | 14 | 30 | 5 |
-| 4 | 17 | 3 | 17 | 41 | 4 |
+Candidate nearest the half-filled sink glyph vs Escondido legend templates (dilated IoU):
 
-Overlays: `out/debug/detections_p{1..4}.png` (refreshed).
+| Legend row | Subtype | IoU (best rot) |
+|------------|---------|----------------|
+| DUPLEX OUTLET AFCI-HALF HOT | `afci_half_hot` | **0.88** (90°) on compact duplex @~(973,295); geometry fill path emits `afci_half_hot` @~(975.4,322.8) |
+| EXHAUST FAN | `bath_exhaust` | 0.65 (180°) on same compact glyph |
+
+**Decision:** label `afci_half_hot` (better match + thin/rotated half-fill prior). Range yin-yang @~(990,420) remains `bath_exhaust`.
+
+### Attic
+
+- Light @~(1120.3, 408.6) `recessed`, room display **Attic**
+- `$` switch also in Attic (from R6)
+
+### Generalization probe (`eval/scripts/generalization_probe.py`)
+
+| Plan | Before | After |
+|------|--------|-------|
+| longview p4 | `ValueError` title | **ok** title=`ELECTRICAL PLAN EXAMPLE`, 14 dets, legend builtin warn |
+| pbg p0 | `ValueError` title | **ok** title=`VIEWPORT_FALLBACK`, 2 dets, viewport+legend+scale warns |
+| pbg p1 | `ValueError` title | **ok** title=`1ST FLOOR POWER PLAN`, 0 dets, legend builtin warn |
+
+Escondido: no fallback warnings; `engine/tests/symbols/` 29 passed.
 
 ## Cómo probarlo
 
 ```bash
 uv run pytest engine/tests/symbols/ -q
 uv run takeoff analyze data/plans/escondido_plans.pdf --page 1 --out out/plan1.json --debug --no-llm --no-bom
+uv run python eval/scripts/generalization_probe.py
 ```
 
 ## Siguiente
 
 - Agente 1: bump `PIPELINE_VERSION` patch + push
-- Residual: Plan 4 Bath-2 wall vanity light still not recovered (glyph sparse vs plan-1 vanity)
+- Residual: Plan 4 Bath-2 wall vanity light
 
 ## Bloqueos
 
@@ -45,14 +56,14 @@ uv run takeoff analyze data/plans/escondido_plans.pdf --page 1 --out out/plan1.j
 
 ## Decisions
 
-- Gang letter align radius 14 pt (box gang stays 10 pt).
-- Exhaust = wide half-disc fill; AFCI half-hot = thin vertical fill + duplex slots.
-- Orphan switch letters: recover from stem bar when IoU would otherwise reject a thin `$`.
+- Soft title ≥14 pt need not be bold; Escondido still requires bold ≥18 for rank-0.
+- Missing LEGEND → builtin catalog (empty geometry) so classify heuristics can run.
+- Sink: geometry half-fill prior + higher half-hot IoU beats exhaust.
 
 ## Needs from Santiago
 
-- Confirm R6 overlays; A1 bump + push when ready.
+- Confirm R7 overlays / probe; A1 bump + push when ready.
 
 ## Explicación para Santiago
 
-En esta ronda arreglé lo que el revisor marcó en el plan 1 a alta resolución: las letras de los interruptores ahora se emparejan una a una con cada `$` (y `3D` ya no se convierte en dimmer), los tomas 240V quedan como `gfci_240v`, el panel IN ATTIC tiene su luz y su switch, recuperamos el FC del laundry, quitamos el falso 240V de la puerta, y en la cocina el yin-yang es exhaust (no half-hot) con el switch del disposal. En el plan 3 recuperamos el 3D de la cocina; en el plan 4 la luz del fregadero. Falta todavía la wall light de Bath 2 del plan 4. Hay que pedir a Agente 1 que suba el patch de versión.
+En la última ronda del motor: la luz del panel IN ATTIC ya se detecta y queda en la habitación Attic. En la cocina del plan 1, el símbolo medio relleno junto al disposal es half-hot (mejor score contra la leyenda AFCI-HALF HOT que contra exhaust); el yin-yang del range sigue siendo exhaust. Además, si un plano no tiene el título exacto de Escondido, el motor busca ELECTRICAL/POWER/LIGHTING PLAN o usa la región de dibujo más grande con un warning; si no hay LEGEND, usa plantillas built-in y avisa. La sonda de generalización de Agente 7 ya no truena: Longview y Palm Beach Gardens terminan con un SheetResult. Hay que pedir a Agente 1 que suba el patch de versión.

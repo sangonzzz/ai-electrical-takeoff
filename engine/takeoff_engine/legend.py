@@ -151,8 +151,14 @@ def _seg_len(s: Segment) -> float:
 
 
 def legend_bbox(ctx: PageContext) -> BBox:
-    """Return the electrical legend content region (for crops / Sheet.legend_bbox)."""
-    return _legend_region(ctx, find_legend_title(ctx))
+    """Return the electrical legend content region (for crops / Sheet.legend_bbox).
+
+    When no LEGEND title exists (builtin fallback), returns a tiny dummy box.
+    """
+    try:
+        return _legend_region(ctx, find_legend_title(ctx))
+    except ValueError:
+        return BBox(x0=0.0, y0=0.0, x1=1.0, y1=1.0)
 
 
 def find_legend_title(ctx: PageContext) -> BBox:
@@ -607,13 +613,85 @@ def _desc_text_for_symbol(
     return re.sub(r"\s+", " ", " ".join(parts)).strip()
 
 
-def extract_legend(ctx: PageContext) -> list[LegendEntry]:
+# Stable ids for built-in catalog (geometry classify looks up by category).
+_BUILTIN_CATALOG: list[tuple[Category, str, str]] = [
+    (Category.CEILING_FAN, "ceiling_fan", "CEILING FAN (builtin)"),
+    (Category.LIGHT, "recessed", "RECESSED DOWNLIGHT (builtin)"),
+    (Category.LIGHT, "recessed_vapor_proof", "VAPOR PROOF RECESSED (builtin)"),
+    (Category.LIGHT, "pendant", "PENDANT LIGHT (builtin)"),
+    (Category.LIGHT, "wall", "WALL MOUNTED LIGHT (builtin)"),
+    (Category.LIGHT, "exterior_wall", "EXTERIOR WALL LIGHT (builtin)"),
+    (Category.SWITCH, "single_pole", "ELECTRICAL SWITCH (builtin)"),
+    (Category.SWITCH, "three_way", "THREE WAY SWITCH (builtin)"),
+    (Category.SWITCH, "three_way_dimmer", "THREE WAY DIMMER (builtin)"),
+    (Category.SWITCH, "dimmer", "SWITCH-DIMMER (builtin)"),
+    (Category.SWITCH, "fan", "FAN SWITCH (builtin)"),
+    (Category.SWITCH, "vacancy_sensor", "VACANCY SENSOR (builtin)"),
+    (Category.SWITCH, "astronomical_timer", "ASTRONOMICAL TIMER (builtin)"),
+    (Category.RECEPTACLE, "duplex", "DUPLEX OUTLET (builtin)"),
+    (Category.RECEPTACLE, "afci", "AFCI OUTLET (builtin)"),
+    (Category.RECEPTACLE, "afci_half_hot", "DUPLEX OUTLET AFCI-HALF HOT (builtin)"),
+    (Category.RECEPTACLE, "gfci", "GFCI OUTLET (builtin)"),
+    (Category.RECEPTACLE, "gfci_weatherproof", "WEATHERPROOF GFCI (builtin)"),
+    (Category.RECEPTACLE, "gfci_240v", "240 VOLT OUTLET (builtin)"),
+    (Category.RECEPTACLE, "gfci_microwave", "MICROWAVE OUTLET (builtin)"),
+    (Category.RECEPTACLE, "gfci_dishwasher", "DISHWASHER OUTLET (builtin)"),
+    (Category.RECEPTACLE, "range_hood", "RANGE HOOD (builtin)"),
+    (Category.RECEPTACLE, "fan_coil_dedicated", "FAN COIL OUTLET (builtin)"),
+    (Category.EXHAUST_FAN, "bath_exhaust", "EXHAUST FAN (builtin)"),
+    (Category.EXHAUST_FAN, "indoor_air_quality", "IAQ FAN (builtin)"),
+    (Category.DETECTOR, "smoke", "SMOKE DETECTOR (builtin)"),
+    (Category.DETECTOR, "smoke_co", "SMOKE/CARBON DETECTOR (builtin)"),
+    (Category.JUNCTION_BOX, "junction_box", "JUNCTION BOX (builtin)"),
+]
+
+
+def builtin_legend_entries() -> list[LegendEntry]:
+    """Category/subtype catalog when the sheet has no parseable LEGEND (R7).
+
+    Empty symbol geometry — classify still runs geometry heuristics that look
+    up entries by category. Template IoU matching is a no-op for these rows.
+    """
+    entries: list[LegendEntry] = []
+    for i, (cat, subtype, desc) in enumerate(_BUILTIN_CATALOG):
+        entries.append(
+            LegendEntry(
+                id=f"builtin-{cat.value}-{subtype}",
+                description=desc,
+                codes=[],
+                category=cat,
+                subtype=subtype,
+                combined=False,
+                symbol_bbox=BBox(x0=0.0, y0=float(i), x1=10.0, y1=float(i) + 10.0),
+                interpreted_by="rules",
+            )
+        )
+    return entries
+
+
+def extract_legend(
+    ctx: PageContext,
+    warnings: list[str] | None = None,
+) -> list[LegendEntry]:
     """Find the electrical LEGEND (not floor finish) and parse each row.
 
     Each entry carries symbol geometry (for templates) and description text.
     Plumbing, attic access, and wiring rows are omitted (SPEC §1).
+
+    R7: if the LEGEND title is missing, return :func:`builtin_legend_entries`
+    and append a warning (do not raise).
     """
-    title = find_legend_title(ctx)
+    try:
+        title = find_legend_title(ctx)
+    except ValueError as exc:
+        msg = f"legend fallback: {exc}; using built-in templates"
+        logger.warning("page %s: %s", ctx.page_index, msg)
+        if warnings is not None:
+            warnings.append(msg)
+        entries = builtin_legend_entries()
+        _BLOB_CACHE[id(ctx)] = {e.id: None for e in entries}
+        return entries
+
     region = _legend_region(ctx, title)
     blobs = _cluster_legend_symbols(ctx, region)
 

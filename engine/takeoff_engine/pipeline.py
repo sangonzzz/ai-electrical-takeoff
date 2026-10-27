@@ -110,16 +110,17 @@ def analyze_sheet(
     timings["pdf_context"] = _ms(t0)
 
     t0 = time.perf_counter()
-    viewport, title = find_electrical_viewport(ctx)
-    title_bbox, _ = find_electrical_title(ctx)
-    scale = parse_scale(ctx, title_bbox)
-    if abs(scale - DEFAULT_PT_PER_FT) > 0.01 and scale == DEFAULT_PT_PER_FT:
-        pass  # parse_scale already logs; keep default
-    if scale == DEFAULT_PT_PER_FT:
-        # Only warn if we actually fell back (parse_scale returns default on failure
-        # OR when the sheet truly is 18.0). Detect fallback via a re-check is hard;
-        # Escondido is 18.0 — no warning when equal.
-        pass
+    viewport, title = find_electrical_viewport(ctx, warnings=warnings)
+    try:
+        title_bbox, _ = find_electrical_title(ctx)
+        scale = parse_scale(ctx, title_bbox)
+    except ValueError:
+        # Largest-region viewport path: no title → keep default scale.
+        scale = DEFAULT_PT_PER_FT
+        warnings.append(
+            "scale fallback: no ELECTRICAL/POWER/LIGHTING PLAN title; "
+            f"using DEFAULT_PT_PER_FT={DEFAULT_PT_PER_FT}"
+        )
     timings["viewport"] = _ms(t0)
 
     # Sheet number from title / page if present in text near title block.
@@ -130,7 +131,7 @@ def analyze_sheet(
             break
 
     t0 = time.perf_counter()
-    legend = extract_legend(ctx)
+    legend = extract_legend(ctx, warnings=warnings)
     templates = legend_templates(ctx, legend)
     legend_region = legend_bbox(ctx)
     timings["legend"] = _ms(t0)

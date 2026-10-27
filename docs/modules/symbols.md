@@ -14,11 +14,12 @@ Geometry decides **where**; the legend decides **what**. Plans are vector — po
 
 ## Viewport (`find_electrical_viewport`)
 
-1. Find bold horizontal span matching `ELECTRICAL PLAN` (size ≥ 18 pt), ignore `ELECTRICAL NOTES`.
+1. Find title span: prefer bold `ELECTRICAL PLAN` ≥ 18 pt (Escondido); else any `ELECTRICAL|POWER|LIGHTING PLAN` ≥ 14 pt (R7). Ignore `ELECTRICAL NOTES` and rotated spine labels.
 2. Collect long **black** vertical segments that have ≥ 200 pt of length **above** the title. (Plan 4: a divider at x≈1439 only exists *below* the title; ignoring it keeps the wide electrical cell.)
 3. Cell left/right = nearest such verticals on either side of the title bbox.
 4. Cell top = nearest long horizontal above the title that overlaps the cell x-range (else ~20 pt margin).
 5. Viewport bottom = `title.y0`. Inset 2 pt from the frame.
+6. **R7 fallback:** if no title / cell frame → `largest_drawing_region` (black-ink bbox + pad) and a warning (`VIEWPORT_FALLBACK`). Escondido still takes the title path (no warning).
 
 ### Thresholds
 
@@ -42,6 +43,7 @@ Reads `SCALE: 1/4" = 1'-0"` under the title → `(draw_inches / real_feet) * 72`
 4. For each symbol blob, collect ~9.6 pt description text in a vertical band between same-column peers (and below the blob for large symbols like the ceiling fan).
 5. Attach ~6.5 pt code tokens nearest to that symbol (closest-peer filter).
 6. `map_description` → category/subtype; exclude plumbing, attic access, wiring.
+7. **R7 fallback:** if no LEGEND title → `builtin_legend_entries()` (stable `builtin-*` ids, empty geometry) + warning. Classify geometry heuristics still resolve categories; template IoU is a no-op for builtins.
 
 `legend_templates` returns `LegendTemplate(entry_id, bbox, segments, fills)` for 1:1 raster matching.
 
@@ -93,6 +95,9 @@ Order matters: remove non-symbol ink **before** clustering so dashes never join 
 | False 240V (R6.5) | Drop weak uncoded receptacle IoU; gate `gfci_240v` on `240V` token | Laundry door ~1096,276 |
 | Exhaust vs half-hot (R6.6) | Wide yin-yang fill → exhaust; thin vertical fill + duplex → half-hot; sink `$` via exhaust-adjacent stem | Plan 1 kitchen |
 | Orphan letters (R6.7) | `3D`/`F`/… token without nearby switch → stem bar recovery | Plan 3 kitchen left wall |
+| Attic light lock (R7.1) | Circle+cross inside IN ATTIC panel → recessed; room Attic | Plan 1 attic can |
+| Sink half-hot (R7.2) | Thin/rotated half-fill → `afci_half_hot` (not exhaust); range yin-yang stays exhaust | Plan 1 kitchen sink ~975,323 |
+| Soft viewport/legend (R7.3) | Title/legend fallbacks; Escondido path unchanged | Longview / PBG probe no longer raises |
 
 4. NMS same category 8 pt; then cross-category NMS for known collisions (fan > light; exhaust > light).
 5. `needs_review` **only** when (a) top-two scores are close **and** different categories, or (b) weak match (&lt;0.30) with no type codes. Same-glyph receptacle/switch legend rows no longer flood review (target &lt;15%; measured ~5%).

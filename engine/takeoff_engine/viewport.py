@@ -75,36 +75,83 @@ def _cluster_positions(positions: list[float], tol: float = 3.0) -> list[float]:
     return [sum(c) / len(c) for c in clusters]
 
 
-def find_electrical_title(ctx: PageContext) -> tuple[BBox, str]:
-    """Locate the bold ``ELECTRICAL PLAN - PLAN N`` title span.
+# Broader plan titles when the Escondido ``ELECTRICAL PLAN - PLAN N`` is absent (R7).
+_TITLE_FALLBACK_RE = re.compile(
+    r"\b((?:ELECTRICAL|POWER|LIGHTING)\s+PLAN)\b",
+    re.IGNORECASE,
+)
+# Soft title match (other cities): slightly smaller / not always bold.
+_TITLE_FALLBACK_MIN_SIZE_PT = 14.0
 
-    Ignores ``ELECTRICAL NOTES`` and small legend/body mentions of the word
-    ELECTRICAL. Prefers spans (whole line) over word tokens because the PDF
-    stores the title as one span.
+
+def find_electrical_title(ctx: PageContext) -> tuple[BBox, str]:
+    """Locate the electrical / power / lighting plan title span.
+
+    Prefers bold ``ELECTRICAL PLAN`` ≥ 18 pt (Escondido). Falls back to any
+    ``ELECTRICAL|POWER|LIGHTING PLAN`` span ≥ 14 pt (R7 generalization).
+    Ignores ``ELECTRICAL NOTES`` and rotated spine labels.
     """
     best: Word | None = None
+    best_text = ""
+    best_rank = 99
     for span in ctx.spans:
-        if not span.is_bold or span.size < _TITLE_MIN_SIZE_PT:
-            continue
         if abs(span.dir_deg) > 5.0:
             continue  # skip rotated spine labels
         text = " ".join(span.text.split())
         upper = text.upper()
-        if "ELECTRICAL PLAN" not in upper:
-            continue
         if "NOTES" in upper:
             continue
-        if best is None or span.size > best.size:
+        rank: int | None = None
+        # Rank 0: Escondido-style bold title (unchanged thresholds).
+        if (
+            span.is_bold
+            and span.size >= _TITLE_MIN_SIZE_PT
+            and "ELECTRICAL PLAN" in upper
+        ):
+            rank = 0
+        elif (
+            span.size >= _TITLE_FALLBACK_MIN_SIZE_PT
+            and _TITLE_FALLBACK_RE.search(upper)
+        ):
+            # Prefer bold when several soft matches exist.
+            rank = 1 if span.is_bold else 2
+        if rank is None:
+            continue
+        if best is None or rank < best_rank or (
+            rank == best_rank and span.size > best.size
+        ):
             best = span
             best_text = text
+            best_rank = rank
 
     if best is None:
         raise ValueError(
-            f"page {ctx.page_index}: no bold 'ELECTRICAL PLAN - PLAN N' title found"
+            f"page {ctx.page_index}: no ELECTRICAL/POWER/LIGHTING PLAN title found"
         )
 
     x0, y0, x1, y1 = best.bbox
     return BBox(x0=x0, y0=y0, x1=x1, y1=y1), best_text
+
+
+def largest_drawing_region(ctx: PageContext) -> BBox:
+    """Content bbox of black ink with a small pad — last-resort viewport (R7)."""
+    xs: list[float] = []
+    ys: list[float] = []
+    for seg in ctx.black_segments:
+        xs.extend([seg.x0, seg.x1])
+        ys.extend([seg.y0, seg.y1])
+    for fill in ctx.black_fills:
+        xs.extend([fill.x0, fill.x1])
+        ys.extend([fill.y0, fill.y1])
+    if not xs:
+        return BBox(x0=0.0, y0=0.0, x1=ctx.page_width, y1=ctx.page_height)
+    pad = 20.0
+    return BBox(
+        x0=max(0.0, min(xs) - pad),
+        y0=max(0.0, min(ys) - pad),
+        x1=min(ctx.page_width, max(xs) + pad),
+        y1=min(ctx.page_height, max(ys) + pad),
+    )
 
 
 def _frame_verticals_above(
@@ -171,14 +218,17 @@ def _frame_horizontals(
     return _cluster_positions(ys, tol=3.0)
 
 
-def find_electrical_viewport(ctx: PageContext) -> tuple[BBox, str]:
+def find_electrical_viewport(
+    ctx: PageContext,
+    warnings: list[str] | None = None,
+) -> tuple[BBox, str]:
     """Locate the electrical plan drawing cell and its title string.
 
     Returns (viewport_bbox, title) where title is like
     ``ELECTRICAL PLAN - PLAN 1``. Must exclude mechanical and finish plans.
 
     Algorithm:
-    1. Find the bold title span.
+    1. Find the bold title span (ELECTRICAL / POWER / LIGHTING PLAN).
     2. Collect long vertical frame lines that extend *above* the title (lines
        that only exist below the title, e.g. a divider starting under a wide
        cell, are ignored — Plan 4 needs this).
@@ -186,8 +236,19 @@ def find_electrical_viewport(ctx: PageContext) -> tuple[BBox, str]:
     4. Cell top = nearest long horizontal above the title that spans the cell,
        else a small page margin.
     5. Viewport bottom = title top (drawing sits above the title band).
+
+    R7 generalization: if no title / cell frame is found, fall back to the
+    largest black-ink drawing region and append a warning (do not raise).
     """
-    title_bbox, title = find_electrical_title(ctx)
+    try:
+        title_bbox, title = find_electrical_title(ctx)
+    except ValueError as exc:
+        msg = f"viewport title fallback: {exc}; using largest drawing region"
+        logger.warning("page %s: %s", ctx.page_index, msg)
+        if warnings is not None:
+            warnings.append(msg)
+        return largest_drawing_region(ctx), "VIEWPORT_FALLBACK"
+
     title_y0 = title_bbox.y0
     title_cx = 0.5 * (title_bbox.x0 + title_bbox.x1)
 
@@ -202,16 +263,26 @@ def find_electrical_viewport(ctx: PageContext) -> tuple[BBox, str]:
     left_candidates = [x for x, _ in verticals if x < title_bbox.x0 + 5.0]
     right_candidates = [x for x, _ in verticals if x > title_bbox.x1 - 5.0]
     if not left_candidates or not right_candidates:
-        raise ValueError(
-            f"page {ctx.page_index}: could not find cell frame around title {title!r}"
+        msg = (
+            f"viewport frame fallback: no cell around title {title!r}; "
+            "using largest drawing region"
         )
+        logger.warning("page %s: %s", ctx.page_index, msg)
+        if warnings is not None:
+            warnings.append(msg)
+        return largest_drawing_region(ctx), title
 
     cell_x0 = max(left_candidates)
     cell_x1 = min(right_candidates)
     if cell_x1 - cell_x0 < 50.0:
-        raise ValueError(
-            f"page {ctx.page_index}: degenerate cell width around title {title!r}"
+        msg = (
+            f"viewport frame fallback: degenerate cell around title {title!r}; "
+            "using largest drawing region"
         )
+        logger.warning("page %s: %s", ctx.page_index, msg)
+        if warnings is not None:
+            warnings.append(msg)
+        return largest_drawing_region(ctx), title
 
     horizontals = _frame_horizontals(ctx.black_segments, cell_x0, cell_x1)
     above = [y for y in horizontals if y < title_y0 - 2.0]
