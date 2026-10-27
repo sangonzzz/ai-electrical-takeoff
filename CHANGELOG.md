@@ -2,6 +2,21 @@
 
 Plain-language notes for Santiago. Newest first.
 
+## v0.6.6 — Mech. Closet B14 + longest-boundary merge (frozen)
+
+Rooms closet / merge rules (final):
+
+- **Closet:** deep footprint hole + keynote within ~14 pt → `Mech. Closet (<tag>)`
+  any size (even if the closet touches an exterior wall; tags sit on wall poche).
+- **240V without keynote:** deep hole + `240V` text → `Mech. Closet (B14)` when B14
+  is off-viewport (plans 2/3); pick candidate nearest Laundry.
+- **Merge:** other deep holes merge into the labeled neighbor with the longest
+  shared boundary (dilate ~1 wall width; nearer label ≤75 pt wins when competing).
+  Never emit `Unlabeled space`.
+- **Shallow niches:** leave unclaimed → Exterior (e.g. B38 outdoor unit).
+
+**Engine frozen after this tag** (`AGENTS.md` §14).
+
 ## v0.6.5 — pocket rule + prices + cable-edit response (frozen)
 
 Engine patch + related app fixes:
@@ -15,8 +30,7 @@ Engine patch + related app fixes:
 - **Cable-edit response fix:** PATCH move / wire CRUD return fresh boxes + BOM
   (same as a subsequent GET; no stale identity-map collections).
 
-**Engine frozen after this tag** (`AGENTS.md` §14). Golden refresh may still need
-Santiago OK if non-room deltas remain (Agente 7).
+Engine was frozen after this tag until Santiago approved the v0.6.6 closet/merge rules.
 
 ## App 0.7.0: editable cables and boxes
 
