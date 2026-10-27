@@ -2,57 +2,55 @@
 
 ## Estado
 
-Wires **v3**: black dashes only; keynotes + gray millwork excluded; DF→fan restored; `nm_14_3` = 3-way travelers only.
+Wires **v3 final**: curved-only + measured gap window; `nm_14_3` = clean 3-way traveler only; residual millwork → A6 beta.
 
 ## Hecho
 
-- **Black (0,0,0) only** — never `gray_segments` / RGB ~0.67 (cabinets, sinks, toilets, equipment)
-- Exclude **keynote boxes** (A01/B38/…, size ≤12 pt)
-- Exclude black dashes whose midpoint sits in large **gray millwork fills**
-- Dropped oversized fan-blade disk (it ate bedroom D/F→fan); blades still rejected by gap pattern
-- **Cable rule documented:** `nm_14_3` only 3-way↔3-way traveler; switch→light / light→light → `nm_14_2`
-- Tests + docs + assumptions updated; debug PNGs regenerated
-- Asked Agente 1 to bump `PIPELINE_VERSION`
+- Reject **collinear** dash chains (`MAX_CHAIN_STRAIGHTNESS = 0.88` + direction variance)
+- Gap membership `[1.5, 9]` around measured ~3.8 pt; length collect `[1.5, 12]` (PDF flatten of ~7 pt dashes)
+- **`nm_14_3`:** consecutive distant 3-way hops, or traveler BFS that does **not** graze lights/fans/receptacles (living loop stays `nm_14_2`)
+- Messaged Agente 6: Wires layer **off by default** + **beta** badge (kitchen/bath millwork still leaks)
+- Messaged Agente 1: bump `PIPELINE_VERSION`
+- Tests + `docs/modules/bom.md` + `data/assumptions.yaml` updated; PNGs regenerated
 
-## Run counts (v3)
+## Run counts (v3 final)
 
-| Plan | runs | nm_14_2 (n / ft) | nm_14_3 (n / ft) |
-|------|------|------------------|------------------|
-| 1    | 20   | 19 / 240.8       | 1 / 33.2         |
-| 2    | 27   | 27 / 316.9       | 0 / 0.0*         |
-| 3    | 52   | 48 / 709.1       | 4 / 139.5        |
-| 4    | 61   | 59 / 737.8       | 2 / 65.5         |
-
-\*Plan 2: only one 3-way in detections. Plan 1 has switch→fan run; 4 keynotes excluded.
+| Plan | runs | nm_14_2 | nm_14_3 | notes |
+|------|------|---------|---------|-------|
+| 1    | 15   | 15      | 0       | 3-way path shares lighting ink → no clean traveler |
+| 2    | 22   | 22      | 0       | |
+| 3    | 33   | 33      | 0       | |
+| 4    | 44   | 44      | 0       | kitchen millwork FPs remain (beta) |
 
 ## Cómo probarlo
 
 ```bash
-.venv/Scripts/python -m pytest engine/tests/bom/test_wires.py -v
-.venv/Scripts/python -c "from takeoff_engine.wires import find_wire_runs; ..."
+uv run --package takeoff-engine pytest engine/tests/bom/test_wires.py -q
 ```
 
 PNGs: `out/debug/wires_plan{1..4}.png`
 
 ## Siguiente
 
-- Reviewer visual pass on all 4 PNGs
-- Plan 2 second 3-way (Agente 2) if needed
+- Agente 1 version bump
+- Agente 6 wires beta UI
+- No further wires engine work this round (timebox done)
 
 ## Bloqueos
 
 - Agente 1 version bump
+- Agente 6 beta layer (requested)
 
 ## Decisions
 
-- Strict black RGB ≤ 0.02; gray millwork never candidates
-- No fan bbox/disk blanking (approach wiring enters fan bbox)
-- Keynote size cutoff 12 pt (Escondido tags ~9.5 pt)
+- Collinear filter at **chain** link time, not every short hop (short hops on real curves look “straight”)
+- Traveler BFS rejected if path grazes mid-path lights — better 0 `nm_14_3` than labeling the living loop
+- Residual millwork → product beta, not more engine churn in this timebox
 
 ## Needs from Santiago
 
-None.
+None (this round was approved).
 
 ## Explicación para Santiago
 
-v3: solo rayitas **negras** cuentan como cable (las grises de gabinetes/inodoros/B38 no). Sacamos también las cajitas de keynotes y la tinta negra que cae sobre rellenos grises de millwork. Quité el disco enorme del ventilador que se comía el cable D/F→fan del bedroom. Regla de tipo: `nm_14_3` **solo** entre dos 3-way; todo lo demás (apagador→luz, luz→luz) es `nm_14_2`.
+Última pasada de cables: las rayitas de cable en estos planos son **curvas**, así que botamos cadenas casi rectas (gabinetes, equipos). El hueco entre rayitas ~3.8 pt filtra juntas continuas de símbolos. `nm_14_3` queda **solo** para el tramo viajero entre dos 3-way; si el camino pasa por luces (loop living/cocina), todo queda `nm_14_2`. Todavía se cuelan algunos gabinetes/baños en el overlay, así que pedí a Agente 6 que la capa Wires arranque **apagada** con badge **beta**.

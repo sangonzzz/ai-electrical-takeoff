@@ -20,20 +20,20 @@ Inside `config.APPROX_VIEWPORTS[0]`, black open strokes (width ≈ 0.24) that fo
 | Gap (median, wiring-like pairs) | **3.8 pt** |
 | Gap (typical range) | **2–4.5 pt** |
 
-Detector (v3): **black (0,0,0) strokes only** — never gray (~0.67) cabinet/sink/toilet/equipment dashes. Length **1.5–14 pt**, **gap pattern** required (`gap ∈ [1.2, 9]`). Documented in `data/assumptions.yaml`.
+Detector (v3 final): **black (0,0,0) strokes only**. Visual dash ≈ **7 pt** / gap ≈ **3.8 pt**; PDF flatten samples are shorter, so length collect is **1.5–12 pt**. Gap membership **1.5–9 pt** (~2× typical max, rejects continuous glyph joints). Wiring is always **curved** — collinear/straight dashed chains (cabinets, sinks, equipment) are rejected (`MAX_CHAIN_STRAIGHTNESS = 0.88`).
 
-## Wire algorithm (v3)
+## Wire algorithm (v3 final)
 
-1. **Collect black dashed strokes only** from `black_segments` (RGB ≤ 0.02). Never read `gray_segments`. Require a dash-gap neighbor; continuous glyph joints are out. Drop ink inside keynote boxes (A01/B38/…), receptacle/detector bboxes (+2 pt), and large gray millwork fills.
-2. **Link into open curves** (greedy tip growth, gap × 2 + tangent). Drop closed loops.
-3. **Ends at bbox boundary** of the nearest device; mid-path fixtures split the curve.
-4. **Runs** require different devices, mostly dash-covered ink, plan length ≤ 40 ft.
+1. **Collect black dashed strokes** (`black_segments`, RGB ≤ 0.02). Never `gray_segments`. Require a neighbor gap in the measured window; drop keynotes, receptacle/detector bboxes, gray millwork fills.
+2. **Link into open curves**; drop closed loops and **collinear** chains (chord/length ≥ 0.88 or low direction variance).
+3. **Ends at bbox boundary**; mid-path fixtures split into consecutive hops.
+4. **Runs** need different devices, dash-backed ink, plan ≤ 40 ft, not a straight chord.
 5. **Cable type (hard rule):**
-   - ``nm_14_3`` — **only** the traveler between two distant 3-way switches (subtype or codes `3`/`3D`).
+   - ``nm_14_3`` — **only** a traveler hop whose *both* ends are distant 3-way switches, or a dedicated traveler BFS between 3-way gangs that does **not** graze lights/fans/receptacles. Never label the whole living/kitchen loop ``nm_14_3``.
    - ``nm_14_2`` — switch→light, light→light, switch→fan, and every other hop.
-6. **Vertical allowance** from assumptions; waste in `compute_bom`.
+6. **Known limit:** some millwork (kitchen cabinets, bath fixtures, equipment outlines) can still leak through on curved black dashes; UI should keep the Wires layer **off by default** with a **beta** badge (Agente 6).
 
-Debug PNGs: teal black-dash underlay + pink (`nm_14_2`) / green (`nm_14_3`) runs labeled `{cable_type} {total_ft}ft`.
+Debug PNGs: teal dash underlay + pink (`nm_14_2`) / green (`nm_14_3`) runs → `out/debug/wires_plan{1..4}.png`.
 
 ### Routing assumption (honest limit)
 

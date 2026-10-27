@@ -11,13 +11,15 @@ cable_roll_ft: 250
 
 # Measured on Escondido Plan 1 (page index 0), electrical viewport, 2026-10-25:
 # short black open strokes that form dashed wiring chains.
-# v3: black (0,0,0) dashes only — never gray (~0.67) millwork.
-# Dash length [1.5, 14] pt; gap pattern [1.2, gap_max]; continuous joints are out.
-# Cable: nm_14_3 only for 3-way↔3-way travelers; all other hops nm_14_2.
+# v3 final: black (0,0,0) only; curved chains only (reject collinear millwork).
+# Visual dash ~7 pt; PDF flatten samples down to ~1.5 pt → collect [1.5, 12].
+# Measured gap ~3.8 pt; membership [1.5, 9] (~2× typical max) for flatten jitter.
+# Cable: nm_14_3 only for 3-way↔3-way traveler hops (not living/kitchen loops); else nm_14_2.
 dash_length_pt_median: 7.1
-dash_length_pt_range: [4.0, 10.0]
+dash_length_pt_range: [1.5, 12.0]
 gap_pt_median: 3.8
 gap_pt_range: [2.0, 4.5]
-gap_pattern_min_pt: 1.2
-gap_max_pt: 9.0  # gap_pt_range[1] × 2
+gap_pattern_min_pt: 1.5
+gap_pattern_max_pt: 9.0
 wire_stroke_rgb: [0.0, 0.0, 0.0]
+wires_layer_beta: true  # residual millwork false-positives possible

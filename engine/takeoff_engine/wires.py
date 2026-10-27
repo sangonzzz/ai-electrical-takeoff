@@ -24,20 +24,23 @@ from takeoff_engine.models import BBox, Category, Detection, Point, WireRun
 from takeoff_engine.types import FillPath, PageContext, Segment
 
 # Measured thresholds (see docs/modules/bom.md and data/assumptions.yaml).
+# Visual wiring dash ≈ 7 pt / gap ≈ 3.8 pt, always *curved*. PDF curve flatten
+# yields short samples (~1.5–3 pt), so the length window includes those.
 GAP_MEDIAN_PT = 3.8
-GAP_TYPICAL_MAX_PT = 4.5
-# Length window: measured dashes 4–10 pt, plus ~1.5–3 pt Bezier-flattened samples
-# on real curves. Continuous glyph joints are rejected by the gap-pattern filter.
 DASH_LEN_MIN_PT = 1.5
-DASH_LEN_MAX_PT = 14.0
-# Below this endpoint gap = continuous glyph stroke (never wire). Dash gaps start here.
-GAP_PATTERN_MIN_PT = 1.2
+DASH_LEN_MAX_PT = 12.0
+# Measured gap ≈ 3.8 pt (typical 2–4.5). Membership uses [1.5, 9] (= ~2× typical
+# max) so PDF flatten jitter still links; continuous joints (<1.5) stay out.
+GAP_PATTERN_MIN_PT = 1.5
+GAP_PATTERN_MAX_PT = 9.0
 GAP_MIN_PT = GAP_PATTERN_MIN_PT
-# Link up to measured gap × 2.
-GAP_MAX_PT = GAP_TYPICAL_MAX_PT * 2.0  # 9.0
-GAP_MAX_ALIGNED_PT = GAP_MAX_PT * 1.25  # ~11.25 when cos is high
-DIR_COS_MIN = -0.35
-DIR_COS_PREFER = 0.35
+GAP_MAX_PT = GAP_PATTERN_MAX_PT
+GAP_MAX_ALIGNED_PT = 11.25
+DIR_COS_MIN = -0.25
+DIR_COS_PREFER = 0.40
+# Reject chains that are basically a straight dashed line (cabinets, equipment).
+MAX_CHAIN_STRAIGHTNESS = 0.88
+MIN_DIRECTION_VARIANCE = 0.04  # mean |sin| of dash dirs vs mean dir
 
 STROKE_WIDTH_NOMINAL = 0.24
 STROKE_WIDTH_TOL = 0.08
@@ -260,8 +263,8 @@ def _filter_dash_gap_pattern(segs: list[Segment]) -> list[Segment]:
     """Keep only strokes that participate in a real dash gap (not continuous glyphs).
 
     A wiring dash must have at least one other candidate whose endpoint lies in
-    ``[GAP_PATTERN_MIN, GAP_MAX]``. Near-touching joints (gap < 1.2) are continuous
-    symbol outlines (fan blades, receptacle loops) and never count as wire.
+    ``[GAP_PATTERN_MIN, GAP_PATTERN_MAX]`` (~3.8 pt measured). Near-touching
+    joints (gap < pattern min) are continuous symbol outlines and never wires.
     """
     n = len(segs)
     if n == 0:
@@ -279,7 +282,7 @@ def _filter_dash_gap_pattern(segs: list[Segment]) -> list[Segment]:
             if ia == ib:
                 continue
             gap = math.hypot(ax - bx, ay - by)
-            if GAP_PATTERN_MIN_PT <= gap <= GAP_MAX_PT:
+            if GAP_PATTERN_MIN_PT <= gap <= GAP_PATTERN_MAX_PT:
                 has_dash_gap[ia] = True
                 has_dash_gap[ib] = True
     return [s for i, s in enumerate(segs) if has_dash_gap[i]]
@@ -466,8 +469,47 @@ def _is_closed_loop(points: list[Point]) -> bool:
     return length > 3.0 * max(tip_dist, 1.0)
 
 
+def _dash_direction(s: Segment) -> tuple[float, float]:
+    return _unit(s.x1 - s.x0, s.y1 - s.y0)
+
+
+def _chain_is_collinear(chain: list[Segment], points: list[Point]) -> bool:
+    """True for straight dashed runs (cabinets, equipment) — wiring is curved.
+
+    Uses polyline straightness (chord/length) and dash-direction agreement.
+    """
+    if len(points) >= 2:
+        length = _polyline_length_pt(points)
+        if length > 1e-6:
+            chord = math.hypot(points[-1].x - points[0].x, points[-1].y - points[0].y)
+            if chord / length >= MAX_CHAIN_STRAIGHTNESS:
+                return True
+    if len(chain) < 3:
+        return False
+    dirs = [_dash_direction(s) for s in chain]
+    # Mean direction (flip each dash to agree with the first).
+    mx, my = dirs[0]
+    sx = sy = 0.0
+    for dx, dy in dirs:
+        if dx * mx + dy * my < 0:
+            dx, dy = -dx, -dy
+        sx += dx
+        sy += dy
+    mx, my = _unit(sx, sy)
+    # Mean absolute sine vs mean dir ≈ angular spread.
+    spread = 0.0
+    for dx, dy in dirs:
+        if dx * mx + dy * my < 0:
+            dx, dy = -dx, -dy
+        # |sin| = sqrt(1 - cos^2)
+        cos = max(-1.0, min(1.0, dx * mx + dy * my))
+        spread += math.sqrt(max(0.0, 1.0 - cos * cos))
+    spread /= len(dirs)
+    return spread < MIN_DIRECTION_VARIANCE
+
+
 def _link_dash_curves(dashes: list[Segment]) -> list[list[Segment]]:
-    """Link dashes into full curves via gap + tangent continuity (greedy growth)."""
+    """Link dashes into *curved* wiring runs (reject collinear millwork chains)."""
     n = len(dashes)
     if n == 0:
         return []
@@ -486,6 +528,8 @@ def _link_dash_curves(dashes: list[Segment]) -> list[list[Segment]]:
         chain = [dashes[i] for i in idxs]
         points = _ordered_polyline(chain)
         if _is_closed_loop(points):
+            continue
+        if _chain_is_collinear(chain, points):
             continue
         curves.append(chain)
     return curves
@@ -613,6 +657,14 @@ def _bbox_to_polyline(
     if best_dist is None:
         return None
     return best_t, best_dist
+
+
+def _device_near_polyline(
+    det: Detection, points: list[Point], max_dist: float
+) -> bool:
+    """True when the device bbox approaches the polyline within ``max_dist``."""
+    got = _bbox_to_polyline(points, det.bbox)
+    return got is not None and got[1] <= max_dist
 
 
 def _tip_device_rank(det: Detection) -> int:
@@ -990,9 +1042,36 @@ def _three_way_traveler_runs(
             poly = _snap_ends_to_bbox(points, a, b)
             if len(poly) < 2 or _is_closed_loop(poly):
                 continue
+            # Traveler only — reject paths that graze lights/fans (living loop).
+            # Use the same mid-path radius as curve splitting so a light on the
+            # run blocks nm_14_3 (those hops stay nm_14_2).
+            mid_hits = [
+                d
+                for d in active
+                if d.id not in (a.id, b.id)
+                and d.category
+                in (
+                    Category.LIGHT,
+                    Category.CEILING_FAN,
+                    Category.EXHAUST_FAN,
+                    Category.RECEPTACLE,
+                    Category.JUNCTION_BOX,
+                    Category.SWITCH,
+                )
+                and not _is_three_way(d)
+                and _device_near_polyline(d, poly, DEVICE_PATH_ASSOCIATE_PT)
+            ]
+            if mid_hits:
+                continue
+            # Traveler must be a curved dashed path, not a wall/cabinet chord.
+            length = _polyline_length_pt(poly)
+            if length > 1e-6:
+                chord = math.hypot(poly[-1].x - poly[0].x, poly[-1].y - poly[0].y)
+                if chord / length >= MAX_CHAIN_STRAIGHTNESS:
+                    continue
             if _uncovered_fraction(poly, dashes) > MAX_UNCOVERED_FRACTION:
                 continue
-            plan_ft = _polyline_length_pt(poly) / scale_pt_per_ft
+            plan_ft = length / scale_pt_per_ft
             if plan_ft > MAX_PLAN_LENGTH_FT or plan_ft < 0.5:
                 continue
             seen_pairs.add(pair)
@@ -1077,12 +1156,14 @@ def find_wire_runs(
                 poly = _snap_ends_to_bbox(points, from_det, to_det)
             if len(poly) < 2 or _is_closed_loop(poly):
                 return
+            # Chain-level collinear filter already dropped cabinet runs; short
+            # hops on a real curve can still look "straight" by chord/length.
             if _is_unsupported_straight_chord(poly, dashes):
                 return
+            hop_len = _polyline_length_pt(poly)
             if _uncovered_fraction(poly, dashes) > MAX_UNCOVERED_FRACTION:
                 return
-            plan_pt = _polyline_length_pt(poly)
-            plan_ft = plan_pt / scale_pt_per_ft
+            plan_ft = hop_len / scale_pt_per_ft
             if plan_ft > MAX_PLAN_LENGTH_FT or plan_ft < 0.25:
                 return
             seen_pairs.add(pair)
@@ -1108,18 +1189,8 @@ def find_wire_runs(
                 )
             )
 
-        threes_along = [d for d in along if _is_three_way(d)]
-        best_traveler: tuple[float, Detection, Detection] | None = None
-        for i, a in enumerate(threes_along):
-            for b in threes_along[i + 1 :]:
-                dist = math.hypot(a.center.x - b.center.x, a.center.y - b.center.y)
-                if dist < _THREE_WAY_TRAVELER_MIN_DIST_PT:
-                    continue
-                if best_traveler is None or dist > best_traveler[0]:
-                    best_traveler = (dist, a, b)
-        if best_traveler is not None:
-            _emit(best_traveler[1], best_traveler[2], "nm_14_3")
-
+        # nm_14_3 only on consecutive hops that are both 3-ways (or traveler BFS
+        # below). Do NOT span mid-path lights as one giant nm_14_3 loop.
         for i in range(len(along) - 1):
             from_det, to_det = along[i], along[i + 1]
             _emit(from_det, to_det, _cable_type(from_det, to_det))
@@ -1205,7 +1276,9 @@ __all__ = [
     "DEVICE_BBOX_ASSOCIATE_PT",
     "GAP_MAX_PT",
     "GAP_MEDIAN_PT",
+    "GAP_PATTERN_MAX_PT",
     "GAP_PATTERN_MIN_PT",
+    "MAX_CHAIN_STRAIGHTNESS",
     "MAX_PLAN_LENGTH_FT",
     "MAX_UNCOVERED_FRACTION",
     "find_wire_runs",
