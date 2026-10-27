@@ -688,13 +688,78 @@ def _fill_holes(region: np.ndarray) -> np.ndarray:
     return out
 
 
-def _attic_box_polygon(ctx: PageContext, label: _Label, viewport: BBox) -> list[Point] | None:
-    """Find the gray rectangle around ``IN ATTIC`` (attic access panel box)."""
-    best: FillPath | None = None
+def _gray_stroke_panel_around(
+    ctx: PageContext,
+    cx: float,
+    cy: float,
+) -> tuple[float, float, float, float] | None:
+    """Tight gray-stroke rectangle containing (cx, cy) — the real IN ATTIC frame.
+
+    Escondido draws the attic access panel as four light-gray axis-aligned
+    strokes (~45×33 pt), not a gray fill. A padded text bbox sits ~12 pt too
+    high and steals the hallway recessed can above the panel while cutting off
+    the ``$`` at the bottom.
+    """
+    hs: list[tuple[float, float, float]] = []  # (y, x0, x1)
+    vs: list[tuple[float, float, float]] = []  # (x, y0, y1)
+    for s in ctx.gray_segments:
+        ax = abs(s.x1 - s.x0)
+        ay = abs(s.y1 - s.y0)
+        if ay <= 1.5 and 25.0 <= ax <= 100.0:
+            y = 0.5 * (s.y0 + s.y1)
+            if abs(y - cy) > 50.0:
+                continue
+            hs.append((y, min(s.x0, s.x1), max(s.x0, s.x1)))
+        elif ax <= 1.5 and 20.0 <= ay <= 100.0:
+            x = 0.5 * (s.x0 + s.x1)
+            if abs(x - cx) > 50.0:
+                continue
+            vs.append((x, min(s.y0, s.y1), max(s.y0, s.y1)))
+    if len(hs) < 2 or len(vs) < 2:
+        return None
+    best: tuple[float, float, float, float] | None = None
     best_area = float("inf")
-    lx0, ly0, lx1, ly1 = label.bbox
+    for i, (y_a, ax0, ax1) in enumerate(hs):
+        if not (ax0 - 2.0 <= cx <= ax1 + 2.0):
+            continue
+        for y_b, bx0, bx1 in hs[i + 1 :]:
+            if abs(y_b - y_a) < 18.0 or abs(y_b - y_a) > 90.0:
+                continue
+            if not (bx0 - 2.0 <= cx <= bx1 + 2.0):
+                continue
+            x0 = max(ax0, bx0)
+            x1 = min(ax1, bx1)
+            if x1 - x0 < 25.0:
+                continue
+            y0, y1 = (y_a, y_b) if y_a < y_b else (y_b, y_a)
+            if not (y0 - 2.0 <= cy <= y1 + 2.0):
+                continue
+            left_ok = any(
+                abs(vx - x0) <= 3.0 and vy0 <= y0 + 3.0 and vy1 >= y1 - 3.0
+                for vx, vy0, vy1 in vs
+            )
+            right_ok = any(
+                abs(vx - x1) <= 3.0 and vy0 <= y0 + 3.0 and vy1 >= y1 - 3.0
+                for vx, vy0, vy1 in vs
+            )
+            if not (left_ok and right_ok):
+                continue
+            area = (x1 - x0) * (y1 - y0)
+            if area < best_area:
+                best_area = area
+                best = (x0, y0, x1, y1)
+    return best
+
+
+def _attic_box_polygon(ctx: PageContext, label: _Label, viewport: BBox) -> list[Point] | None:
+    """Polygon of the attic access panel — from the panel frame, not the text.
+
+    Prefer (1) gray fill containing the label, then (2) gray-stroke rectangle
+    around ``IN ATTIC``, then (3) a tight pad on the label as last resort.
+    """
+    best: tuple[float, float, float, float] | None = None
+    best_area = float("inf")
     for fill in ctx.gray_fills:
-        # Attic panel is a roughly square/rect gray stroke-fill containing the label.
         w = abs(fill.x1 - fill.x0)
         h = abs(fill.y1 - fill.y0)
         if w < 20 or h < 20 or w > 120 or h > 120:
@@ -703,27 +768,23 @@ def _attic_box_polygon(ctx: PageContext, label: _Label, viewport: BBox) -> list[
             area = w * h
             if area < best_area:
                 best_area = area
-                best = fill
-        # Also accept fills whose bbox nearly contains the label bbox.
-        elif fill.x0 <= lx0 and fill.y0 <= ly0 and fill.x1 >= lx1 and fill.y1 >= ly1:
-            area = w * h
-            if area < best_area:
-                best_area = area
-                best = fill
+                best = (fill.x0, fill.y0, fill.x1, fill.y1)
+
     if best is None:
-        # Fallback: axis-aligned box around the label with padding.
-        pad = 14.0
-        return [
-            Point(x=lx0 - pad, y=ly0 - pad),
-            Point(x=lx1 + pad, y=ly0 - pad),
-            Point(x=lx1 + pad, y=ly1 + pad),
-            Point(x=lx0 - pad, y=ly1 + pad),
-        ]
+        best = _gray_stroke_panel_around(ctx, label.cx, label.cy)
+
+    if best is None:
+        # Last resort only — padded text overshoots above the panel on Plan 1.
+        lx0, ly0, lx1, ly1 = label.bbox
+        pad = 8.0
+        best = (lx0 - pad, ly0 - pad, lx1 + pad, ly1 + pad)
+
+    x0, y0, x1, y1 = best
     return [
-        Point(x=best.x0, y=best.y0),
-        Point(x=best.x1, y=best.y0),
-        Point(x=best.x1, y=best.y1),
-        Point(x=best.x0, y=best.y1),
+        Point(x=x0, y=y0),
+        Point(x=x1, y=y0),
+        Point(x=x1, y=y1),
+        Point(x=x0, y=y1),
     ]
 
 

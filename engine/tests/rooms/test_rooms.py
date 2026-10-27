@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from takeoff_engine.models import BBox, Category, Detection, Point
 from takeoff_engine.pdf_context import load_page
 from takeoff_engine.rooms import (
@@ -113,3 +115,33 @@ def test_rooms_debug_png_all_plans(plans_pdf: Path) -> None:
         out = _DEBUG / f"rooms_p{page_index + 1}.png"
         save_rooms_debug_png(ctx, vp, rooms, out)
         assert out.is_file()
+
+
+def test_plan1_attic_polygon_from_panel_not_text(plans_pdf: Path) -> None:
+    """Attic = gray-stroke panel (~y 419–452), not a padded IN ATTIC text box."""
+    ctx = load_page(plans_pdf, 0)
+    vp, _ = find_electrical_viewport(ctx)
+    rooms = detect_rooms(ctx, vp, _sheet_id(0))
+    attic = next(r for r in rooms if r.kind == "attic")
+    ys = [p.y for p in attic.polygon]
+    xs = [p.x for p in attic.polygon]
+    assert min(ys) == pytest.approx(419.3, abs=1.0)
+    assert max(ys) == pytest.approx(452.3, abs=1.0)
+    assert min(xs) == pytest.approx(1097.5, abs=1.0)
+    assert max(xs) == pytest.approx(1142.5, abs=1.0)
+    # Hallway can above the panel must not be Attic; switch inside must be.
+    assert assign_room(Point(x=1120.0, y=409.0), rooms) != attic.id
+    assert assign_room(Point(x=1136.0, y=444.0), rooms) == attic.id
+
+
+def test_plan1_attic_has_one_light_and_one_switch(plans_pdf: Path) -> None:
+    """End-to-end: after assign_rooms, Attic owns exactly 1 light and 1 switch."""
+    from takeoff_engine.pipeline import analyze_sheet
+
+    result = analyze_sheet(plans_pdf, 0, use_llm=False)
+    attic = next(r for r in result.rooms if r.display_name == "Attic")
+    active = [d for d in result.detections if d.status == "active" and d.room_id == attic.id]
+    lights = [d for d in active if d.category == Category.LIGHT]
+    switches = [d for d in active if d.category == Category.SWITCH]
+    assert len(lights) == 1, [(d.center.x, d.center.y) for d in lights]
+    assert len(switches) == 1, [(d.center.x, d.center.y) for d in switches]

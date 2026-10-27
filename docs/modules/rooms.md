@@ -62,8 +62,11 @@ Debug: `out/debug/walls_pN.png` (white = barrier, red crosses = labels).
    - A diagonal cut can cross furniture; we then **fill holes** (contour children) so
      furniture islands stay with the room that owns the surrounding floor.
    - The user can reassign any detection; the boundary is an honest default, not a wall.
-5. Attic: gray rectangle around `IN ATTIC` (or a padded box fallback) → room `Attic`
-   (`kind=attic`) with **priority** over the room below in `assign_room`.
+5. Attic: polygon from the **panel frame**, not the text. Prefer a gray fill that
+   contains `IN ATTIC`, else the four gray-stroke edges of the access panel
+   (~45×33 pt on Plan 1: y≈419–452). Padded text is last resort only (it sat ~12 pt
+   too high and stole the hallway can above the box while cutting off the `$`).
+   Room `Attic` (`kind=attic`) has **priority** over the room below in `assign_room`.
 6. Contours → simplified polygons in PDF points (`approxPolyDP`, ε ≈ 1.5 pt).
 7. Synthetic **Exterior** room: `kind=exterior`, empty `polygon` (everything outside the
    building footprint = union of interior/attic polygons for assignment).
