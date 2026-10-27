@@ -37,7 +37,6 @@ demo:
 	uv run python backend/scripts/demo_upload.py
 	@echo "Open http://localhost:5173"
 
-# Playwright quality pass against the running docker stack (Agente 7).
-# Requires: make up (api + web + worker healthy on :8000 / :5173).
+# Isolated DB takeoff_e2e on :5174/:8001 — see e2e/README.md (never default takeoff DB)
 e2e:
-	cd e2e && npm install && npx playwright install chromium && npx playwright test
+	cd e2e && npm install && npm test

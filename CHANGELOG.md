@@ -2,6 +2,20 @@
 
 Plain-language notes for Santiago. Newest first.
 
+## App 0.7.0: editable cables and boxes
+
+Application release (git tag **`v0.7.0`**). **`PIPELINE_VERSION` stays `0.6.4`**
+(analysis / golden unchanged).
+
+- **Edit cables** in the UI (toggle): select runs, change 14/2↔14/3, create A→B,
+  soft-delete / restore, drag devices → reattach tips; boxes stay derived (1G/2G/3G).
+- **Backend** wire-run CRUD + `bom_edit` recompute without re-tracing the plan;
+  undo/redo covers cable corrections; Excel/PDF exports reflect edits.
+- **Golden** lock at `eval/golden/v0.6.4/` + isolated e2e (`takeoff_e2e` / `:5174`)
+  for demo-flow and cable-edit.
+
+Engine freeze at **v0.6.4** still applies for detection/rooms/LLM/BOM tracing.
+
 ## v0.6.4 — B14 closet / unlabeled interior rooms (frozen)
 
 Rooms: unlabeled enclosed pockets inside the building footprint are interior rooms,
