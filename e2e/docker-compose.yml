@@ -56,8 +56,8 @@ services:
       REDIS_URL: redis://redis:6379/0
       ENGINE: real
       INLINE_JOBS: "false"
-      # Entrypoint already runs alembic from /app/backend; lifespan auto_migrate
-      # resolves script_location relative to cwd=/app and breaks (Agente 5).
+      # Lifespan auto_migrate still crashes (run_async_migrations never awaited).
+      # Entrypoint alembic upgrade is enough for takeoff_e2e.
       AUTO_MIGRATE: "false"
       # JSON list — pydantic-settings
       CORS_ORIGINS: '["http://localhost:5174","http://127.0.0.1:5174"]'
