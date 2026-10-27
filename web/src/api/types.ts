@@ -10,6 +10,8 @@ import type {
   WireRun,
 } from "@/types/contracts";
 
+export type { Detection, WireRun, Box, Bom, Takeoff };
+
 export type JobStatus = "queued" | "running" | "succeeded" | "failed";
 
 export interface JobInfo {
@@ -81,6 +83,46 @@ export interface CorrectionEvent {
 export interface DetectionMutationResponse {
   detection: SheetResult["detections"][number];
   takeoff: Takeoff;
+  /** Present when Agente 5 returns recomputed wiring context after a move. */
+  wire_runs?: WireRun[];
+  boxes?: Box[];
+  bom?: Bom | null;
+}
+
+/** Wire / box mutation response (Agente 5 EntityMutationResponse). */
+export interface EntityMutationResponse {
+  takeoff: Takeoff;
+  bom?: Bom | null;
+  detection?: Detection | null;
+  wire_run?: WireRun | null;
+  wire_runs?: WireRun[];
+  boxes?: Box[];
+  box?: Box | null;
+}
+
+export type CableTypeApi = "nm_14_2" | "nm_14_3";
+
+export interface WireRunCreateBody {
+  points: { x: number; y: number }[];
+  from_detection_id?: string | null;
+  to_detection_id?: string | null;
+  cable_type: CableTypeApi;
+  plan_length_ft: number;
+  vertical_allowance_ft?: number;
+  total_length_ft?: number;
+  confidence?: number;
+}
+
+export interface WireRunPatchBody {
+  points?: { x: number; y: number }[];
+  from_detection_id?: string | null;
+  to_detection_id?: string | null;
+  cable_type?: CableTypeApi;
+  plan_length_ft?: number;
+  vertical_allowance_ft?: number;
+  total_length_ft?: number;
+  confidence?: number;
+  history_action?: "undo" | "redo";
 }
 
 export interface SheetBundle {

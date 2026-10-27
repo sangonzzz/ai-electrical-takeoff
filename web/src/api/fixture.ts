@@ -1,13 +1,21 @@
-import type { Bom, Detection, SheetResult, Takeoff } from "@/types/contracts";
+import type { Bom, Box, Detection, SheetResult, Takeoff, WireRun } from "@/types/contracts";
 import { assignRoomId } from "@/lib/rooms";
 import { computeTakeoff } from "@/lib/takeoff";
+import {
+  planLengthFt,
+  totalLengthFt,
+  wiresAfterDetectionMove,
+} from "@/lib/wires";
 import type {
   CorrectionEvent,
   DocumentSummary,
+  EntityMutationResponse,
   JobInfo,
   ReviewCompleteResponse,
   SheetBundle,
   SheetSummary,
+  WireRunCreateBody,
+  WireRunPatchBody,
 } from "./types";
 
 /** Bundled sample fixture — imported at build time for offline demo. */
@@ -20,6 +28,8 @@ let fixtureResult: SheetResult = structuredClone(sampleResult) as SheetResult;
 let corrections: CorrectionEvent[] = [];
 let undoStack: SheetResult[] = [];
 let redoStack: SheetResult[] = [];
+/** Soft-deleted wire runs for restore (Agente 5 restore endpoint mock). */
+let deletedWires: Map<string, WireRun> = new Map();
 let humanReviewed = false;
 let undoEpoch = 0;
 const undoListeners = new Set<() => void>();
@@ -153,8 +163,44 @@ export function resetFixtureState(): void {
   corrections = [];
   undoStack = [];
   redoStack = [];
+  deletedWires = new Map();
   humanReviewed = false;
   notifyUndo();
+}
+
+function ptPerFt(): number {
+  return fixtureResult.sheet.scale_pt_per_ft || 18;
+}
+
+function regroupBoxes(result: SheetResult): Box[] {
+  const dets = Object.fromEntries(
+    result.detections.filter((d) => d.status !== "deleted").map((d) => [d.id, d]),
+  );
+  return (result.boxes ?? []).map((box) => {
+    const members = box.detection_ids.map((id) => dets[id]).filter(Boolean);
+    if (members.length === 0) return box;
+    const cx = members.reduce((s, d) => s + d.center.x, 0) / members.length;
+    const cy = members.reduce((s, d) => s + d.center.y, 0) / members.length;
+    const half = Math.max(7, members.length * 5);
+    return {
+      ...box,
+      center: { x: cx, y: cy },
+      bbox: { x0: cx - half, y0: cy - half, x1: cx + half, y1: cy + half },
+      gangs: Math.max(box.gangs, members.length),
+    };
+  });
+}
+
+function entityContext(
+  wire_run?: WireRun | null,
+): EntityMutationResponse {
+  return {
+    takeoff: takeoffOf(fixtureResult),
+    bom: bomOf(fixtureResult),
+    wire_run: wire_run ?? null,
+    wire_runs: fixtureResult.wire_runs ?? [],
+    boxes: fixtureResult.boxes ?? [],
+  };
 }
 
 function fixtureDocumentSummary(): DocumentSummary {
@@ -251,7 +297,13 @@ export async function fixtureCreateDetection(
 export async function fixturePatchDetection(
   id: string,
   patch: Partial<Detection>,
-): Promise<{ detection: Detection; takeoff: Takeoff }> {
+): Promise<{
+  detection: Detection;
+  takeoff: Takeoff;
+  wire_runs: WireRun[];
+  boxes: Box[];
+  bom: Bom;
+}> {
   pushUndo();
   const idx = fixtureResult.detections.findIndex((d) => d.id === id);
   if (idx < 0) throw new Error(`Detection ${id} not found`);
@@ -273,9 +325,111 @@ export async function fixturePatchDetection(
   }
   const detections = [...fixtureResult.detections];
   detections[idx] = next;
-  fixtureResult = { ...fixtureResult, detections };
+  let wire_runs = fixtureResult.wire_runs ?? [];
+  if (patch.center) {
+    wire_runs = wiresAfterDetectionMove(wire_runs, id, patch.center, ptPerFt());
+  }
+  fixtureResult = {
+    ...fixtureResult,
+    detections,
+    wire_runs,
+    boxes: regroupBoxes({ ...fixtureResult, detections, wire_runs }),
+  };
   logCorrection("detection", id, "update", before, next);
-  return { detection: next, takeoff: takeoffOf(fixtureResult) };
+  return {
+    detection: next,
+    takeoff: takeoffOf(fixtureResult),
+    wire_runs: fixtureResult.wire_runs ?? [],
+    boxes: fixtureResult.boxes ?? [],
+    bom: bomOf(fixtureResult),
+  };
+}
+
+export async function fixtureCreateWire(
+  sheetId: string,
+  body: WireRunCreateBody,
+): Promise<EntityMutationResponse> {
+  pushUndo();
+  const vertical = body.vertical_allowance_ft ?? 0;
+  const plan = body.plan_length_ft;
+  const total = body.total_length_ft ?? totalLengthFt(plan, vertical);
+  const wire: WireRun = {
+    id: `wire-user-${crypto.randomUUID()}`,
+    sheet_id: sheetId,
+    points: body.points,
+    from_detection_id: body.from_detection_id ?? null,
+    to_detection_id: body.to_detection_id ?? null,
+    cable_type: body.cable_type,
+    plan_length_ft: plan,
+    vertical_allowance_ft: vertical,
+    total_length_ft: total,
+    confidence: body.confidence ?? 1,
+    source: "user",
+  };
+  fixtureResult = {
+    ...fixtureResult,
+    wire_runs: [...(fixtureResult.wire_runs ?? []), wire],
+  };
+  logCorrection("wire_run", wire.id, "create", null, wire);
+  return entityContext(wire);
+}
+
+export async function fixturePatchWire(
+  id: string,
+  patch: WireRunPatchBody,
+): Promise<EntityMutationResponse> {
+  pushUndo();
+  const wires = [...(fixtureResult.wire_runs ?? [])];
+  const idx = wires.findIndex((w) => w.id === id);
+  if (idx < 0) throw new Error(`Wire ${id} not found`);
+  const before = wires[idx];
+  let next: WireRun = { ...before, ...patch, points: patch.points ?? before.points };
+  if (patch.plan_length_ft != null || patch.vertical_allowance_ft != null || patch.points) {
+    const plan =
+      patch.plan_length_ft ??
+      (patch.points ? planLengthFt(patch.points, ptPerFt()) : before.plan_length_ft);
+    const vertical = patch.vertical_allowance_ft ?? before.vertical_allowance_ft;
+    next = {
+      ...next,
+      plan_length_ft: plan,
+      vertical_allowance_ft: vertical,
+      total_length_ft: patch.total_length_ft ?? totalLengthFt(plan, vertical),
+    };
+  }
+  wires[idx] = next;
+  fixtureResult = { ...fixtureResult, wire_runs: wires };
+  logCorrection("wire_run", id, patch.history_action ?? "update", before, next);
+  return entityContext(next);
+}
+
+export async function fixtureDeleteWire(id: string): Promise<EntityMutationResponse> {
+  pushUndo();
+  const wires = fixtureResult.wire_runs ?? [];
+  const found = wires.find((w) => w.id === id);
+  if (!found) throw new Error(`Wire ${id} not found`);
+  deletedWires.set(id, structuredClone(found));
+  fixtureResult = {
+    ...fixtureResult,
+    wire_runs: wires.filter((w) => w.id !== id),
+  };
+  logCorrection("wire_run", id, "delete", found, null);
+  return entityContext(null);
+}
+
+export async function fixtureRestoreWire(
+  id: string,
+  opts?: { history_action?: "undo" | "redo" },
+): Promise<EntityMutationResponse> {
+  pushUndo();
+  const wire = deletedWires.get(id);
+  if (!wire) throw new Error(`Wire ${id} not in deleted set`);
+  deletedWires.delete(id);
+  fixtureResult = {
+    ...fixtureResult,
+    wire_runs: [...(fixtureResult.wire_runs ?? []), wire],
+  };
+  logCorrection("wire_run", id, opts?.history_action ?? "update", null, wire);
+  return entityContext(wire);
 }
 
 export async function fixtureDeleteDetection(

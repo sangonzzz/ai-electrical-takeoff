@@ -7,7 +7,9 @@ import {
 } from "@/lib/jobs";
 import {
   fixtureCreateDetection,
+  fixtureCreateWire,
   fixtureDeleteDetection,
+  fixtureDeleteWire,
   fixtureExportGroundTruth,
   fixtureGetDocument,
   fixtureGetJob,
@@ -15,20 +17,25 @@ import {
   fixtureLoadDemo,
   fixtureMarkReviewed,
   fixturePatchDetection,
+  fixturePatchWire,
   fixtureRedo,
+  fixtureRestoreWire,
   fixtureUndo,
 } from "./fixture";
 import type {
   CorrectionEvent,
   DocumentSummary,
+  EntityMutationResponse,
   JobInfo,
   ReanalyzeResponse,
   ReviewCompleteResponse,
   SheetBundle,
   SheetDetailApi,
+  WireRunCreateBody,
+  WireRunPatchBody,
 } from "./types";
 
-export type { ReanalyzeResponse };
+export type { ReanalyzeResponse, EntityMutationResponse, WireRunCreateBody, WireRunPatchBody };
 
 /** Raw GET /api/documents/{id} body (Agente 5). */
 interface DocumentDetailApi {
@@ -58,6 +65,9 @@ interface DocumentUploadApi {
 export type DetectionMutationResult = {
   detection: Detection;
   takeoff: Takeoff;
+  wire_runs?: import("@/types/contracts").WireRun[];
+  boxes?: import("@/types/contracts").Box[];
+  bom?: Bom | null;
 };
 
 export type { ReviewCompleteResponse };
@@ -223,6 +233,59 @@ export async function deleteDetection(id: string): Promise<DetectionMutationResu
   if (useFixture) return fixtureDeleteDetection(id);
   return request<DetectionMutationResult>(`/api/detections/${id}`, {
     method: "DELETE",
+  });
+}
+
+export async function listWireRuns(sheetId: string): Promise<import("@/types/contracts").WireRun[]> {
+  if (useFixture) {
+    const bundle = await fixtureGetSheet(sheetId);
+    return bundle.result.wire_runs ?? [];
+  }
+  try {
+    return await request(`/api/sheets/${sheetId}/wire-runs`);
+  } catch {
+    const detail = await request<SheetDetailApi>(`/api/sheets/${sheetId}`);
+    return detail.wire_runs ?? [];
+  }
+}
+
+export async function createWireRun(
+  sheetId: string,
+  body: WireRunCreateBody,
+): Promise<EntityMutationResponse> {
+  if (useFixture) return fixtureCreateWire(sheetId, body);
+  return request<EntityMutationResponse>(`/api/sheets/${sheetId}/wire-runs`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export async function patchWireRun(
+  id: string,
+  patch: WireRunPatchBody,
+): Promise<EntityMutationResponse> {
+  if (useFixture) return fixturePatchWire(id, patch);
+  return request<EntityMutationResponse>(`/api/wire-runs/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(patch),
+  });
+}
+
+export async function deleteWireRun(id: string): Promise<EntityMutationResponse> {
+  if (useFixture) return fixtureDeleteWire(id);
+  return request<EntityMutationResponse>(`/api/wire-runs/${id}`, {
+    method: "DELETE",
+  });
+}
+
+export async function restoreWireRun(
+  id: string,
+  opts?: { history_action?: "undo" | "redo" },
+): Promise<EntityMutationResponse> {
+  if (useFixture) return fixtureRestoreWire(id, opts);
+  return request<EntityMutationResponse>(`/api/wire-runs/${id}/restore`, {
+    method: "POST",
+    body: JSON.stringify(opts ?? {}),
   });
 }
 
