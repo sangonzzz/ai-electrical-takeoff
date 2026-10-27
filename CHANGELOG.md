@@ -2,6 +2,11 @@
 
 Plain-language notes for Santiago. Newest first.
 
+## v0.6.1 — engine patch
+
+Patch bump so idempotency picks up approved post-0.6.0 engine fixes. Freeze policy
+unchanged: further behavior changes still need Santiago’s approval.
+
 ## v0.6.0 — final engine (frozen)
 
 Final engine release for the demo / interview build. Detection, rooms, LLM rules,

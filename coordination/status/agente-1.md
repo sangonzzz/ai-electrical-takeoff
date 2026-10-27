@@ -2,25 +2,22 @@
 
 ## Estado
 
-**v0.6.0** tagged — motor final congelado.
+**v0.6.1** tagged (patch). Freeze policy unchanged.
 
 ## Hecho
 
-- `PIPELINE_VERSION` → `0.6.0` + CHANGELOG + tag
-- AGENTS.md / DECISIONS / README: freeze final en 0.6.0
-- Mensaje to-all
+- `PIPELINE_VERSION` → `0.6.1` + CHANGELOG + tag + README
 
 ## Cómo probarlo
 
 ```bash
-uv run takeoff --version   # -> 0.6.0
-git show v0.6.0 --no-patch
+uv run takeoff --version   # -> 0.6.1
+git show v0.6.1 --no-patch
 ```
 
 ## Siguiente
 
-- Solo backend / frontend / eval docs salvo OK de Santiago para engine
-- Rebuild api/worker: `docker compose up -d --build api worker`
+- Rebuild api/worker if needed: `docker compose up -d --build api worker`
 
 ## Bloqueos
 
@@ -28,7 +25,7 @@ git show v0.6.0 --no-patch
 
 ## Decisions
 
-Engine final = v0.6.0 (freeze reforzado).
+Ninguna nueva.
 
 ## Needs from Santiago
 
@@ -36,4 +33,4 @@ Engine final = v0.6.0 (freeze reforzado).
 
 ## Explicación para Santiago
 
-Marqué el motor en **0.6.0** como versión final de la demo. A partir de aquí nadie toca detección, cuartos, LLM, cables/BOM u overlay sin tu visto bueno. El backend, el front y la documentación de eval pueden seguir. El tag `v0.6.0` está en GitHub.
+Parche **0.6.1** para que el backend no reutilice análisis de 0.6.0 si el motor ya cambió después. El freeze sigue: más cambios de engine solo con tu OK.

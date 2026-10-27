@@ -9,7 +9,7 @@ See ``AGENTS.md``.
 from takeoff_engine.models import SCHEMA_VERSION
 
 # Single source of truth — CLI, analyze_sheet SheetResult, and backend settings.
-PIPELINE_VERSION = "0.6.0"
+PIPELINE_VERSION = "0.6.1"
 __version__ = PIPELINE_VERSION
 
 __all__ = ["SCHEMA_VERSION", "PIPELINE_VERSION", "__version__"]
