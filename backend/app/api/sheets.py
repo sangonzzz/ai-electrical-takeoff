@@ -47,6 +47,7 @@ from app.services.sheet_ops import (
     get_sheet_or_404,
     list_wire_runs,
     load_current_run,
+    load_fresh_entities,
     patch_box,
     patch_detection,
     patch_wire,
@@ -358,14 +359,14 @@ async def post_wire(
     sheet_id: str, body: WireRunCreate, session: DbSession, settings: AppSettings
 ) -> EntityMutationResponse:
     sheet = await get_sheet_or_404(session, sheet_id)
-    row, takeoff = await create_wire(session, sheet, body, settings)
-    run = await load_current_run(session, sheet)
-    assert run is not None
-    _r, dets, _l, wires, boxes = load_run_entities(run)
+    row, _takeoff = await create_wire(session, sheet, body, settings)
+    wire_id = row.id
+    _run, rooms, dets, _l, wires, boxes = await load_fresh_entities(session, sheet)
+    wire = next((w for w in wires if w.id == wire_id), wire_from_row(row))
     return EntityMutationResponse(
-        takeoff=takeoff,
+        takeoff=sheet_takeoff(rooms, dets),
         bom=sheet_bom(settings, sheet.id, dets, wires, boxes),
-        wire_run=wire_from_row(row),
+        wire_run=wire,
     )
 
 
@@ -373,14 +374,13 @@ async def post_wire(
 async def patch_wire_route(
     wire_id: str, body: WireRunPatch, session: DbSession, settings: AppSettings
 ) -> EntityMutationResponse:
-    row, takeoff, sheet = await patch_wire(session, wire_id, body, settings)
-    run = await load_current_run(session, sheet)
-    assert run is not None
-    _r, dets, _l, wires, boxes = load_run_entities(run)
+    row, _takeoff, sheet = await patch_wire(session, wire_id, body, settings)
+    _run, rooms, dets, _l, wires, boxes = await load_fresh_entities(session, sheet)
+    wire = next((w for w in wires if w.id == wire_id), wire_from_row(row))
     return EntityMutationResponse(
-        takeoff=takeoff,
+        takeoff=sheet_takeoff(rooms, dets),
         bom=sheet_bom(settings, sheet.id, dets, wires, boxes),
-        wire_run=wire_from_row(row),
+        wire_run=wire,
     )
 
 
@@ -388,12 +388,10 @@ async def patch_wire_route(
 async def delete_wire_route(
     wire_id: str, session: DbSession, settings: AppSettings
 ) -> EntityMutationResponse:
-    takeoff, sheet, _row = await delete_wire(session, wire_id)
-    run = await load_current_run(session, sheet)
-    assert run is not None
-    _r, dets, _l, wires, boxes = load_run_entities(run)
+    _takeoff, sheet, _row = await delete_wire(session, wire_id)
+    _run, rooms, dets, _l, wires, boxes = await load_fresh_entities(session, sheet)
     return EntityMutationResponse(
-        takeoff=takeoff,
+        takeoff=sheet_takeoff(rooms, dets),
         bom=sheet_bom(settings, sheet.id, dets, wires, boxes),
     )
 
@@ -409,14 +407,13 @@ async def restore_wire_route(
     body: WireRunRestoreBody | None = None,
 ) -> EntityMutationResponse:
     hist = body.history_action if body is not None else None
-    row, takeoff, sheet = await restore_wire(session, wire_id, history_action=hist)
-    run = await load_current_run(session, sheet)
-    assert run is not None
-    _r, dets, _l, wires, boxes = load_run_entities(run)
+    row, _takeoff, sheet = await restore_wire(session, wire_id, history_action=hist)
+    _run, rooms, dets, _l, wires, boxes = await load_fresh_entities(session, sheet)
+    wire = next((w for w in wires if w.id == wire_id), wire_from_row(row))
     return EntityMutationResponse(
-        takeoff=takeoff,
+        takeoff=sheet_takeoff(rooms, dets),
         bom=sheet_bom(settings, sheet.id, dets, wires, boxes),
-        wire_run=wire_from_row(row),
+        wire_run=wire,
     )
 
 

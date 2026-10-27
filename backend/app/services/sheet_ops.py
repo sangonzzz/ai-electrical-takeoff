@@ -179,6 +179,40 @@ async def require_succeeded_run(session: AsyncSession, sheet: Sheet) -> Analysis
     return run
 
 
+async def load_fresh_entities(
+    session: AsyncSession, sheet: Sheet
+) -> tuple[
+    AnalysisRun,
+    list,
+    list[Detection],
+    list,
+    list[WireRun],
+    list[Box],
+]:
+    """Reload current-run collections from the DB (post flush/commit).
+
+    Session uses ``expire_on_commit=False``, so ``run.boxes`` / ``wire_runs``
+    can still hold the pre-mutation identity-map collection after commit.
+    Refresh the relationships (do not ``expire_all`` — that expires ``sheet``
+    and triggers sync lazy-loads under async).
+    """
+    run = await load_current_run(session, sheet)
+    if run is None:
+        raise HTTPException(status_code=409, detail="sheet has no analysis run")
+    await session.refresh(
+        run,
+        attribute_names=[
+            "detections",
+            "wire_runs",
+            "boxes",
+            "rooms",
+            "legend_entries",
+        ],
+    )
+    rooms, dets, legend, wires, boxes = load_run_entities(run)
+    return run, rooms, dets, legend, wires, boxes
+
+
 async def _finish_detection_mutation(
     session: AsyncSession,
     sheet: Sheet,
@@ -187,15 +221,17 @@ async def _finish_detection_mutation(
     *,
     changed_wires: list[WireRun] | None = None,
 ) -> DetectionMutationResult:
-    """Refresh geometry boxes (+ optional BOM) after a detection mutation."""
-    run = await load_current_run(session, sheet)
-    assert run is not None
-    rooms_m, dets_m, _leg, wires_m, _boxes_old = load_run_entities(run)
+    """Refresh geometry boxes (+ BOM) AFTER move/reattach are flushed."""
+    await session.flush()
+    run, rooms_m, dets_m, _leg, wires_m, _old_boxes = await load_fresh_entities(
+        session, sheet
+    )
+    # Recompute gangs from post-move detections; persist, then reload for response.
     await replace_geometry_boxes(session, run, sheet.id, dets_m)
     await session.commit()
-    run = await load_current_run(session, sheet)
-    assert run is not None
-    rooms_m, dets_m, _leg, wires_m, boxes_m = load_run_entities(run)
+    _run, rooms_m, dets_m, _leg, wires_m, boxes_m = await load_fresh_entities(
+        session, sheet
+    )
     takeoff = sheet_takeoff(rooms_m, dets_m)
     bom = (
         sheet_bom(settings, sheet.id, dets_m, wires_m, boxes_m)
@@ -548,9 +584,7 @@ async def create_wire(
         after=after,
     )
     await session.commit()
-    run = await load_current_run(session, sheet)
-    assert run is not None
-    rooms_m, dets_m, *_ = load_run_entities(run)
+    _run, rooms_m, dets_m, *_rest = await load_fresh_entities(session, sheet)
     return row, sheet_takeoff(rooms_m, dets_m)
 
 
@@ -632,9 +666,7 @@ async def patch_wire(
         after=after,
     )
     await session.commit()
-    run = await load_current_run(session, sheet)
-    assert run is not None
-    rooms_m, dets_m, *_ = load_run_entities(run)
+    _run, rooms_m, dets_m, *_rest = await load_fresh_entities(session, sheet)
     return row, sheet_takeoff(rooms_m, dets_m), sheet
 
 
@@ -663,9 +695,7 @@ async def delete_wire(
         after=after,
     )
     await session.commit()
-    run = await load_current_run(session, sheet)
-    assert run is not None
-    rooms_m, dets_m, *_ = load_run_entities(run)
+    _run, rooms_m, dets_m, *_rest = await load_fresh_entities(session, sheet)
     return sheet_takeoff(rooms_m, dets_m), sheet, row
 
 
@@ -699,9 +729,7 @@ async def restore_wire(
         after=after,
     )
     await session.commit()
-    run = await load_current_run(session, sheet)
-    assert run is not None
-    rooms_m, dets_m, *_ = load_run_entities(run)
+    _run, rooms_m, dets_m, *_rest = await load_fresh_entities(session, sheet)
     return row, sheet_takeoff(rooms_m, dets_m), sheet
 
 
