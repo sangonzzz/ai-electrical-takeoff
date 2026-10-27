@@ -2,23 +2,25 @@
 
 ## Estado
 
-**v0.5.1** tagged (`PIPELINE_VERSION` patch bump).
+**v0.6.0** tagged — motor final congelado.
 
 ## Hecho
 
-- `PIPELINE_VERSION` → `0.5.1` + CHANGELOG + tag
-- README version refs updated
+- `PIPELINE_VERSION` → `0.6.0` + CHANGELOG + tag
+- AGENTS.md / DECISIONS / README: freeze final en 0.6.0
+- Mensaje to-all
 
 ## Cómo probarlo
 
 ```bash
-uv run takeoff --version   # -> 0.5.1
-git show v0.5.1 --no-patch
+uv run takeoff --version   # -> 0.6.0
+git show v0.6.0 --no-patch
 ```
 
 ## Siguiente
 
-- Rebuild api/worker image if stack is running: `docker compose up -d --build api worker`
+- Solo backend / frontend / eval docs salvo OK de Santiago para engine
+- Rebuild api/worker: `docker compose up -d --build api worker`
 
 ## Bloqueos
 
@@ -26,7 +28,7 @@ git show v0.5.1 --no-patch
 
 ## Decisions
 
-Ninguna nueva.
+Engine final = v0.6.0 (freeze reforzado).
 
 ## Needs from Santiago
 
@@ -34,4 +36,4 @@ Ninguna nueva.
 
 ## Explicación para Santiago
 
-Subí el motor a **0.5.1** (parche) para que al re-subir un PDF el backend no reutilice corridas de 0.5.0 si el engine ya cambió después de ese tag. El tag `v0.5.1` está en GitHub.
+Marqué el motor en **0.6.0** como versión final de la demo. A partir de aquí nadie toca detección, cuartos, LLM, cables/BOM u overlay sin tu visto bueno. El backend, el front y la documentación de eval pueden seguir. El tag `v0.6.0` está en GitHub.

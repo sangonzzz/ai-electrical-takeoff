@@ -2,6 +2,14 @@
 
 Plain-language notes for Santiago. Newest first.
 
+## v0.6.0 — final engine (frozen)
+
+Final engine release for the demo / interview build. Detection, rooms, LLM rules,
+wires/BOM, and overlay behavior are **frozen** from this tag: no further engine
+changes without Santiago’s explicit approval (`AGENTS.md` §14).
+
+Backend, frontend, eval docs, and non-behavior test lock-ins may continue.
+
 ## v0.5.1 — engine patch
 
 Patch bump so backend idempotency picks up the latest engine behavior after

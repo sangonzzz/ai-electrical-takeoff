@@ -106,5 +106,5 @@ When several codes apply: `240V` > `MW` / `DW` / `H` / `FC` > `WP` > half-hot >
   `page_index`. Do not squash or rewrite git history; Cursor co-author trailers OK.
 - **Single `PIPELINE_VERSION`** in `engine/takeoff_engine/__init__.py` only; bump on any
   engine behavior change. `ENGINE=real` is the compose/.env default (`fake` for tests).
-- **Engine freeze from v0.4.0:** no engine behavior changes without Santiago’s approval
-  (AGENTS.md §14).
+- **Engine freeze:** from v0.4.0; **final engine = v0.6.0**. No engine behavior changes
+  without Santiago’s approval (AGENTS.md §14).

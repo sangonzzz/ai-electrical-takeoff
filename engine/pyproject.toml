@@ -1,6 +1,6 @@
 [project]
 name = "takeoff-engine"
-version = "0.5.1"
+version = "0.6.0"
 description = "Pure electrical takeoff engine (no web)"
 requires-python = ">=3.12"
 dependencies = [

@@ -49,10 +49,10 @@ Everyone also owns `coordination/status/agente-N.md` (your own number) and `docs
     the patch** (Agente 1 applies the bump, or you ask Agente 1) so
     `(file_hash, page_index, pipeline_version)` never serves a stale run. Do not define a second version
     constant in `pipeline.py` or elsewhere.
-14. **Engine freeze (from v0.4.0):** do **not** change engine detection/rooms/LLM/BOM/overlay behavior
-    unless Santiago approves. File a message to Agente 1 with the proposal; Agente 1 bumps
-    `PIPELINE_VERSION` only after approval. Docs, tests that lock current behavior, backend, and
-    frontend may continue.
+14. **Engine freeze (from v0.4.0; final engine = v0.6.0):** do **not** change engine
+    detection/rooms/LLM/BOM/overlay behavior unless Santiago approves. File a message to Agente 1
+    with the proposal; Agente 1 bumps `PIPELINE_VERSION` only after approval. Docs, tests that
+    lock current behavior, backend, and frontend may continue.
 
 ## Communication protocol (agents do not see each other's chats; files are the channel)
 
