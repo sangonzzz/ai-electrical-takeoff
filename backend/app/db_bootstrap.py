@@ -74,6 +74,9 @@ def run_alembic_upgrade() -> None:
     url = get_settings().database_url
     ini = _BACKEND_ROOT / "alembic.ini"
     cfg = Config(str(ini))
+    # script_location in alembic.ini is relative; resolve against the ini dir
+    # so lifespan works when cwd is /app (not /app/backend).
+    cfg.set_main_option("script_location", str(_BACKEND_ROOT / "alembic"))
     # env.py also overwrites sqlalchemy.url from settings; set for clarity.
     cfg.set_main_option("sqlalchemy.url", url)
     command.upgrade(cfg, "head")
