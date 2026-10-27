@@ -46,14 +46,14 @@ items:
     verified: true
 
   - item_key: box_3gang
-    description: "Carlon 3-gang PVC new-work electrical box"
+    description: "Carlon 3-gang 55 cu in PVC old-work switch/outlet box (B355R)"
     unit: ea
-    unit_price: null
+    unit_price: 7.98
     source:
       store: Home Depot
-      url: "https://www.homedepot.com/b/Electrical-Electrical-Boxes-Conduit-Fittings-Electrical-Boxes/N-5yc1vZc34n"
-    captured_at: "2026-10-25"
-    verified: false
+      url: "https://www.homedepot.com/p/Carlon-3-Gang-55-cu-in-PVC-Old-Work-Electrical-Switch-and-Outlet-Box-B355R/100211759"
+    captured_at: "2026-10-27"
+    verified: true
 
   - item_key: box_fan_rated
     description: "Carlon 4 in 20 cu in PVC new-work ceiling box (fan-rated, B720R-SHK)"
@@ -96,14 +96,14 @@ items:
     verified: true
 
   - item_key: plate_3gang
-    description: "Leviton 3-gang white wall plate"
+    description: "Leviton 3-gang white wall plate (88011-W)"
     unit: ea
-    unit_price: null
+    unit_price: 2.98
     source:
       store: Home Depot
-      url: "https://www.homedepot.com/b/Electrical-Wall-Plates/N-5yc1vZc1xy"
-    captured_at: "2026-10-25"
-    verified: false
+      url: "https://www.homedepot.com/p/100069153"
+    captured_at: "2026-10-27"
+    verified: true
 
   - item_key: weatherproof_cover
     description: "Commercial Electric 1-gang metal weatherproof GFCI cover"
@@ -126,114 +126,183 @@ items:
     verified: true
 
   - item_key: switch_three_way
-    description: "Leviton 15A 3-way toggle switch"
+    description: "Leviton 15A 3-way toggle switch white (1453-2W)"
     unit: ea
     unit_price: 2.58
     source:
       store: Home Depot
-      url: "https://www.homedepot.com/p/Leviton-15-Amp-Preferred-Switch-White-RS115-2W-R62-RS115-02W/202027032"
-    captured_at: "2026-10-25"
-    verified: false
+      url: "https://www.homedepot.com/p/Leviton-15-Amp-3-Way-Toggle-Switch-White-R62-01453-02W/100356976"
+    captured_at: "2026-10-27"
+    verified: true
 
   - item_key: switch_dimmer
-    description: "Residential dimmer switch (placeholder SKU)"
+    description: "Lutron Diva LED+ dimmer DVCL-153PR-WH (single-pole or 3-way)"
     unit: ea
-    unit_price: null
+    unit_price: 31.02
     source:
       store: Home Depot
-      url: "https://www.homedepot.com/b/Electrical-Light-Switches/N-5yc1vZc33w"
-    captured_at: "2026-10-25"
-    verified: false
+      url: "https://www.homedepot.com/p/Lutron-Diva-LED-Dimmer-Switch-for-Dimmable-LED-and-Incandescent-Bulbs-150-Watt-Single-Pole-or-3-Way-White-DVCL-153PR-WH-DVCL-153PR-WH/203670402"
+    captured_at: "2026-10-27"
+    verified: true
+
+  - item_key: switch_three_way_dimmer
+    description: "Lutron Diva LED+ dimmer DVCL-153PR-WH (single-pole or 3-way)"
+    unit: ea
+    unit_price: 31.02
+    source:
+      store: Home Depot
+      url: "https://www.homedepot.com/p/Lutron-Diva-LED-Dimmer-Switch-for-Dimmable-LED-and-Incandescent-Bulbs-150-Watt-Single-Pole-or-3-Way-White-DVCL-153PR-WH-DVCL-153PR-WH/203670402"
+    captured_at: "2026-10-27"
+    verified: true
 
   - item_key: switch_fan
-    description: "Fan-rated wall switch (placeholder SKU)"
+    description: "Lutron Toggler fan control TGFSQ-FH-WH"
     unit: ea
-    unit_price: null
+    unit_price: 26.28
     source:
       store: Home Depot
-      url: "https://www.homedepot.com/b/Electrical-Light-Switches/N-5yc1vZc33w"
-    captured_at: "2026-10-25"
-    verified: false
+      url: "https://www.homedepot.com/p/100399017"
+    captured_at: "2026-10-27"
+    verified: true
 
-  - item_key: switch_other
-    description: "Specialty wall switch (vacancy / timer / 3-way dimmer)"
+  - item_key: switch_vacancy_sensor
+    description: "Lutron Maestro dual-voltage vacancy sensor MS-VPS6M2-DV-WH"
     unit: ea
-    unit_price: null
+    unit_price: 50.25
     source:
       store: Home Depot
-      url: "https://www.homedepot.com/b/Electrical-Light-Switches/N-5yc1vZc33w"
-    captured_at: "2026-10-25"
-    verified: false
+      url: "https://www.homedepot.com/p/Lutron-Maestro-Dual-Voltage-Vacancy-Sensor-Switch-6-Amp-Single-Pole-White-MS-VPS6M2-DV-WH-MS-VPS6M2-DV-WH/204488740"
+    captured_at: "2026-10-27"
+    verified: true
+
+  - item_key: switch_astronomical_timer
+    description: "Intermatic ST01K 15A 7-day astronomic in-wall timer"
+    unit: ea
+    unit_price: 67.98
+    source:
+      store: Home Depot
+      url: "https://www.homedepot.com/p/Intermatic-15-Amp-7-Day-Indoor-In-Wall-Astronomic-Digital-Timer-White-ST01K/205478792"
+    captured_at: "2026-10-27"
+    verified: true
 
   - item_key: receptacle_duplex
-    description: "15A duplex receptacle"
+    description: "Leviton E5325-MW tamper-resistant duplex (10-pack → ea)"
     unit: ea
-    unit_price: null
+    unit_price: 2.60
     source:
       store: Home Depot
-      url: "https://www.homedepot.com/b/Electrical-Outlets-Receptacles/N-5yc1vZc1xz"
-    captured_at: "2026-10-25"
-    verified: false
+      url: "https://www.homedepot.com/p/Leviton-Decora-15-Amp-125-V-Tamper-Resistant-Duplex-Outlet-Receptacle-White-10-Pack-E5325-MW-M02-E5325-0MW/322083559"
+    captured_at: "2026-10-27"
+    verified: true
+    pack_note: "25.98 / 10 = 2.60 ea"
 
   - item_key: receptacle_gfci
-    description: "15A GFCI receptacle"
+    description: "Leviton EGFT1 self-test TR GFCI (3-pack → ea); also WP / MW / DW / range hood"
     unit: ea
-    unit_price: null
+    unit_price: 17.66
     source:
       store: Home Depot
-      url: "https://www.homedepot.com/b/Electrical-Outlets-Receptacles/N-5yc1vZc1xz"
-    captured_at: "2026-10-25"
-    verified: false
+      url: "https://www.homedepot.com/p/Leviton-Lever-Edge-15-Amp-125-Volt-Self-Test-Tamper-Resistant-GFCI-Duplex-Outlet-Receptacle-White-3-Pack-EGFT1-3W-M02-EGFT1-03W/331589225"
+    captured_at: "2026-10-27"
+    verified: true
+    pack_note: "52.99 / 3 = 17.66 ea"
 
-  - item_key: receptacle_other
-    description: "Specialty receptacle (AFCI / WP / 240V / dedicated)"
+  - item_key: receptacle_afci
+    description: "Leviton AFTR1-KW 15A tamper-resistant AFCI outlet; also half-hot / fan-coil"
     unit: ea
-    unit_price: null
+    unit_price: 26.25
     source:
       store: Home Depot
-      url: "https://www.homedepot.com/b/Electrical-Outlets-Receptacles/N-5yc1vZc1xz"
-    captured_at: "2026-10-25"
-    verified: false
+      url: "https://www.homedepot.com/p/Leviton-15-Amp-Tamper-Resistant-AFCI-Outlet-White-AFTR1-KW-R32-AFTR1-0KW/204290242"
+    captured_at: "2026-10-27"
+    verified: true
+
+  - item_key: receptacle_240v
+    description: "Leviton 278-S00 30A flush 240V receptacle (laundry); GFCI usually at breaker"
+    unit: ea
+    unit_price: 10.98
+    source:
+      store: Home Depot
+      url: "https://www.homedepot.com/p/sets/general-merchandise/package/Leviton-Laundry-Room-Bundle/package_2676"
+    captured_at: "2026-10-27"
+    verified: true
 
   - item_key: device_ceiling_fan
-    description: "Ceiling fan (fixture only; box priced separately)"
+    description: "Hampton Bay Baymore 52 in ceiling fan with remote (N351-MWH)"
     unit: ea
-    unit_price: null
+    unit_price: 181.09
     source:
       store: Home Depot
-      url: "https://www.homedepot.com/b/Lighting-Ceiling-Fans/N-5yc1vZc7oe"
-    captured_at: "2026-10-25"
-    verified: false
+      url: "https://www.homedepot.com/p/Hampton-Bay-Baymore-52-in-Indoor-Outdoor-Matte-White-Ceiling-Fan-with-Remote-Control-Included-N351-MWH/322921133"
+    captured_at: "2026-10-27"
+    verified: true
+    bom_section: fixtures
 
-  - item_key: device_light
-    description: "Light fixture (recessed / pendant / wall / exterior)"
+  - item_key: device_light_recessed
+    description: "Lithonia Wafer 4 in LED recessed kit WF4 LED 30K (pack size to confirm)"
+    unit: ea
+    unit_price: 29.97
+    source:
+      store: Home Depot
+      url: "https://www.homedepot.com/p/Lithonia-Lighting-Wafer-4-in-White-Integrated-LED-Recessed-Kit-WF4-LED-30K-120-MW-HP18-M6/303722178"
+    captured_at: "2026-10-27"
+    verified: true
+    bom_section: fixtures
+
+  - item_key: device_light_wall
+    description: "Progress Lighting P7093-3030K9 LED wall sconce"
+    unit: ea
+    unit_price: 90.85
+    source:
+      store: Home Depot
+      url: "https://www.homedepot.com/p/Progress-Lighting-1-Light-White-Integrated-LED-Wall-Sconce-with-White-Glass-P7093-3030K9/206196309"
+    captured_at: "2026-10-27"
+    verified: true
+    bom_section: fixtures
+
+  - item_key: device_light_exterior
+    description: "Jushua Z-CT-WF001-W dusk-to-dawn exterior wall lantern"
+    unit: ea
+    unit_price: 64.96
+    source:
+      store: Home Depot
+      url: "https://www.homedepot.com/p/1-Light-Textured-Black-not-Motion-Sensing-Dusk-to-Dawn-Outdoor-Hardwired-Wall-Lantern-Sconce-with-LED-Z-CT-WF001-W/326805300"
+    captured_at: "2026-10-27"
+    verified: true
+    bom_section: fixtures
+
+  - item_key: device_light_pendant
+    description: "Pendant light fixture (allowance SKU pending)"
     unit: ea
     unit_price: null
     source:
       store: Home Depot
       url: "https://www.homedepot.com/b/Lighting/N-5yc1vZbvn"
-    captured_at: "2026-10-25"
+    captured_at: "2026-10-27"
     verified: false
+    bom_section: fixtures
 
   - item_key: device_exhaust_fan
-    description: "Bath / IAQ exhaust fan (integrated housing)"
+    description: "Broan-NuTone HB80RL 80 CFM bath exhaust fan with light"
     unit: ea
-    unit_price: null
+    unit_price: 72.00
     source:
       store: Home Depot
-      url: "https://www.homedepot.com/b/Heating-Venting-Cooling-Bathroom-Fans/N-5yc1vZc4kz"
-    captured_at: "2026-10-25"
-    verified: false
+      url: "https://www.homedepot.com/p/NuTone-80-CFM-Ceiling-Bathroom-Exhaust-Fan-with-Light-HB80RL/307738252"
+    captured_at: "2026-10-27"
+    verified: true
+    bom_section: fixtures
 
   - item_key: device_detector
-    description: "Smoke / smoke-CO detector"
+    description: "First Alert SC9120B hardwired smoke+CO (smoke-only priced as combo)"
     unit: ea
-    unit_price: null
+    unit_price: 35.99
     source:
       store: Home Depot
-      url: "https://www.homedepot.com/b/Electrical-Fire-Safety-Smoke-Detectors/N-5yc1vZc1y0"
-    captured_at: "2026-10-25"
-    verified: false
+      url: "https://www.homedepot.com/p/First-Alert-Hardwired-Interconnected-Smoke-and-CO-Alarm-with-Battery-Backup-SC9120B/300733357"
+    captured_at: "2026-10-27"
+    verified: true
+    bom_section: fixtures
 
   - item_key: device_junction_box
     description: "Standalone junction box device count (box hardware separate)"

@@ -8,9 +8,20 @@ from pathlib import Path
 
 import pytest
 
-from takeoff_engine.bom import compute_bom
+from takeoff_engine.bom import (
+    _device_item_key,
+    compute_bom,
+    group_bom_lines,
+)
 from takeoff_engine.boxes import compute_boxes
-from takeoff_engine.models import SheetResult
+from takeoff_engine.models import (
+    BBox,
+    Category,
+    Detection,
+    Evidence,
+    Point,
+    SheetResult,
+)
 from takeoff_engine.pricing import load_assumptions, load_price_list
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -68,6 +79,61 @@ def test_compute_bom_from_fixture() -> None:
 
     assert bom.assumptions["ceiling_height_ft"] == 8.0
     assert "routing_note" in bom.assumptions
+    assert "pricing_note_fixtures" in bom.assumptions
+
+    sections = group_bom_lines(bom.lines)
+    labels = [label for _, label, _ in sections]
+    assert "Devices" in labels
+    assert "Fixtures (allowance)" in labels
+    assert "Boxes and plates" in labels
+    assert "Cable" in labels
+    # Fixtures must not sit under Devices.
+    fixture_keys = {
+        ln.item_key
+        for sec, _, lines in sections
+        if sec == "fixtures"
+        for ln in lines
+    }
+    assert "device_ceiling_fan" in fixture_keys
+    assert "device_light_recessed" in fixture_keys or "device_light_wall" in fixture_keys
+
+
+def test_subtype_maps_to_specific_price_keys_not_other() -> None:
+    def det(cat: Category, subtype: str) -> Detection:
+        return Detection(
+            id=f"{cat.value}-{subtype}",
+            sheet_id="s",
+            category=cat,
+            subtype=subtype,
+            center=Point(x=0, y=0),
+            bbox=BBox(x0=0, y0=0, x1=1, y1=1),
+            confidence=0.9,
+            source="geometry",
+            evidence=Evidence(),
+        )
+
+    assert _device_item_key(det(Category.SWITCH, "dimmer")) == "switch_dimmer"
+    assert _device_item_key(det(Category.SWITCH, "three_way_dimmer")) == (
+        "switch_three_way_dimmer"
+    )
+    assert _device_item_key(det(Category.SWITCH, "vacancy_sensor")) == (
+        "switch_vacancy_sensor"
+    )
+    assert _device_item_key(det(Category.RECEPTACLE, "gfci_weatherproof")) == (
+        "receptacle_gfci"
+    )
+    assert _device_item_key(det(Category.RECEPTACLE, "afci_half_hot")) == (
+        "receptacle_afci"
+    )
+    assert _device_item_key(det(Category.RECEPTACLE, "gfci_240v")) == "receptacle_240v"
+    assert _device_item_key(det(Category.LIGHT, "recessed")) == "device_light_recessed"
+    assert _device_item_key(det(Category.LIGHT, "exterior_wall")) == (
+        "device_light_exterior"
+    )
+    prices = load_price_list(REPO_ROOT / "data" / "price_list.yaml")
+    assert "switch_other" not in prices
+    assert "receptacle_other" not in prices
+    assert "device_light" not in prices  # split by subtype
 
 
 def test_compute_bom_roll_ceil() -> None:

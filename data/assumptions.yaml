@@ -21,3 +21,15 @@ gap_pt_range: [2.0, 4.5]
 gap_pattern_min_pt: 1.2
 gap_max_pt: 9.0  # gap_pt_range[1] × 2
 wire_stroke_rgb: [0.0, 0.0, 0.0]
+
+# Pricing honesty notes (surfaced on Bom.assumptions for quote/UI).
+pricing_note_240v: >-
+  240 V circuits are usually GFCI-protected at the breaker; the BOM prices a
+  flush 30A receptacle body only (Leviton 278-S00 allowance).
+pricing_note_detector: >-
+  Smoke-only detectors are priced as a smoke+CO combo unit (First Alert
+  SC9120B) — conservative allowance.
+pricing_note_fixtures: >-
+  Fans, lights, exhaust, and detectors are allowance fixtures, listed under
+  "Fixtures (allowance)" separate from devices / boxes / cable.
+

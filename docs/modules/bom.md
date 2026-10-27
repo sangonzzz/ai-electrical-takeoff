@@ -54,18 +54,20 @@ Same wall = centers share x or y within 3 pt. Deleted detections are ignored.
 
 ## BOM lines
 
-- **Devices** keyed by taxonomy → `item_key` (e.g. `switch_single_pole`, `device_light`).
-- **Boxes** by kind/gangs (`box_1gang`, `box_2gang`, `box_fan_rated`, …).
-- **Covers** (`plate_1gang`, `plate_2gang`, `weatherproof_cover`).
-- **Cable:** `{nm_14_2\|nm_14_3}_ft` (with waste) and `{…}_roll_250` (`ceil(ft / cable_roll_ft)`).
-- Each line has `source_ids` (detection / box / wire ids).
-- `total_usd` sums only lines with a known `extended_price`.
+Sections (via `group_bom_lines`, also line order in `compute_bom`):
+
+1. **Devices** — switches and receptacles by subtype (`switch_dimmer`, `receptacle_gfci`, …). No `*_other` buckets.
+2. **Fixtures (allowance)** — `device_ceiling_fan`, `device_light_{recessed,wall,exterior,pendant}`, `device_exhaust_fan`, `device_detector`.
+3. **Boxes and plates** — `box_*`, `plate_*`, `weatherproof_cover`.
+4. **Cable** — `{nm_14_2|nm_14_3}_ft` (with waste) and `{…}_roll_250`.
+
+Each line has `source_ids`. `total_usd` sums only lines with a known `extended_price`.
 
 ## Price sources
 
 `data/price_list.yaml`: Home Depot URLs, `captured_at`, `verified` flag. **Never invent a price** — if unverified, `unit_price` is null and `verified: false`.
 
-Verified examples (2026-10-25): 14/2 250 ft roll $125; 14/3 250 ft $165; 1-gang box $2.37; 2-gang $3.38; fan-rated ceiling box $8.38; 1-gang plate $0.88; WP cover $5.98; single-pole switch $0.98.
+Verified wave 2026-10-27 includes Lutron dimmers/fan/vacancy, Intermatic timer, Leviton receptacles (duplex/GFCI/AFCI/240V), Carlon 3-gang, plate 3-gang, Hampton Bay fan, Lithonia recessed, Progress wall, exterior lantern, Broan exhaust, First Alert smoke+CO. Pack prices are divided to per-each (e.g. duplex 25.98/10 = 2.60). Notes on 240V GFCI-at-breaker and smoke-as-combo live in `assumptions.yaml`.
 
 ## Parameters / thresholds
 
@@ -110,6 +112,7 @@ CRUD must update boxes, cable totals, and price **without** calling `find_wire_r
 find_wire_runs(ctx, viewport, detections, scale_pt_per_ft, assumptions) -> list[WireRun]
 compute_boxes(detections, sheet_id) -> list[Box]
 compute_bom(sheet_id, detections, wire_runs, boxes, prices, assumptions) -> Bom
+group_bom_lines(lines) -> list[tuple[section, label, lines]]
 recompute_run(run, detections_by_id, scale_pt_per_ft, assumptions) -> WireRun
 reattach_runs(runs, detections_by_id, moved_detection_id, scale_pt_per_ft, assumptions) -> list[WireRun]
 make_user_run(sheet_id, from_detection, to_detection, points | None, scale_pt_per_ft, assumptions, cable_type | None) -> WireRun

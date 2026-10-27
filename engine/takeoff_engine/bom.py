@@ -8,46 +8,77 @@ from __future__ import annotations
 
 import math
 from collections import defaultdict
-from typing import Any
+from typing import Any, Iterable, Literal
 
 from takeoff_engine.models import Bom, BomLine, Box, Category, Detection, WireRun
 from takeoff_engine.pricing import price_source_label
 
-# Map detection taxonomy → price_list item_key.
+BomSection = Literal["devices", "fixtures", "boxes", "cable"]
+
+# Map detection taxonomy → price_list item_key (no catch-all "other" buckets).
 _SWITCH_KEYS: dict[str, str] = {
     "single_pole": "switch_single_pole",
     "three_way": "switch_three_way",
-    "three_way_dimmer": "switch_other",
+    "three_way_dimmer": "switch_three_way_dimmer",
     "dimmer": "switch_dimmer",
     "fan": "switch_fan",
-    "vacancy_sensor": "switch_other",
-    "astronomical_timer": "switch_other",
+    "vacancy_sensor": "switch_vacancy_sensor",
+    "astronomical_timer": "switch_astronomical_timer",
 }
 
 _RECEPTACLE_KEYS: dict[str, str] = {
     "duplex": "receptacle_duplex",
     "gfci": "receptacle_gfci",
-    "gfci_weatherproof": "receptacle_other",
-    "afci": "receptacle_other",
-    "afci_half_hot": "receptacle_other",
-    "gfci_240v": "receptacle_other",
-    "gfci_microwave": "receptacle_other",
-    "gfci_dishwasher": "receptacle_other",
-    "range_hood": "receptacle_other",
-    "fan_coil_dedicated": "receptacle_other",
-    "240v": "receptacle_other",
+    "gfci_weatherproof": "receptacle_gfci",
+    "gfci_microwave": "receptacle_gfci",
+    "gfci_dishwasher": "receptacle_gfci",
+    "range_hood": "receptacle_gfci",
+    "afci": "receptacle_afci",
+    "afci_half_hot": "receptacle_afci",
+    "fan_coil_dedicated": "receptacle_afci",
+    "gfci_240v": "receptacle_240v",
+    "240v": "receptacle_240v",
+}
+
+_LIGHT_KEYS: dict[str, str] = {
+    "recessed": "device_light_recessed",
+    "recessed_vapor_proof": "device_light_recessed",
+    "wall": "device_light_wall",
+    "exterior_wall": "device_light_exterior",
+    "pendant": "device_light_pendant",
+}
+
+# Fixture allowance SKUs (fans, lights, exhaust, detectors) — own BOM section.
+_FIXTURE_ITEM_KEYS = frozenset(
+    {
+        "device_ceiling_fan",
+        "device_light_recessed",
+        "device_light_wall",
+        "device_light_exterior",
+        "device_light_pendant",
+        "device_exhaust_fan",
+        "device_detector",
+    }
+)
+
+_SECTION_ORDER: tuple[BomSection, ...] = ("devices", "fixtures", "boxes", "cable")
+_SECTION_LABELS: dict[BomSection, str] = {
+    "devices": "Devices",
+    "fixtures": "Fixtures (allowance)",
+    "boxes": "Boxes and plates",
+    "cable": "Cable",
 }
 
 
 def _device_item_key(det: Detection) -> str:
     if det.category == Category.SWITCH:
-        return _SWITCH_KEYS.get(det.subtype, "switch_other")
+        return _SWITCH_KEYS.get(det.subtype, f"switch_{det.subtype}")
     if det.category == Category.RECEPTACLE:
-        return _RECEPTACLE_KEYS.get(det.subtype, "receptacle_other")
+        return _RECEPTACLE_KEYS.get(det.subtype, f"receptacle_{det.subtype}")
     if det.category == Category.CEILING_FAN:
         return "device_ceiling_fan"
     if det.category == Category.LIGHT:
-        return "device_light"
+        return _LIGHT_KEYS.get(det.subtype, "device_light_pendant")
     if det.category == Category.EXHAUST_FAN:
         return "device_exhaust_fan"
     if det.category == Category.DETECTOR:
@@ -55,6 +86,48 @@ def _device_item_key(det: Detection) -> str:
     if det.category == Category.JUNCTION_BOX:
         return "device_junction_box"
     return f"device_{det.category.value}"
+
+
+def bom_section_for_item_key(item_key: str) -> BomSection:
+    """Classify a BOM line into Devices / Fixtures / Boxes / Cable.
+
+    WHY: quote PDF and UI need a stable grouping without changing the BomLine
+    contract. Fixtures are allowance SKUs (fan/light/exhaust/detector).
+    """
+    k = item_key.lower()
+    if k.startswith("nm_") or k.endswith("_ft") or "cable" in k or k.endswith("_roll_250"):
+        return "cable"
+    if (
+        k.startswith("box_")
+        or k.startswith("plate_")
+        or k == "weatherproof_cover"
+    ):
+        return "boxes"
+    if item_key in _FIXTURE_ITEM_KEYS or k.startswith("device_light"):
+        return "fixtures"
+    if k.startswith("device_ceiling_fan") or k.startswith("device_exhaust") or k.startswith(
+        "device_detector"
+    ):
+        return "fixtures"
+    return "devices"
+
+
+def group_bom_lines(
+    lines: Iterable[BomLine],
+) -> list[tuple[BomSection, str, list[BomLine]]]:
+    """Group BOM lines for display/export: (section_key, label, lines).
+
+    Empty sections are omitted. Order is Devices → Fixtures → Boxes → Cable.
+    """
+    buckets: dict[BomSection, list[BomLine]] = {s: [] for s in _SECTION_ORDER}
+    for line in lines:
+        buckets[bom_section_for_item_key(line.item_key)].append(line)
+    out: list[tuple[BomSection, str, list[BomLine]]] = []
+    for section in _SECTION_ORDER:
+        group = buckets[section]
+        if group:
+            out.append((section, _SECTION_LABELS[section], group))
+    return out
 
 
 def _box_item_key(box: Box) -> str | None:
@@ -130,6 +203,9 @@ def _assumptions_public(assumptions: dict[str, Any]) -> dict[str, float | str]:
         "cable_roll_ft",
         "dash_length_pt_median",
         "gap_pt_median",
+        "pricing_note_240v",
+        "pricing_note_detector",
+        "pricing_note_fixtures",
     )
     out: dict[str, float | str] = {}
     for k in keys:
@@ -156,11 +232,9 @@ def compute_bom(
 ) -> Bom:
     """Build priced BOM lines from detections, wire runs, and boxes.
 
-    Includes:
-    - devices (by category/subtype item_key)
-    - boxes (by kind / gang)
-    - plates / weatherproof covers
-    - cable by type: total feet (with waste) and roll count
+    Lines are ordered Devices → Fixtures (allowance) → Boxes and plates → Cable
+    so quote/UI grouping stays stable without a contract field. Use
+    ``group_bom_lines`` for labeled sections.
 
     Each line carries ``source_ids`` pointing at the detection / box / wire ids
     behind it. Deleted detections are ignored. ``total_usd`` sums only lines
@@ -170,25 +244,27 @@ def compute_bom(
     waste = float(assumptions.get("waste_fraction", 0.10))
     roll_ft = float(assumptions.get("cable_roll_ft", 250))
 
-    lines: list[BomLine] = []
+    device_lines: list[BomLine] = []
+    fixture_lines: list[BomLine] = []
 
-    # --- Devices ---
     device_groups: dict[str, list[Detection]] = defaultdict(list)
     for det in active:
         device_groups[_device_item_key(det)].append(det)
     for key, dets in sorted(device_groups.items()):
-        lines.append(
-            _line(
-                key,
-                key.replace("_", " "),
-                float(len(dets)),
-                "ea",
-                prices,
-                [d.id for d in dets],
-            )
+        line = _line(
+            key,
+            key.replace("_", " "),
+            float(len(dets)),
+            "ea",
+            prices,
+            [d.id for d in dets],
         )
+        if bom_section_for_item_key(key) == "fixtures":
+            fixture_lines.append(line)
+        else:
+            device_lines.append(line)
 
-    # --- Boxes ---
+    box_lines: list[BomLine] = []
     box_groups: dict[str, list[Box]] = defaultdict(list)
     for box in boxes:
         bk = _box_item_key(box)
@@ -196,7 +272,7 @@ def compute_bom(
             continue
         box_groups[bk].append(box)
     for key, group in sorted(box_groups.items()):
-        lines.append(
+        box_lines.append(
             _line(
                 key,
                 key.replace("_", " "),
@@ -207,7 +283,6 @@ def compute_bom(
             )
         )
 
-    # --- Covers / plates ---
     cover_groups: dict[str, list[Box]] = defaultdict(list)
     for box in boxes:
         ck = _cover_item_key(box)
@@ -215,7 +290,7 @@ def compute_bom(
             continue
         cover_groups[ck].append(box)
     for key, group in sorted(cover_groups.items()):
-        lines.append(
+        box_lines.append(
             _line(
                 key,
                 key.replace("_", " "),
@@ -226,7 +301,7 @@ def compute_bom(
             )
         )
 
-    # --- Cable by type (feet with waste + rolls) ---
+    cable_lines: list[BomLine] = []
     cable_ft: dict[str, float] = defaultdict(float)
     cable_ids: dict[str, list[str]] = defaultdict(list)
     for wr in wire_runs:
@@ -239,11 +314,13 @@ def compute_bom(
             continue
         with_waste = raw_ft * (1.0 + waste)
         roll_key = f"{cable_type}_roll_250"
-        # Feet line (informational quantity; priced via rolls).
-        lines.append(
+        cable_lines.append(
             BomLine(
                 item_key=f"{cable_type}_ft",
-                description=f"{cable_type.replace('_', ' ').upper()} cable (plan + vertical + {int(waste * 100)}% waste)",
+                description=(
+                    f"{cable_type.replace('_', ' ').upper()} cable "
+                    f"(plan + vertical + {int(waste * 100)}% waste)"
+                ),
                 quantity=round(with_waste, 2),
                 unit="ft",
                 unit_price=None,
@@ -254,7 +331,7 @@ def compute_bom(
         )
         n_rolls = int(math.ceil(with_waste / roll_ft)) if with_waste > 0 else 0
         if n_rolls > 0:
-            lines.append(
+            cable_lines.append(
                 _line(
                     roll_key,
                     f"{cable_type} roll",
@@ -264,6 +341,8 @@ def compute_bom(
                     cable_ids[cable_type],
                 )
             )
+
+    lines = device_lines + fixture_lines + box_lines + cable_lines
 
     total = 0.0
     for line in lines:
@@ -276,3 +355,12 @@ def compute_bom(
         total_usd=round(total, 2),
         assumptions=_assumptions_public(assumptions),
     )
+
+
+__all__ = [
+    "compute_bom",
+    "bom_section_for_item_key",
+    "group_bom_lines",
+    "_device_item_key",
+    "_SECTION_LABELS",
+]

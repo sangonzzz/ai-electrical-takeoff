@@ -28,6 +28,13 @@ def test_load_price_list_keyed_and_sourced() -> None:
     assert "homedepot.com" in entry["source"]["url"]
     assert entry["captured_at"] == "2026-10-25"
 
-    # Unverified placeholders must not silently invent a price.
-    assert prices["box_3gang"]["verified"] is False
-    assert prices["box_3gang"]["unit_price"] is None
+    assert prices["box_3gang"]["verified"] is True
+    assert prices["box_3gang"]["unit_price"] == 7.98
+    assert prices["switch_dimmer"]["verified"] is True
+    assert prices["switch_dimmer"]["unit_price"] == 31.02
+    assert prices["receptacle_duplex"]["unit_price"] == 2.60
+    assert prices["receptacle_gfci"]["unit_price"] == 17.66
+    # Pendant still pending a verified SKU.
+    assert prices["device_light_pendant"]["verified"] is False
+    assert prices["device_light_pendant"]["unit_price"] is None
+    assert prices["switch_three_way"]["captured_at"] == "2026-10-27"
