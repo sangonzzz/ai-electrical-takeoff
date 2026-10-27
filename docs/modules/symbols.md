@@ -98,6 +98,7 @@ Order matters: remove non-symbol ink **before** clustering so dashes never join 
 | Attic light lock (R7.1/R7b) | Gray-stroke panel bbox (not padded label); circle-ring light @~(1117,436) → Attic | Plan 1 IN ATTIC box |
 | Sink half-hot (R7.2) | Thin/rotated half-fill → `afci_half_hot` (not exhaust); range yin-yang stays exhaust | Plan 1 kitchen sink ~975,323 |
 | Soft viewport/legend (R7.3) | Title/legend fallbacks; Escondido path unchanged | Longview / PBG probe no longer raises |
+| Disposal `$` (R7b) | Half-hot also anchors exhaust-adjacent `$` recovery | Plan 1 kitchen ~975,354; 13 switches |
 
 4. NMS same category 8 pt; then cross-category NMS for known collisions (fan > light; exhaust > light).
 5. `needs_review` **only** when (a) top-two scores are close **and** different categories, or (b) weak match (&lt;0.30) with no type codes. Same-glyph receptacle/switch legend rows no longer flood review (target &lt;15%; measured ~5%).

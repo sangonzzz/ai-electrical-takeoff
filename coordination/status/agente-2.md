@@ -2,41 +2,32 @@
 
 ## Estado
 
-**Round 7b done** (final engine fix). Plan 1 IN ATTIC circle-with-cross light is in `analyze_sheet` with room Attic. Ask A1 to bump patch.
+**Disposal `$` restored** (plan 1 kitchen). Half-hot fix kept. Ask A1 to bump patch.
 
 ## Hecho
 
 | Fix | Behavior | Commit |
 |-----|----------|--------|
-| R7.1–2 | Attic + sink half-hot (first pass) | `273d3e7` |
-| R7.3 | Viewport/legend generalization | `d4cc92d` |
-| R7b | `_attic_boxes` uses gray **stroke** rectangle (~1097–1142 × 419–452); emit circle-ring light @~(1117.4, 435.8) with room Attic. Padded-label bbox had stolen the hallway can @~(1120, 409) and skipped the real glyph. | *(this commit)* |
+| R7b attic | Gray-stroke panel + circle-ring light @~(1117,436) → Attic | `e6879b0` |
+| R7b disposal `$` | Seed `_switches_near_exhaust` from `afci_half_hot` as well as exhaust (R7 had removed the false sink exhaust that used to anchor recovery). Switch @~(973,353) `single_pole`. Plan 1 switch min **13**. | *(this commit)* |
 
-### Verify (CLI, no LLM)
+### Verify
 
 ```bash
 uv run takeoff analyze data/plans/escondido_plans.pdf --page 1 --out out/plan1.json --debug --no-llm --no-bom
+# switches >= 13; disposal near (975,354) single_pole; sink half-hot still afci_half_hot
+uv run pytest engine/tests/symbols/ -q
 ```
-
-Plan 1: **10 lights**; one with notes `attic_panel_light` / `attic_circle_ring` at ~(1117, 436), room **Attic**.
-
-Test: `test_plan1_has_light_whose_room_is_attic`.
-
-### Note for Agente 3
-
-Attic room polygon is still ~(1084, 405)–(1151, 442) — covers the hallway can above the panel and cuts before the panel bottom (y≈452). Please tighten Attic to the gray stroke frame. A2 symbols no longer depend on the padded label for the light itself.
 
 ## Cómo probarlo
 
 ```bash
-uv run pytest engine/tests/symbols/test_attic_and_halfhot_r7.py -q
-uv run takeoff analyze data/plans/escondido_plans.pdf --page 1 --out out/plan1.json --debug --no-llm --no-bom
+uv run pytest engine/tests/symbols/test_attic_and_halfhot_r7.py engine/tests/symbols/test_category_count_regression.py -q
 ```
 
 ## Siguiente
 
 - Agente 1: bump `PIPELINE_VERSION` patch + push
-- Agente 3: tighten Attic polygon to gray stroke panel (optional cleanup of false Attic on hallway can @~1120,409)
 
 ## Bloqueos
 
@@ -44,13 +35,12 @@ uv run takeoff analyze data/plans/escondido_plans.pdf --page 1 --out out/plan1.j
 
 ## Decisions
 
-- IN ATTIC panel geometry = gray stroke rectangle first; gray fill second; padded label last.
-- Prefer circle-ring recovery inside the panel over square-frame recessed scan (hallway cans).
+- Disposal `$` recovery anchors on half-hot (correct label) with the same horizontal-stem geometry as the old exhaust-adjacent path.
 
 ## Needs from Santiago
 
-- Confirm overlay: light marker on circle-with-cross inside IN ATTIC box; A1 bump + push.
+- Confirm kitchen disposal `$` on overlay; A1 bump + push.
 
 ## Explicación para Santiago
 
-El panel IN ATTIC del plan 1 está dibujado con un rectángulo de líneas grises (~45×33 pt), no con un relleno. Antes usábamos un padding alrededor del texto «ATTIC», que entraba en la lata del pasillo de arriba y hacía que el motor creyera que ya había luz en el ático — y se saltaba el círculo con cruz de dentro del box. Ahora el bbox del panel sale de esas cuatro líneas grises, detectamos el anillo del círculo con cruz (~1117, 436) y queda con habitación Attic. El test y el CLI sin LLM lo confirman. Pedir a Agente 1 el bump de versión.
+Al corregir el tomacorriente half-hot del fregadero, perdimos el ancla que usaba el motor para encontrar el interruptor del disposal (antes el half-hot estaba mal etiquetado como exhaust). Ahora esa misma búsqueda también parte del half-hot correcto: el `$` bajo el fregadero (~975, 354) vuelve como `single_pole`, el half-hot sigue bien, y el test de plan 1 exige 13 interruptores. Pedir a Agente 1 el bump de versión.

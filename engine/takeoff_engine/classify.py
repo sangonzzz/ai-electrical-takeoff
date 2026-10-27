@@ -2282,23 +2282,35 @@ def _switches_near_exhaust(
     switch_tmpls: list[LegendTemplate],
     wall_mask: np.ndarray,
 ) -> list[Detection]:
-    """Recover a wall ``$`` wired to an exhaust when legend IoU is weak (R6 sink).
+    """Recover a wall ``$`` by an exhaust or half-hot when legend IoU is weak.
 
     The disposal switch beside the kitchen sink is drawn rotated; template IoU
-    stays ~0.22, below the normal switch floor, so seed from a stem bar on the
-    wall within ~36 pt of the exhaust hub.
+    stays ~0.20–0.22, below the normal switch floor. R6 seeded from a nearby
+    exhaust hub; after R7 correctly labels the sink glyph ``afci_half_hot``,
+    seed from that receptacle as well (same stem geometry under the basin).
     """
     if not switch_tmpls:
         return []
     entry = next((e for e in usable if e.category == Category.SWITCH), None)
-    exhausts = [d for d in detections if d.category == Category.EXHAUST_FAN]
+    # Anchors: exhaust fans, and AFCI half-hot receptacles (R7b disposal `$`).
+    anchors: list[tuple[Detection, str]] = [
+        (d, "exhaust_adjacent_switch")
+        for d in detections
+        if d.category == Category.EXHAUST_FAN
+    ]
+    anchors.extend(
+        (d, "halfhot_adjacent_switch")
+        for d in detections
+        if d.category == Category.RECEPTACLE and d.subtype == "afci_half_hot"
+    )
     existing_sw = [d for d in detections if d.category == Category.SWITCH]
     existing_rec = [d for d in detections if d.category == Category.RECEPTACLE]
     out: list[Detection] = []
-    for ex in exhausts:
+    for anchor, note in anchors:
         # Already has a controlling switch nearby — skip (cooktop F switch).
         if any(
-            math.hypot(ex.center.x - s.center.x, ex.center.y - s.center.y) < 40.0
+            math.hypot(anchor.center.x - s.center.x, anchor.center.y - s.center.y)
+            < 40.0
             for s in existing_sw
         ):
             continue
@@ -2312,11 +2324,13 @@ def _switches_near_exhaust(
                 continue
             mx = 0.5 * (seg.x0 + seg.x1)
             my = 0.5 * (seg.y0 + seg.y1)
-            dist = math.hypot(mx - ex.center.x, my - ex.center.y)
-            if not (18.0 <= dist <= 36.0):
+            dist = math.hypot(mx - anchor.center.x, my - anchor.center.y)
+            # Half-hot sits ~32 pt above the disposal `$`; exhaust was ~20–36.
+            max_dist = 36.0 if note.startswith("exhaust") else 38.0
+            if not (18.0 <= dist <= max_dist):
                 continue
-            # Prefer below the exhaust (sink → wall switch under basin).
-            if my < ex.center.y - 2.0:
+            # Prefer below the anchor (sink half-hot / exhaust → wall `$` under).
+            if my < anchor.center.y - 2.0:
                 continue
             if not _near_wall(wall_mask, mx, my):
                 continue
@@ -2324,7 +2338,12 @@ def _switches_near_exhaust(
                 continue
             if any(math.hypot(mx - s.center.x, my - s.center.y) < 12.0 for s in existing_sw):
                 continue
-            if any(math.hypot(mx - r.center.x, my - r.center.y) < 10.0 for r in existing_rec):
+            # Block other receptacles; the half-hot anchor itself is farther (~32 pt).
+            if any(
+                r.id != anchor.id
+                and math.hypot(mx - r.center.x, my - r.center.y) < 10.0
+                for r in existing_rec
+            ):
                 continue
             seg_ids: list[int] = []
             xs: list[float] = []
@@ -2393,7 +2412,7 @@ def _switches_near_exhaust(
                     legend_entry_id=entry.id if entry else None,
                     match_score=iou,
                     text_tokens=codes,
-                    notes=["exhaust_adjacent_switch"],
+                    notes=[note],
                 ),
             )
             if best is None or iou > best[0]:

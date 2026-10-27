@@ -83,3 +83,15 @@ def test_plan1_sink_half_hot_range_exhaust(plans_pdf: Path) -> None:
     )
     assert (range_ex.center.x - 989.8) ** 2 + (range_ex.center.y - 419.8) ** 2 < 100.0
     assert range_ex.subtype == "bath_exhaust"
+
+    # Disposal ``$`` just below the sink (restored after R7 half-hot; was v0.5.0).
+    disposal = min(
+        (d for d in result.detections if d.category == Category.SWITCH),
+        key=lambda d: (d.center.x - 975.0) ** 2 + (d.center.y - 354.0) ** 2,
+    )
+    assert (disposal.center.x - 975.0) ** 2 + (disposal.center.y - 354.0) ** 2 < 100.0
+    assert disposal.subtype == "single_pole"
+    assert any(
+        n in (disposal.evidence.notes or [])
+        for n in ("halfhot_adjacent_switch", "exhaust_adjacent_switch")
+    )

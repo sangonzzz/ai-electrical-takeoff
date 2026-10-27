@@ -16,10 +16,10 @@ from takeoff_engine.pipeline import analyze_sheet
 
 # Minimum counts (and plan-4 light band). Switches must not drop below R5.
 _MINIMA: dict[int, dict[Category, int]] = {
-    0: {  # plan 1
+    0: {  # plan 1 — 13 switches includes kitchen disposal `$` (R7b restore)
         Category.LIGHT: 9,
         Category.CEILING_FAN: 1,
-        Category.SWITCH: 12,
+        Category.SWITCH: 13,
     },
     1: {  # plan 2
         Category.LIGHT: 13,
