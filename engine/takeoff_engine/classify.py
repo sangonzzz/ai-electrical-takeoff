@@ -1544,13 +1544,12 @@ def classify_candidates(
                     break
             if weak_wall:
                 continue
-            # Exhaust yin-yang rings look circular — do not mint a recessed can.
-            if any(
-                math.hypot(cx - fx, cy - fy) < 10.0
-                for fx, fy in _half_disc_fills_in_bounds(
-                    ctx, plan_bounds or (0, 0, ctx.page_width, ctx.page_height)
-                )
-            ):
+            # Exhaust yin-yang / half-hot fills look circular — not a recessed can.
+            pb = plan_bounds or (0.0, 0.0, ctx.page_width, ctx.page_height)
+            fill_pts = [(x, y) for x, y in _half_disc_fills_in_bounds(ctx, pb)] + [
+                (x, y) for x, y, _fw, _fh in _half_hot_fills_in_bounds(ctx, pb)
+            ]
+            if any(math.hypot(cx - fx, cy - fy) < 10.0 for fx, fy in fill_pts):
                 continue
             codes = _codes_near_point(ctx, cx, cy, radius=14.0)
             detections.append(
@@ -1613,6 +1612,13 @@ def classify_candidates(
     # Half-filled duplex → AFCI half-hot (R2 Fix 5).
     detections.extend(
         _halfhots_from_fills(ctx, candidates, detections, sheet_id, usable)
+    )
+
+    # IN ATTIC circle-with-cross / recessed light inside the panel (R7).
+    detections.extend(
+        _lights_from_attic_panels(
+            ctx, attic_boxes, detections, sheet_id, usable, templates
+        )
     )
 
     # IN ATTIC ``$`` often merges into the panel X / wire arc (R6 fix 3).
@@ -1847,6 +1853,121 @@ def drop_outside_footprint(
             out.append(d)
             continue
         # Drop false recessed/wall ink in the sheet margin (e.g. plan-4 TL).
+    return out
+
+
+def _lights_from_attic_panels(
+    ctx: PageContext,
+    attic_boxes: list[tuple[float, float, float, float]],
+    detections: list[Detection],
+    sheet_id: str,
+    usable: list[LegendEntry],
+    templates: dict[str, Any],
+) -> list[Detection]:
+    """Ensure each IN ATTIC panel has its circle-with-cross / recessed light (R7).
+
+    The glyph sits on the gray panel; clustering can absorb it into the X or
+    skip it when a hallway can above the box already exists.
+    """
+    if not attic_boxes:
+        return []
+    light_entries = [e for e in usable if e.category == Category.LIGHT]
+    if not light_entries:
+        return []
+    entry = next(
+        (e for e in light_entries if e.subtype == "recessed"),
+        light_entries[0],
+    )
+    out: list[Detection] = []
+    for box in attic_boxes:
+        x0, y0, x1, y1 = box
+        # Already have a light well inside this panel.
+        if any(
+            d.category == Category.LIGHT
+            and _in_attic_box(d.center.x, d.center.y, [box], shrink=3.0)
+            for d in detections + out
+        ):
+            continue
+        # Scan short-stroke rings + square frames inside the panel.
+        found = False
+        for cx, cy in _scan_recessed_downlight_centers(ctx, (x0, y0, x1, y1)):
+            if not _in_attic_box(cx, cy, [box], shrink=2.0):
+                continue
+            if any(
+                d.category == Category.LIGHT
+                and math.hypot(d.center.x - cx, d.center.y - cy) < 10.0
+                for d in detections + out
+            ):
+                continue
+            out.append(
+                Detection(
+                    id=str(uuid.uuid4()),
+                    sheet_id=sheet_id,
+                    category=Category.LIGHT,
+                    subtype="recessed",
+                    codes=[],
+                    center=Point(x=cx, y=cy),
+                    bbox=BBox(x0=cx - 6.0, y0=cy - 6.0, x1=cx + 6.0, y1=cy + 6.0),
+                    rotation_deg=0,
+                    confidence=0.88,
+                    source="geometry",
+                    needs_review=False,
+                    evidence=Evidence(
+                        legend_entry_id=entry.id,
+                        match_score=0.88,
+                        text_tokens=[],
+                        notes=["attic_panel_light", "recessed_downlight_geometry"],
+                    ),
+                )
+            )
+            found = True
+            break
+        if found:
+            continue
+        # Fallback: circle ring of short strokes (circle-with-cross, no square).
+        from takeoff_engine.symbols import _circle_rings_in_seg_ids
+
+        seg_ids = [
+            i
+            for i, s in enumerate(ctx.black_segments)
+            if x0 <= 0.5 * (s.x0 + s.x1) <= x1
+            and y0 <= 0.5 * (s.y0 + s.y1) <= y1
+            and math.hypot(s.x1 - s.x0, s.y1 - s.y0) < 6.0
+        ]
+        for rcx, rcy, rw, rh, _ring_ids in _circle_rings_in_seg_ids(ctx, seg_ids):
+            if any(
+                d.category == Category.LIGHT
+                and math.hypot(d.center.x - rcx, d.center.y - rcy) < 10.0
+                for d in detections + out
+            ):
+                continue
+            out.append(
+                Detection(
+                    id=str(uuid.uuid4()),
+                    sheet_id=sheet_id,
+                    category=Category.LIGHT,
+                    subtype="recessed",
+                    codes=[],
+                    center=Point(x=rcx, y=rcy),
+                    bbox=BBox(
+                        x0=rcx - rw / 2.0,
+                        y0=rcy - rh / 2.0,
+                        x1=rcx + rw / 2.0,
+                        y1=rcy + rh / 2.0,
+                    ),
+                    rotation_deg=0,
+                    confidence=0.86,
+                    source="geometry",
+                    needs_review=False,
+                    evidence=Evidence(
+                        legend_entry_id=entry.id,
+                        match_score=0.86,
+                        text_tokens=[],
+                        notes=["attic_panel_light", "attic_circle_ring"],
+                    ),
+                )
+            )
+            break
     return out
 
 
@@ -2491,21 +2612,29 @@ def _has_duplex_slots_at(ctx: PageContext, cx: float, cy: float) -> bool:
 
 
 def _is_half_hot_fill(fw: float, fh: float) -> bool:
-    """AFCI half-hot legend fill is a thin *vertical* sliver (~2.5×7.5)."""
-    if not (5.0 <= fh <= 14.0 and 2.0 <= fw <= 4.5):
-        return False
-    return fh >= fw * 1.6
+    """AFCI half-hot fill: thin sliver (legend vertical ~2.5×7.5, or rotated).
+
+    Plan-1 kitchen sink disposal half-hot sits on a vertical wall so the fill
+    is a *horizontal* strip (~7.4×2.6), not the yin-yang exhaust disc (R7).
+    """
+    # Legend orientation: tall thin vertical crescent.
+    if 5.0 <= fh <= 14.0 and 2.0 <= fw <= 4.5 and fh >= fw * 1.6:
+        return True
+    # Rotated 90° on a vertical wall: wide thin horizontal strip.
+    if 5.0 <= fw <= 14.0 and 2.0 <= fh <= 4.5 and fw >= fh * 1.6:
+        return True
+    return False
 
 
 def _is_exhaust_half_disc_fill(fw: float, fh: float) -> bool:
-    """Exhaust / IAQ half-disc: wide fill spanning most of the circle."""
-    if not (5.0 <= max(fw, fh) <= 12.0 and 2.2 <= min(fw, fh) <= 10.0):
+    """Exhaust / IAQ yin-yang: wide half-disc, roughly square (not a flat strip)."""
+    if not (5.0 <= max(fw, fh) <= 12.0 and 4.0 <= min(fw, fh) <= 10.0):
         return False
     if _is_half_hot_fill(fw, fh):
         return False
     aspect = max(fw, fh) / max(min(fw, fh), 0.1)
-    # Typical ~1.2–1.7; sink exhaust can be flatter (~2.8) when clipped.
-    return 1.1 <= aspect <= 3.2
+    # Yin-yang half-discs are mildly elongated; flat strips are half-hot (R7 sink).
+    return 1.1 <= aspect <= 1.85
 
 
 def _half_disc_fills_in_bounds(
@@ -2620,19 +2749,19 @@ def _exhausts_from_half_fills(
     return out
 
 
-def _half_hot_fill_centers(
+def _half_hot_fills_in_bounds(
     ctx: PageContext, bounds: tuple[float, float, float, float]
-) -> list[tuple[float, float]]:
-    """Centers of thin half-hot receptacle fills (not exhaust half-discs)."""
+) -> list[tuple[float, float, float, float]]:
+    """Half-hot fills as ``(cx, cy, fw, fh)`` (not exhaust yin-yang discs)."""
     bx0, by0, bx1, by1 = bounds
-    out: list[tuple[float, float]] = []
+    out: list[tuple[float, float, float, float]] = []
     for f in ctx.black_fills:
         fw, fh = f.x1 - f.x0, f.y1 - f.y0
         if not _is_half_hot_fill(fw, fh):
             continue
         cx, cy = 0.5 * (f.x0 + f.x1), 0.5 * (f.y0 + f.y1)
         if bx0 <= cx <= bx1 and by0 <= cy <= by1:
-            out.append((cx, cy))
+            out.append((cx, cy, fw, fh))
     return out
 
 
@@ -2643,10 +2772,10 @@ def _halfhots_from_fills(
     sheet_id: str,
     usable: list[LegendEntry],
 ) -> list[Detection]:
-    """Half-filled duplex receptacle → ``afci_half_hot`` (R2 Fix 5).
+    """Half-filled duplex receptacle → ``afci_half_hot`` (R2 Fix 5 / R7).
 
-    Uses the thin vertical fill of the legend glyph — wide yin-yang fills are
-    exhaust fans (R6 kitchen cooktop / sink).
+    Thin vertical *or* horizontal fill slivers are half-hot. Wide yin-yang discs
+    stay exhaust. Kitchen sink (disposal) has a horizontal fill next to ``$``.
     """
     bounds = _plan_bounds_from_candidates(candidates)
     if bounds is None:
@@ -2660,8 +2789,11 @@ def _halfhots_from_fills(
         next((e for e in usable if e.category == Category.RECEPTACLE), None),
     )
     out: list[Detection] = []
-    for cx, cy in _half_hot_fill_centers(ctx, bounds):
-        if not _has_duplex_slots_at(ctx, cx, cy):
+    drop_ids: set[str] = set()
+    for cx, cy, fw, fh in _half_hot_fills_in_bounds(ctx, bounds):
+        horizontal = fw >= fh * 1.6
+        # Duplex slots, or rotated horizontal strip on a wall (R7 sink disposal).
+        if not (_has_duplex_slots_at(ctx, cx, cy) or horizontal):
             continue
         if any(
             d.category == Category.RECEPTACLE
@@ -2670,7 +2802,12 @@ def _halfhots_from_fills(
             for d in detections + out
         ):
             continue
-        # Upgrade a nearby receptacle detection if present.
+        # Suppress false recessed/exhaust minted on this glyph.
+        for d in detections:
+            if math.hypot(d.center.x - cx, d.center.y - cy) > 10.0:
+                continue
+            if d.category in (Category.EXHAUST_FAN, Category.LIGHT):
+                drop_ids.add(d.id)
         upgraded = False
         for d in detections:
             if d.category != Category.RECEPTACLE:
@@ -2685,6 +2822,9 @@ def _halfhots_from_fills(
         if upgraded:
             continue
         pad = 8.0
+        notes = ["half_fill_duplex"]
+        if horizontal:
+            notes.append("half_hot_rotated_wall")
         out.append(
             Detection(
                 id=str(uuid.uuid4()),
@@ -2702,10 +2842,12 @@ def _halfhots_from_fills(
                     legend_entry_id=entry.id if entry else None,
                     match_score=0.9,
                     text_tokens=[],
-                    notes=["half_fill_duplex"],
+                    notes=notes,
                 ),
             )
         )
+    if drop_ids:
+        detections[:] = [d for d in detections if d.id not in drop_ids]
     return out
 
 
