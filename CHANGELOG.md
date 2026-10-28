@@ -2,6 +2,15 @@
 
 Plain-language notes for Santiago. Newest first.
 
+## app v1.0.6 (UI only, PIPELINE_VERSION 0.6.7)
+
+UI-only app patch (git tag **`v1.0.6`**). Analysis / golden unchanged.
+
+- **Home keeps all documents:** ordered list in `localStorage` (`takeoff.documents`); demo first, uploads append.
+- **Remove from list:** hide a document from Home without deleting server data (404 drops the id silently).
+
+Engine freeze at **0.6.7** still applies for detection/rooms/LLM/BOM tracing.
+
 ## app v1.0.5 (UI only, PIPELINE_VERSION 0.6.7)
 
 UI-only app patch (git tag **`v1.0.5`**). Analysis / golden unchanged.

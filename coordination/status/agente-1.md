@@ -2,24 +2,23 @@
 
 ## Estado
 
-**v1.0.5** tagged locally — `PIPELINE_VERSION` still **0.6.7** (no push; Agente 9).
+**v1.0.6** tagged locally — `PIPELINE_VERSION` still **0.6.7** (no push; Agente 9).
 
 ## Hecho
 
-- A6 UI polish commit; scope web/coordination only
-- Web: tsc + vitest 36 + build OK; package.json 1.0.5
-- CHANGELOG + README; tag `v1.0.5`; to-all
+- A6 home documents list commit; web checks green
+- CHANGELOG + README; tag `v1.0.6`; to-all
 
 ## Cómo probarlo
 
 ```bash
 uv run takeoff --version   # -> 0.6.7
-git show v1.0.5 --no-patch
+git show v1.0.6 --no-patch
 ```
 
 ## Siguiente
 
-- Agente 9 push main + tag `v1.0.5`
+- Agente 9 push main + tag `v1.0.6`
 
 ## Bloqueos
 
@@ -35,5 +34,5 @@ UI-only app tags without PIPELINE bump.
 
 ## Explicación para Santiago
 
-App **v1.0.5**: un solo botón clear en la búsqueda y sin rayas largas (em dash)
-en el copy. Motor 0.6.7. Tag local; Agente 9 hace push.
+App **v1.0.6**: Home guarda todos los documentos y permite quitarlos de la lista
+sin borrar el servidor. Motor 0.6.7. Tag local; Agente 9 hace push.
