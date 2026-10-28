@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { ChevronRight } from "lucide-react";
 import type { Bom, BomLine } from "@/types/contracts";
 import { formatAssumptionRows } from "@/lib/bomAssumptions";
+import { formatUsd } from "@/lib/formatUsd";
 import { useUiStore } from "@/store/uiStore";
 import { EmptyState } from "./ui/EmptyState";
 
@@ -80,12 +81,12 @@ export function BomPanel({ bom, loading }: Props) {
           Bill of materials
         </h2>
         <div className="mt-1 flex flex-wrap items-baseline gap-2">
-          <span
-            className="font-mono text-2xl font-bold tabular-nums tracking-tight text-[var(--ink)]"
+          <p
+            className="m-0 font-mono text-2xl font-bold tabular-nums tracking-tight text-[var(--ink)]"
             data-testid="bom-total"
           >
-            ${bom.total_usd.toFixed(2)}
-          </span>
+            Total {formatUsd(bom.total_usd)}
+          </p>
           {showDelta && (
             <span
               className={`rounded-md px-1.5 py-0.5 font-mono text-[10px] font-bold ${
@@ -95,7 +96,7 @@ export function BomPanel({ bom, loading }: Props) {
               }`}
               title="Change vs when this sheet was opened"
             >
-              {delta > 0 ? "+" : ""}${delta.toFixed(2)}
+              {delta > 0 ? "+" : "-"}${Math.abs(delta).toFixed(2)}
             </span>
           )}
         </div>
