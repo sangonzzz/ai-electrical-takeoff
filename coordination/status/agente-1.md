@@ -2,35 +2,31 @@
 
 ## Estado
 
-**v1.0.0** interview release — engine `0.6.7` + app frozen.
+**v1.0.1** app tagged — `PIPELINE_VERSION` still **0.6.7**.
 
 ## Hecho
 
-- `PIPELINE_VERSION` → `0.6.7` + CHANGELOG known limits + DECISIONS / AGENTS freeze
-- Verified green: `uv run pytest` **183 passed**; web `tsc` + `pnpm build` OK
-- Tags: `v0.6.7`, **`v1.0.0`** (interview release)
-- Mensaje to-all
+- CHANGELOG App v1.0.1 (cable colors by type + edit handles); no pipeline bump
+- README tags; mensaje to-all; tag `v1.0.1`
 
 ## Cómo probarlo
 
 ```bash
 uv run takeoff --version   # -> 0.6.7
-git show v1.0.0 --no-patch
-uv run pytest -q
-cd web && pnpm run build
+git show v1.0.1 --no-patch
 ```
 
 ## Siguiente
 
-- Solo docs / tests locking current behavior unless Santiago unfreezes
+- Engine stays frozen at 0.6.7 unless Santiago approves
 
 ## Bloqueos
 
-- Token `gh` sin scope `workflow` para Actions (`.github/` may still be untracked)
+- Token `gh` sin scope `workflow` para Actions
 
 ## Decisions
 
-Interview freeze at v1.0.0 / PIPELINE 0.6.7. Known limits in CHANGELOG.
+App tags may advance without `PIPELINE_VERSION` when analysis is unchanged.
 
 ## Needs from Santiago
 
@@ -38,7 +34,5 @@ Interview freeze at v1.0.0 / PIPELINE 0.6.7. Known limits in CHANGELOG.
 
 ## Explicación para Santiago
 
-Release de entrevista **v1.0.0** con motor **0.6.7**. Pytest y build web en verde.
-Quedan documentados los límites conocidos: half-hot del plan 3, receptáculo del
-water heater en plan 4, y millwork que a veces se traza como cable. Motor y app
-congelados; nadie cambia comportamiento sin tu OK.
+Parche de app **v1.0.1**: los cables se colorean por tipo (14/2 vs 14/3) y al
+editar aparecen handles. El motor sigue en **0.6.7**; no se reanaliza nada.

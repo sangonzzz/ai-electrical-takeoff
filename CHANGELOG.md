@@ -2,11 +2,23 @@
 
 Plain-language notes for Santiago. Newest first.
 
+## App v1.0.1 — cable colors + edit handles
+
+UI-only app patch (git tag **`v1.0.1`**). **`PIPELINE_VERSION` stays `0.6.7`**
+(analysis / golden unchanged).
+
+- **Cable colors by type:** wire runs colored by cable type (e.g. 14/2 vs 14/3)
+  instead of a single pink stroke.
+- **Edit handles:** visible handles when editing cables for clearer tip / geometry
+  interaction.
+
+Engine freeze at **0.6.7** still applies for detection/rooms/LLM/BOM tracing.
+
 ## v1.0.0 — interview release (`PIPELINE_VERSION` 0.6.7)
 
 Final freeze of **engine and app** for the interview demo. Git tag **`v1.0.0`**;
-engine semver **`0.6.7`**. No further detection/rooms/LLM/BOM tracing or app
-behavior changes without Santiago’s approval (`AGENTS.md` §14).
+engine semver **`0.6.7`**. Further app UI patches (e.g. v1.0.1) may ship without
+bumping the pipeline; engine behavior still needs Santiago’s approval (`AGENTS.md` §14).
 
 Golden lock: `eval/golden/current/` (see `eval/golden/CHANGES.md` vs v0.6.4).
 
