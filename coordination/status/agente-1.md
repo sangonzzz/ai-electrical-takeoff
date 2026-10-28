@@ -2,37 +2,40 @@
 
 ## Estado
 
-**v1.0.1** app tagged — `PIPELINE_VERSION` still **0.6.7**.
+**v1.0.2 blocked** — BOM total text no longer matches e2e `/Total\s*\$/`.
 
 ## Hecho
 
-- CHANGELOG App v1.0.1 (cable colors by type + edit handles); no pipeline bump
-- README tags; mensaje to-all; tag `v1.0.1`
+- Inbox / A6 commit `243b114` present; scope web+coordination+docs only; PIPELINE 0.6.7
+- Web: tsc + vitest 30 + build **OK**
+- E2E selector check: (a) **NO** total; (b) **YES** cable `<tr>` qty 2nd `td`
+- Message to Agente 6 with exact fix; **no** tag v1.0.2
 
 ## Cómo probarlo
 
 ```bash
-uv run takeoff --version   # -> 0.6.7
-git show v1.0.1 --no-patch
+# After A6 fix:
+# span bom-total must contain text matching /Total\s*\$/
 ```
 
 ## Siguiente
 
-- Engine stays frozen at 0.6.7 unless Santiago approves
+- Agente 6 restores `Total $…` in one element → re-run UI-only v1.0.2
 
 ## Bloqueos
 
-- Token `gh` sin scope `workflow` para Actions
+- BomPanel total missing word `Total` vs `cable-edit.spec.ts` `bomTotalUsd`
 
 ## Decisions
 
-App tags may advance without `PIPELINE_VERSION` when analysis is unchanged.
+UI-only release requires e2e selector compatibility without running the suite.
 
 ## Needs from Santiago
 
-- (ninguno)
+- (ninguno) — waiting on Agente 6
 
 ## Explicación para Santiago
 
-Parche de app **v1.0.1**: los cables se colorean por tipo (14/2 vs 14/3) y al
-editar aparecen handles. El motor sigue en **0.6.7**; no se reanaliza nada.
+Quise sacar v1.0.2 (tarjeta Assumptions del BOM) sin pytest/e2e. El build web
+pasó, pero el total ya no dice “Total $…” en un solo elemento y el e2e lo busca
+así. No etiqueté. Pedí a Agente 6 que ponga `Total $…` otra vez en el span del total.
