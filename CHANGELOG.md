@@ -2,6 +2,17 @@
 
 Plain-language notes for Santiago. Newest first.
 
+## app v1.0.2 (UI only, PIPELINE_VERSION 0.6.7)
+
+UI-only app patch (git tag **`v1.0.2`**). Analysis / golden unchanged.
+
+- **Assumptions card:** collapsible BOM assumptions (hidden by default).
+- **Human labels:** assumption keys shown in plain language; dash/gap keys hidden.
+- **Prominent total:** BOM total at the top as `Total $…` (e2e-compatible).
+- **Vitest:** BomPanel / assumptions helpers cover total selector + formatting.
+
+Engine freeze at **0.6.7** still applies for detection/rooms/LLM/BOM tracing.
+
 ## App v1.0.1 — cable colors + edit handles
 
 UI-only app patch (git tag **`v1.0.1`**). **`PIPELINE_VERSION` stays `0.6.7`**
