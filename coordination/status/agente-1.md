@@ -2,24 +2,24 @@
 
 ## Estado
 
-**v1.0.4** tagged locally — `PIPELINE_VERSION` still **0.6.7** (no push; Agente 9).
+**v1.0.5** tagged locally — `PIPELINE_VERSION` still **0.6.7** (no push; Agente 9).
 
 ## Hecho
 
-- A6 three UI commits (search, Atreyus mark, version chips); scope web/coordination/docs
-- Web: tsc + vitest 36 + build OK; package.json 1.0.4
-- CHANGELOG + README; tag `v1.0.4`; to-all
+- A6 UI polish commit; scope web/coordination only
+- Web: tsc + vitest 36 + build OK; package.json 1.0.5
+- CHANGELOG + README; tag `v1.0.5`; to-all
 
 ## Cómo probarlo
 
 ```bash
 uv run takeoff --version   # -> 0.6.7
-git show v1.0.4 --no-patch
+git show v1.0.5 --no-patch
 ```
 
 ## Siguiente
 
-- Agente 9 push main + tag `v1.0.4`
+- Agente 9 push main + tag `v1.0.5`
 
 ## Bloqueos
 
@@ -35,5 +35,5 @@ UI-only app tags without PIPELINE bump.
 
 ## Explicación para Santiago
 
-App **v1.0.4**: búsqueda en palette, marca “for Atreyus” con logo oficial, y chips
-Engine/App/PDF. Motor 0.6.7. Tag local; Agente 9 hace push.
+App **v1.0.5**: un solo botón clear en la búsqueda y sin rayas largas (em dash)
+en el copy. Motor 0.6.7. Tag local; Agente 9 hace push.

@@ -2,6 +2,15 @@
 
 Plain-language notes for Santiago. Newest first.
 
+## app v1.0.5 (UI only, PIPELINE_VERSION 0.6.7)
+
+UI-only app patch (git tag **`v1.0.5`**). Analysis / golden unchanged.
+
+- **Single clear button:** palette search uses `type="text"` so the browser shows one clear control.
+- **No em dashes:** user-facing copy uses `.` / `:` instead of `—`.
+
+Engine freeze at **0.6.7** still applies for detection/rooms/LLM/BOM tracing.
+
 ## app v1.0.4 (UI only, PIPELINE_VERSION 0.6.7)
 
 UI-only app patch (git tag **`v1.0.4`**). Analysis / golden unchanged.
