@@ -2,38 +2,39 @@
 
 ## Estado
 
-**v1.0.3** tagged locally — `PIPELINE_VERSION` still **0.6.7** (no push; Agente 9).
+**v1.0.4 blocked** — falta commit A6 “for Atreyus” mark (logo).
 
 ## Hecho
 
-- A6 three UI commits + docs; e2e only `bomTotalUsd` → `getByTestId("bom-total")`
-- Web: tsc + vitest 34 + build OK; `bom-total` at `BomPanel.tsx:134`
-- CHANGELOG + README; tag `v1.0.3`; to-all
+- Inbox A6 partial: component search + version chips OK; Atreyus mark blocked
+- No tag `v1.0.4` (step 2 failed)
 
 ## Cómo probarlo
 
 ```bash
-uv run takeoff --version   # -> 0.6.7
-git show v1.0.3 --no-patch
+git log --oneline v1.0.3..HEAD
+# need third [A6] for Atreyus mark before re-run
 ```
 
 ## Siguiente
 
-- Agente 9 push main + tag `v1.0.3`
+- Santiago: drop `web/public/brand/atreyus-logo.svg` (or `.png`)
+- A6 finishes Task 2 → A1 re-runs UI-only v1.0.4
 
 ## Bloqueos
 
-- (ninguno)
+- Official Atreyus logo missing (A6 429/403 from atreyus.ai)
 
 ## Decisions
 
-UI-only app tags without PIPELINE bump.
+- (ninguno)
 
 ## Needs from Santiago
 
-- (ninguno)
+- Brand logo file for Agente 6
 
 ## Explicación para Santiago
 
-App **v1.0.3**: tarjeta de total del BOM, campos numéricos a prueba de locale, y
-handles de cable simplificados. Motor 0.6.7. Tag local; Agente 9 hace push.
+No etiqueté v1.0.4: hay búsqueda y chips, pero falta la marca “for Atreyus”
+porque no está el logo oficial. Cuando lo dejes en `web/public/brand/`, A6 termina
+y yo reintento el release.
