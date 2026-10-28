@@ -34,13 +34,14 @@ radius 10 px, transitions ~150 ms. Light theme default.
   and wire PATCH previous values); clears redo on new action; refreshes sheet/BOM/corrections.
 - **Component palette** — drag subtypes onto the plan (ghost + “Drop on the plan”);
   click-to-add still works in Add mode. Room auto-assigned on create.
-- **Details** — editable X/Y in PDF points (also drag marks on the plan).
+- **Details** — editable X/Y in PDF points (locale-proof text decimal fields; also drag).
 - **Edit cables** (header + toolbar toggle, off by default) — turns Wires layer on; runs
   colored by type (`nm_14_2` pink, `nm_14_3` green `#16A34A`); hover label keeps type +
   length. Selected run shows round handles (`data-testid="wire-handle"`): drag vertex to
   reshape, double-click run to add a bend, Alt+click vertex to remove, drag an end onto a
-  device to reconnect (PATCH points + from/to). Delete key removes the selected run.
-  Details panel: type, from/to, lengths, source, delete. Undo/redo covers reshape/reconnect.
+  device to reconnect (PATCH points + from/to). Dense traced runs (>12 pts) show RDP-simplified
+  handles (≤12); the drawn path stays full until the first edit commits the simplified polyline.
+  Delete key removes the selected run. Plan length / Vertical use locale-proof decimals.
   Wires layer on → hint “Select a cable to edit, or New cable to add one”.
 - **New cable** — click device A then B; dashed preview follows cursor; Esc cancels;
   straight run via `POST .../wire-runs` (fixture mock until Agente 5 ships).
@@ -60,8 +61,9 @@ radius 10 px, transitions ~150 ms. Light theme default.
 - Wires: **off by default**, beta badge + tooltip about dashed-line tracing limits;
   when on, labels only on hover or when wire count ≤ 14 (always on hover in Edit cables).
 - Boxes off by default. Floating toolbar: select / add / fit / **Edit cables** / layers.
-- BOM: prominent total at top; cable section “Cable (estimated)”; Assumptions
-  collapsed by default with human labels (hides dash/gap medians — Excel only).
+- BOM: summary card (“Estimated material cost” + `data-testid="bom-total"` amount-only);
+  cable section “Cable (estimated)”; Assumptions collapsed by default with human labels
+  (hides dash/gap medians — Excel only).
 - **Re-run fresh analysis** → confirm → `POST /api/sheets/{id}/reanalyze`, poll job, reload.
 
 ## Keyboard
