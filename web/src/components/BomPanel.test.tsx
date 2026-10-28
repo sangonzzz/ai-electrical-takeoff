@@ -37,13 +37,13 @@ const fixtureBom: Bom = {
 };
 
 describe("BomPanel", () => {
-  it("exposes a single Total $… node for e2e (bom-total)", () => {
+  it("exposes bom-total as amount-only for e2e", () => {
     render(<BomPanel bom={fixtureBom} />);
 
-    const matches = screen.getAllByText(/Total\s*\$/);
-    expect(matches).toHaveLength(1);
-    expect(matches[0]).toHaveAttribute("data-testid", "bom-total");
-    expect(matches[0].textContent).toMatch(/^Total \$1,234\.56$/);
+    const total = screen.getByTestId("bom-total");
+    expect(total.textContent).toMatch(/^\$[\d,]+\.\d{2}$/);
+    expect(total.textContent).toBe("$1,234.56");
+    expect(screen.getByText(/Estimated material cost/i)).toBeInTheDocument();
 
     const rows = screen.getAllByRole("row");
     expect(rows.length).toBeGreaterThanOrEqual(1);

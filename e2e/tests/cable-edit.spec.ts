@@ -94,7 +94,7 @@ async function bomCableQty(page: Page, itemKey: string): Promise<number | null> 
 
 async function bomTotalUsd(page: Page): Promise<number | null> {
   await page.getByRole("button", { name: "BOM" }).click();
-  const total = page.getByText(/Total\s*\$/);
+  const total = page.getByTestId("bom-total");
   if (!(await total.isVisible().catch(() => false))) return null;
   const t = await total.innerText();
   const m = /\$\s*([\d,.]+)/.exec(t);

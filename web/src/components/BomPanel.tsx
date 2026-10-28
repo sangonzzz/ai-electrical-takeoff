@@ -39,6 +39,48 @@ const SECTION_LABEL: Record<Section, string> = {
   other: "Other",
 };
 
+const SUBTOTAL_ORDER: { key: Section; label: string }[] = [
+  { key: "fixtures", label: "Fixtures" },
+  { key: "devices", label: "Devices" },
+  { key: "boxes", label: "Boxes" },
+  { key: "cable", label: "Cable" },
+];
+
+function priceCaptureDate(bom: Bom): string | null {
+  const raw =
+    bom.assumptions?.price_capture_date ??
+    bom.assumptions?.price_list_date ??
+    (typeof bom.price_capture_date === "string" ? bom.price_capture_date : null) ??
+    (typeof bom.price_list_date === "string" ? bom.price_list_date : null);
+  if (typeof raw !== "string" || !raw.trim()) return null;
+  return raw.trim();
+}
+
+/** Compact section subtotals when they reconcile with total_usd. */
+function sectionSubtotals(
+  lines: BomLine[],
+  totalUsd: number,
+): { label: string; usd: number }[] | null {
+  const sums: Record<Section, number> = {
+    fixtures: 0,
+    devices: 0,
+    boxes: 0,
+    cable: 0,
+    other: 0,
+  };
+  for (const line of lines) {
+    const ext = line.extended_price;
+    if (ext == null || !Number.isFinite(ext)) return null;
+    sums[sectionOf(line)] += ext;
+  }
+  const reconcilable = sums.fixtures + sums.devices + sums.boxes + sums.cable + sums.other;
+  if (Math.abs(reconcilable - totalUsd) > 0.01) return null;
+  return SUBTOTAL_ORDER.filter((s) => sums[s.key] > 0.005).map((s) => ({
+    label: s.label,
+    usd: Math.round(sums[s.key] * 100) / 100,
+  }));
+}
+
 export function BomPanel({ bom, loading }: Props) {
   const bomBaselineUsd = useUiStore((s) => s.bomBaselineUsd);
   const setBomBaselineUsd = useUiStore((s) => s.setBomBaselineUsd);
@@ -73,31 +115,49 @@ export function BomPanel({ bom, loading }: Props) {
   const delta = bomBaselineUsd != null ? bom.total_usd - bomBaselineUsd : 0;
   const showDelta = Math.abs(delta) >= 0.005;
   const assumptionRows = formatAssumptionRows(bom.assumptions ?? {});
+  const captureDate = priceCaptureDate(bom);
+  const subtotals = sectionSubtotals(bom.lines, bom.total_usd);
+  const footnote = captureDate
+    ? `Devices, boxes, cable and fixture allowances · Home Depot prices · ${captureDate}`
+    : "Devices, boxes, cable and fixture allowances · Home Depot prices";
 
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="shrink-0 border-b border-[var(--border)] px-3 py-3">
-        <h2 className="text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
-          Bill of materials
-        </h2>
-        <div className="mt-1 flex flex-wrap items-baseline gap-2">
-          <p
-            className="m-0 font-mono text-2xl font-bold tabular-nums tracking-tight text-[var(--ink)]"
-            data-testid="bom-total"
-          >
-            Total {formatUsd(bom.total_usd)}
-          </p>
-          {showDelta && (
-            <span
-              className={`rounded-md px-1.5 py-0.5 font-mono text-[10px] font-bold ${
-                delta > 0
-                  ? "bg-emerald-50 text-emerald-700"
-                  : "bg-rose-50 text-rose-700"
-              }`}
-              title="Change vs when this sheet was opened"
+        <div className="rounded-[10px] border border-[var(--border)] bg-[var(--surface-2)] p-3">
+          <div className="text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+            Estimated material cost
+          </div>
+          <div className="mt-1 flex flex-wrap items-baseline gap-2">
+            <p
+              className="m-0 text-[28px] font-semibold leading-none tabular-nums tracking-tight text-[var(--ink)]"
+              data-testid="bom-total"
             >
-              {delta > 0 ? "+" : "-"}${Math.abs(delta).toFixed(2)}
-            </span>
+              {formatUsd(bom.total_usd)}
+            </p>
+            {showDelta && (
+              <span
+                className={`rounded-md px-1.5 py-0.5 font-mono text-[10px] font-bold ${
+                  delta > 0
+                    ? "bg-emerald-50 text-emerald-700"
+                    : "bg-rose-50 text-rose-700"
+                }`}
+                title="Change vs when this sheet was opened"
+              >
+                {delta > 0 ? "+" : "-"}${Math.abs(delta).toFixed(2)}
+              </span>
+            )}
+          </div>
+          <p className="mt-2 text-[11px] leading-snug text-[var(--muted)]">{footnote}</p>
+          {subtotals && subtotals.length > 0 && (
+            <ul className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-[var(--ink-soft)]">
+              {subtotals.map((s) => (
+                <li key={s.label}>
+                  <span className="text-[var(--muted)]">{s.label}</span>{" "}
+                  <span className="tabular-nums">{formatUsd(s.usd)}</span>
+                </li>
+              ))}
+            </ul>
           )}
         </div>
       </div>
