@@ -1,5 +1,7 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import { ChevronRight } from "lucide-react";
 import type { Bom, BomLine } from "@/types/contracts";
+import { formatAssumptionRows } from "@/lib/bomAssumptions";
 import { useUiStore } from "@/store/uiStore";
 import { EmptyState } from "./ui/EmptyState";
 
@@ -40,6 +42,7 @@ export function BomPanel({ bom, loading }: Props) {
   const bomBaselineUsd = useUiStore((s) => s.bomBaselineUsd);
   const setBomBaselineUsd = useUiStore((s) => s.setBomBaselineUsd);
   const seeded = useRef(false);
+  const [assumptionsOpen, setAssumptionsOpen] = useState(false);
 
   useEffect(() => {
     if (!bom || seeded.current) return;
@@ -68,17 +71,20 @@ export function BomPanel({ bom, loading }: Props) {
 
   const delta = bomBaselineUsd != null ? bom.total_usd - bomBaselineUsd : 0;
   const showDelta = Math.abs(delta) >= 0.005;
+  const assumptionRows = formatAssumptionRows(bom.assumptions ?? {});
 
   return (
-    <div className="flex h-full flex-col">
-      <div className="border-b border-[var(--border)] px-3 py-2">
-        <h2 className="text-sm font-semibold text-[var(--ink)]">Bill of materials</h2>
-        <p className="flex flex-wrap items-center gap-2 text-[11px] text-[var(--muted)]">
-          <span>
-            Total{" "}
-            <span className="font-mono font-semibold text-[var(--ink)]">
-              ${bom.total_usd.toFixed(2)}
-            </span>
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="shrink-0 border-b border-[var(--border)] px-3 py-3">
+        <h2 className="text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+          Bill of materials
+        </h2>
+        <div className="mt-1 flex flex-wrap items-baseline gap-2">
+          <span
+            className="font-mono text-2xl font-bold tabular-nums tracking-tight text-[var(--ink)]"
+            data-testid="bom-total"
+          >
+            ${bom.total_usd.toFixed(2)}
           </span>
           {showDelta && (
             <span
@@ -92,7 +98,7 @@ export function BomPanel({ bom, loading }: Props) {
               {delta > 0 ? "+" : ""}${delta.toFixed(2)}
             </span>
           )}
-        </p>
+        </div>
       </div>
 
       <div className="min-h-0 flex-1 overflow-auto">
@@ -137,16 +143,45 @@ export function BomPanel({ bom, loading }: Props) {
         ))}
       </div>
 
-      <div className="m-3 rounded-[10px] border border-[var(--border)] bg-[var(--surface-2)] p-3 text-[11px] text-[var(--muted)]">
-        <div className="mb-1.5 font-semibold text-[var(--ink)]">Assumptions</div>
-        <ul className="space-y-0.5">
-          {Object.entries(bom.assumptions).map(([k, v]) => (
-            <li key={k}>
-              <span className="font-mono">{k}</span>: {String(v)}
-            </li>
-          ))}
-        </ul>
-      </div>
+      {assumptionRows.length > 0 && (
+        <div className="shrink-0 border-t border-[var(--border)] bg-[var(--surface)]">
+          <button
+            type="button"
+            className="flex w-full items-center gap-1.5 px-3 py-2 text-left text-[12px] font-semibold text-[var(--ink)] hover:bg-[var(--surface-2)]"
+            aria-expanded={assumptionsOpen}
+            data-testid="bom-assumptions-toggle"
+            onClick={() => setAssumptionsOpen((o) => !o)}
+          >
+            <ChevronRight
+              size={14}
+              className={`shrink-0 text-[var(--muted)] transition-transform ${
+                assumptionsOpen ? "rotate-90" : ""
+              }`}
+            />
+            Assumptions ({assumptionRows.length})
+          </button>
+          {assumptionsOpen && (
+            <div
+              className="max-h-40 overflow-y-auto border-t border-[var(--border)]/70 px-3 py-2 text-[11px] text-[var(--muted)]"
+              data-testid="bom-assumptions-body"
+            >
+              <ul className="space-y-1.5">
+                {assumptionRows.map((row) =>
+                  row.kind === "metric" ? (
+                    <li key={row.key} className="text-[var(--ink-soft)]">
+                      {row.label}
+                    </li>
+                  ) : (
+                    <li key={row.key} className="leading-snug text-[var(--muted)]">
+                      {row.text}
+                    </li>
+                  ),
+                )}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

@@ -2,34 +2,28 @@
 
 ## Estado
 
-Cables coloreados por tipo + handles de reshape/reconnect; Edit cables también en el header.
+BOM tab polish: total grande + Assumptions colapsable con labels humanos.
 
 ## Hecho
 
-- Colores: `nm_14_2` rosa `#DB2777`, `nm_14_3` verde `#16A34A`; leyenda 14/2 y 14/3
-- Edit cables: handles redondos en extremos y vértices (`data-testid="wire-handle"`)
-  - Drag vértice → reshape; doble clic en run → agrega vértice; Alt+clic → quita
-  - Drag extremo sobre un dispositivo → reconnect (snap) + PATCH points/from/to
-  - Delete borra el run seleccionado; undo/redo vía command stack / fixture
-- Discoverability: botón **Edit cables** en header junto a Undo/Redo; hint al prender Wires
-- BOM: sección **Fixtures (allowance)** (pedido Agente 8)
-- Mensaje a Agente 7 con pasos e2e de reshape/reconnect
+- Total BOM destacado arriba (`data-testid="bom-total"`)
+- Assumptions colapsado por defecto: `Assumptions (N) ▸`; expandido scrollea en `max-h-40` sin empujar las líneas
+- Labels: Ceiling height, Switch box height, Slack per end, Waste %, Cable roll
+- Notas de pricing + routing como oraciones; ocultos `dash_length_pt_median` / `gap_pt_median`
+- Antes: colores de cable, handles, Edit cables en header, Fixtures (allowance)
 
 ## Cómo probarlo
 
 ```bash
 cd web
 pnpm exec tsc --noEmit && pnpm exec vitest run && pnpm run build
-pnpm dev   # VITE_USE_FIXTURE=true
-# Header o toolbar → Edit cables → seleccionar run rosa/verde → drag handles
-# Doble clic en el trazo → nuevo vértice; Alt+clic en handle → quitar
-# Arrastrar extremo hasta otro mark → reconnect; ver Details length + BOM
-# Del → borra run; Ctrl+Z deshace
+pnpm dev
+# Sheet → BOM: total grande; Assumptions colapsado; clic para expandir
 ```
 
 ## Siguiente
 
-- (ninguno bloqueante) Agente 7 e2e de handles
+- (ninguno)
 
 ## Bloqueos
 
@@ -37,9 +31,8 @@ pnpm dev   # VITE_USE_FIXTURE=true
 
 ## Decisions
 
-- Seleccionar un cable con la capa Wires on enciende Edit cables (discoverability)
-- Alt+clic en un extremo con >2 puntos lo quita y limpia from/to de ese extremo
-- Snap de reconnect: 22 pt PDF
+- Conteo del badge = filas visibles tras filtrar claves técnicas
+- Cuerpo expandido `max-h-40` + overflow para no robar el scroll de las líneas
 
 ## Needs from Santiago
 
@@ -47,10 +40,8 @@ pnpm dev   # VITE_USE_FIXTURE=true
 
 ## Explicación para Santiago
 
-Los cables ya no son todos rosa: el 14/2 sigue rosa y el 14/3 es verde, como en la leyenda.
-Hay un botón **Edit cables** arriba junto a Undo, además del de la barra flotante. Con
-edición activa, el cable seleccionado muestra bolitas en cada esquina: las arrastrás para
-cambiar la forma, doble clic agrega un codo, Alt+clic lo saca, y si soltás un extremo
-encima de otro dispositivo, el cable se reconecta. Todo eso manda un PATCH al API (o al
-mock en fixture) y el BOM se actualiza; Undo/Redo lo deshace. Si solo prendés la capa
-Wires, aparece un tip de una línea para que sepas que podés editar o crear un cable.
+En la pestaña BOM el total ahora se ve grande arriba. Las Assumptions ya no ocupan
+media pantalla: vienen cerradas (`Assumptions (6) ▸`) y al abrirlas scrollean solas
+abajo, sin tapar la lista. En vez de claves crudas ves textos claros (altura de
+cielo, caja de switch, slack, desperdicio, rollo) y las notas de precio/ruta como
+frases cortas. Los números técnicos de dash/gap solo quedan en el Excel.

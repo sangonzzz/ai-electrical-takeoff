@@ -60,7 +60,8 @@ radius 10 px, transitions ~150 ms. Light theme default.
 - Wires: **off by default**, beta badge + tooltip about dashed-line tracing limits;
   when on, labels only on hover or when wire count ≤ 14 (always on hover in Edit cables).
 - Boxes off by default. Floating toolbar: select / add / fit / **Edit cables** / layers.
-- BOM cable section labeled “Cable (estimated)” with per-line estimated badge.
+- BOM: prominent total at top; cable section “Cable (estimated)”; Assumptions
+  collapsed by default with human labels (hides dash/gap medians — Excel only).
 - **Re-run fresh analysis** → confirm → `POST /api/sheets/{id}/reanalyze`, poll job, reload.
 
 ## Keyboard
