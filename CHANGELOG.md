@@ -2,6 +2,16 @@
 
 Plain-language notes for Santiago. Newest first.
 
+## app v1.0.4 (UI only, PIPELINE_VERSION 0.6.7)
+
+UI-only app patch (git tag **`v1.0.4`**). Analysis / golden unchanged.
+
+- **Component search:** palette filter with synonyms (`/`, Esc, Enter).
+- **“for Atreyus” mark:** official logo at `web/public/brand/atreyus-logo.png`.
+- **Labeled version chips:** Engine / App v1.0.4 / PDF hash in the sheet header.
+
+Engine freeze at **0.6.7** still applies for detection/rooms/LLM/BOM tracing.
+
 ## app v1.0.3 (UI only, PIPELINE_VERSION 0.6.7)
 
 UI-only app patch (git tag **`v1.0.3`**). Analysis / golden unchanged.
