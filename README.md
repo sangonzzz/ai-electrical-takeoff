@@ -18,6 +18,8 @@ Demo plans: City of Escondido PAADU public-domain set —
 
 App: **`v1.0.5`** (UI polish). Engine: **`PIPELINE_VERSION` = `0.6.7` (frozen)**. Engine changes need Santiago’s approval (`AGENTS.md` §14).
 
+Design document: [`docs/design-doc.md`](docs/design-doc.md) · [`docs/design-doc.pdf`](docs/design-doc.pdf).
+
 ---
 
 ## What it is
