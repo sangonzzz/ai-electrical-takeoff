@@ -19,12 +19,14 @@ radius 10 px, transitions ~150 ms. Light theme default.
 
 ## Screens
 
-1. **Home** — hero, “Load demo plans”, upload, sheet cards with `sheet_number` /
-   `title` and job status from `GET /api/documents/{id}` (poll every 2 s while
-   queued/running).
-2. **Sheet** — header (plan tabs, **Engine** / **App v** chips + **PDF** hash,
-   Undo/Redo, review/export, **Re-run fresh analysis**), KPI strip, searchable
-   component palette (`/` focuses search), plan canvas, right panel.
+1. **Home** — hero (“Prepared for” + Atreyus logo), “Load demo plans”, upload,
+   sheet cards with `sheet_number` / `title` and job status from
+   `GET /api/documents/{id}` (poll every 2 s while queued/running).
+2. **Sheet** — header (“Electrical Takeoff · for” + Atreyus logo; plan tabs;
+   **Engine** / **App v** chips + **PDF** hash; Undo/Redo; review/export;
+   **Re-run fresh analysis**), KPI strip, searchable component palette
+   (`/` focuses search), plan canvas, right panel. Brand mark:
+   `public/brand/atreyus-logo.png` (official asset, never redrawn).
 
 ## Editing
 

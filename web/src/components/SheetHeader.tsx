@@ -56,6 +56,16 @@ export function SheetHeader({
           <ArrowLeft size={14} />
           <span className="font-bold tracking-tight">Electrical Takeoff</span>
         </Link>
+        <span className="mx-0.5 h-4 w-px shrink-0 bg-[var(--border-strong)]" aria-hidden />
+        <span className="inline-flex items-center gap-1.5 text-[11px] text-[var(--muted)]">
+          <span>for</span>
+          <img
+            src="/brand/atreyus-logo.png"
+            alt="Atreyus"
+            height={20}
+            className="h-5 w-auto"
+          />
+        </span>
 
         <nav className="flex flex-wrap items-center gap-1" aria-label="Plan switcher">
           {sheets.map((s) => {

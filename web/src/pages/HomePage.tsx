@@ -86,6 +86,15 @@ export function HomePage() {
           <h1 className="mt-2 text-4xl font-semibold tracking-tight text-[var(--ink)]">
             Review every mark on the plan
           </h1>
+          <p className="mt-2 inline-flex items-center gap-2 text-[12px] text-[var(--muted)]">
+            <span>Prepared for</span>
+            <img
+              src="/brand/atreyus-logo.png"
+              alt="Atreyus"
+              height={24}
+              className="h-6 w-auto"
+            />
+          </p>
           <p className="mt-3 text-[15px] leading-relaxed text-[var(--muted)]">
             Load residential electrical sheets, verify detections on the drawing, and export a
             takeoff you can defend — counts always trace back to marks on the plan.
