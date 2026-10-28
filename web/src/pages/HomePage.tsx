@@ -97,7 +97,7 @@ export function HomePage() {
           </p>
           <p className="mt-3 text-[15px] leading-relaxed text-[var(--muted)]">
             Load residential electrical sheets, verify detections on the drawing, and export a
-            takeoff you can defend — counts always trace back to marks on the plan.
+            takeoff you can defend. Counts always trace back to marks on the plan.
           </p>
           <div className="mt-6 flex flex-wrap items-center gap-3">
             <button

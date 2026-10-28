@@ -100,7 +100,8 @@ export function ComponentPalette() {
           />
           <input
             ref={searchRef}
-            type="search"
+            type="text"
+            inputMode="search"
             data-testid="palette-search"
             className="field w-full !py-1.5 !pl-7 !pr-7 text-[12px]"
             placeholder="Search components"

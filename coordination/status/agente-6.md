@@ -2,13 +2,14 @@
 
 ## Estado
 
-v1.0.4 UI completo: búsqueda, marca Atreyus, chips de versión.
+v1.0.5 polish: un solo clear en search; sin em dashes en copy de UI.
 
 ## Hecho
 
-- Component search (`2a32a9c`)
-- Version chips Engine / App v1.0.4 / PDF (`66692ce`)
-- for Atreyus: logo byte-for-byte en `web/public/brand/atreyus-logo.png`; header + home
+- `palette-search` → `type="text"` (sin clear nativo del browser)
+- Em dashes de frases de usuario → punto/coma/dos puntos
+- `package.json` → `1.0.5`
+- v1.0.4: search, Atreyus mark, version chips
 
 ## Cómo probarlo
 
@@ -19,7 +20,7 @@ pnpm exec tsc --noEmit && pnpm exec vitest run && pnpm build
 
 ## Siguiente
 
-- Agente 1 tag v1.0.4
+- Agente 1 tag v1.0.5
 
 ## Bloqueos
 
@@ -31,5 +32,5 @@ pnpm exec tsc --noEmit && pnpm exec vitest run && pnpm build
 
 ## Explicación para Santiago
 
-Las tres piezas de v1.0.4 están: buscar en Components, sello “for Atreyus” con tu
-logo oficial, y chips Engine / App / PDF. Listo para el tag de Agente 1 (sin push).
+Quité la doble X del buscador de Components y reemplacé los guiones largos de las
+frases visibles por puntos o dos puntos. App queda en v1.0.5.

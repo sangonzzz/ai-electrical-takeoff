@@ -309,12 +309,12 @@ export function SheetPage() {
 
       {mode === "add" && (
         <div className="pointer-events-none fixed bottom-4 left-1/2 z-40 -translate-x-1/2 rounded-full bg-[var(--ink)] px-3 py-1.5 text-[12px] font-semibold text-white shadow-[var(--shadow-md)]">
-          Add mode — click the plan · Esc to cancel
+          Add mode: click the plan · Esc to cancel
         </div>
       )}
       {mode === "wire_create" && (
         <div className="pointer-events-none fixed bottom-4 left-1/2 z-40 -translate-x-1/2 rounded-full bg-pink-600 px-3 py-1.5 text-[12px] font-semibold text-white shadow-[var(--shadow-md)]">
-          New cable — click device A, then B · Esc to cancel
+          New cable: click device A, then B · Esc to cancel
         </div>
       )}
     </div>

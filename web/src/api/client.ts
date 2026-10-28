@@ -356,7 +356,7 @@ export async function reanalyzeSheet(sheetId: string): Promise<ReanalyzeResponse
   let status = normalizeJobStatus(started.status);
   while (status === "queued" || status === "running") {
     if (Date.now() > deadline) {
-      throw new Error("Re-analysis timed out — check job status and reload.");
+      throw new Error("Re-analysis timed out. Check the job status and reload.");
     }
     await new Promise((r) => setTimeout(r, 1500));
     const job = await getJob(started.job_id);

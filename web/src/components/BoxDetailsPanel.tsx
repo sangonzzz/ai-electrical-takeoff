@@ -39,7 +39,7 @@ export function BoxDetailsPanel({ box, detections, onHighlightDevices }: Props) 
           <dd>{box.source}</dd>
         </dl>
         <p className="text-[11px] text-[var(--muted)]">
-          Boxes are derived from nearby devices — edit the switches on the plan, not the box.
+          Boxes are derived from nearby devices. Edit the switches on the plan, not the box.
         </p>
         <div>
           <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">

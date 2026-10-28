@@ -268,7 +268,7 @@ export const PlanViewer = forwardRef<PlanViewerHandle, Props>(function PlanViewe
             ? "Click the second device · Esc to cancel"
             : "Click the first device · Esc to cancel"
           : editCables
-            ? "Edit cables on — drag handles to reshape · double-click to add a bend · Alt+click to remove"
+            ? "Edit cables on: drag handles to reshape · double-click to add a bend · Alt+click to remove"
             : layers.wires
               ? "Select a cable to edit, or New cable to add one"
               : "Scroll zoom · drag pan · drag components from the palette";

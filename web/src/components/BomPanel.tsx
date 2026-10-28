@@ -178,7 +178,7 @@ export function BomPanel({ bom, loading }: Props) {
                         {g.section === "cable" && (
                           <span
                             className="rounded bg-[var(--warn-soft)] px-1 py-px text-[9px] font-semibold uppercase tracking-wide text-[var(--warn)]"
-                            title="Lengths traced from dashed plan lines — review before quoting"
+                            title="Lengths traced from dashed plan lines. Review before quoting."
                           >
                             estimated
                           </span>
