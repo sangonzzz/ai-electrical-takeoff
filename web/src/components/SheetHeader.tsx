@@ -92,16 +92,23 @@ export function SheetHeader({
           })}
         </nav>
 
-        <span className="chip font-mono text-[10px]" title="Pipeline version">
-          {pipelineVersion}
+        <span
+          className="chip font-mono text-[10px]"
+          title="Detection pipeline version. Results are cached per file, page and engine version."
+        >
+          Engine {pipelineVersion}
+        </span>
+
+        <span className="chip font-mono text-[10px]" title="Application release">
+          App v{__APP_VERSION__}
         </span>
 
         {hashShort && (
           <span
             className="chip font-mono text-[10px]"
-            title="SHA-256 of original PDF (unchanged)"
+            title="SHA-256 of the uploaded PDF"
           >
-            {hashShort}…
+            PDF {hashShort}…
           </span>
         )}
 
