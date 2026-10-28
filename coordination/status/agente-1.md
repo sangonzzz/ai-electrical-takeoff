@@ -2,25 +2,24 @@
 
 ## Estado
 
-**v1.0.2** tagged locally — `PIPELINE_VERSION` still **0.6.7** (no push; Agente 9).
+**v1.0.3** tagged locally — `PIPELINE_VERSION` still **0.6.7** (no push; Agente 9).
 
 ## Hecho
 
-- A6 BOM assumptions + total e2e fix (`1bbf81f`); scope web/coordination/docs only
-- Web: tsc + vitest 31 + build OK
-- E2E selectors: (a) yes `BomPanel.tsx:88`; (b) yes `BomPanel.tsx:114–132`
-- CHANGELOG + README; tag `v1.0.2`; to-all
+- A6 three UI commits + docs; e2e only `bomTotalUsd` → `getByTestId("bom-total")`
+- Web: tsc + vitest 34 + build OK; `bom-total` at `BomPanel.tsx:134`
+- CHANGELOG + README; tag `v1.0.3`; to-all
 
 ## Cómo probarlo
 
 ```bash
 uv run takeoff --version   # -> 0.6.7
-git show v1.0.2 --no-patch
+git show v1.0.3 --no-patch
 ```
 
 ## Siguiente
 
-- Agente 9 push main + tag `v1.0.2`
+- Agente 9 push main + tag `v1.0.3`
 
 ## Bloqueos
 
@@ -28,7 +27,7 @@ git show v1.0.2 --no-patch
 
 ## Decisions
 
-UI-only app tags without PIPELINE bump when analysis unchanged.
+UI-only app tags without PIPELINE bump.
 
 ## Needs from Santiago
 
@@ -36,5 +35,5 @@ UI-only app tags without PIPELINE bump when analysis unchanged.
 
 ## Explicación para Santiago
 
-App **v1.0.2**: tarjeta Assumptions del BOM (colapsable, labels humanos, total
-`Total $…`). Motor sigue en 0.6.7. Tag local; Agente 9 hace push.
+App **v1.0.3**: tarjeta de total del BOM, campos numéricos a prueba de locale, y
+handles de cable simplificados. Motor 0.6.7. Tag local; Agente 9 hace push.

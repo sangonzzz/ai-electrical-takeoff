@@ -2,6 +2,16 @@
 
 Plain-language notes for Santiago. Newest first.
 
+## app v1.0.3 (UI only, PIPELINE_VERSION 0.6.7)
+
+UI-only app patch (git tag **`v1.0.3`**). Analysis / golden unchanged.
+
+- **BOM total card:** estimated material cost summary; `data-testid="bom-total"` is amount-only (`$…`).
+- **Locale-proof number fields:** Plan length / Vertical / X / Y use a shared decimal input.
+- **Simplified cable handles:** dense runs show fewer edit handles (RDP ≤12).
+
+Engine freeze at **0.6.7** still applies for detection/rooms/LLM/BOM tracing.
+
 ## app v1.0.2 (UI only, PIPELINE_VERSION 0.6.7)
 
 UI-only app patch (git tag **`v1.0.2`**). Analysis / golden unchanged.
