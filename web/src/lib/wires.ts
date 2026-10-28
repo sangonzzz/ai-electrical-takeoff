@@ -125,3 +125,74 @@ export function removeVertexAt(points: Point[], index: number): Point[] | null {
   if (index < 0 || index >= points.length) return null;
   return points.filter((_, i) => i !== index);
 }
+
+function perpDist(p: Point, a: Point, b: Point): number {
+  const abx = b.x - a.x;
+  const aby = b.y - a.y;
+  const len2 = abx * abx + aby * aby;
+  if (len2 === 0) return Math.hypot(p.x - a.x, p.y - a.y);
+  const t = ((p.x - a.x) * abx + (p.y - a.y) * aby) / len2;
+  const projX = a.x + t * abx;
+  const projY = a.y + t * aby;
+  return Math.hypot(p.x - projX, p.y - projY);
+}
+
+/** Classic Ramer–Douglas–Peucker; always keeps endpoints. */
+export function ramerDouglasPeucker(points: Point[], epsilon: number): Point[] {
+  if (points.length <= 2) return points.map((p) => ({ ...p }));
+  let maxDist = 0;
+  let maxIdx = 0;
+  const first = points[0];
+  const last = points[points.length - 1];
+  for (let i = 1; i < points.length - 1; i++) {
+    const d = perpDist(points[i], first, last);
+    if (d > maxDist) {
+      maxDist = d;
+      maxIdx = i;
+    }
+  }
+  if (maxDist > epsilon) {
+    const left = ramerDouglasPeucker(points.slice(0, maxIdx + 1), epsilon);
+    const right = ramerDouglasPeucker(points.slice(maxIdx), epsilon);
+    return [...left.slice(0, -1), ...right];
+  }
+  return [
+    { ...first },
+    { ...last },
+  ];
+}
+
+export const HANDLE_POINT_CAP = 12;
+export const HANDLE_SIMPLIFY_EPS = 2;
+
+/**
+ * Simplify a dense polyline for edit handles (keep endpoints).
+ * Raises epsilon until result has at most `maxPoints` vertices.
+ */
+export function simplifyPolylineForHandles(
+  points: Point[],
+  maxPoints = HANDLE_POINT_CAP,
+  startEpsilon = HANDLE_SIMPLIFY_EPS,
+): Point[] {
+  if (points.length <= maxPoints) return points.map((p) => ({ ...p }));
+  let eps = startEpsilon;
+  let simplified = ramerDouglasPeucker(points, eps);
+  let guard = 0;
+  while (simplified.length > maxPoints && guard < 40) {
+    eps *= 1.5;
+    simplified = ramerDouglasPeucker(points, eps);
+    guard += 1;
+  }
+  if (simplified.length > maxPoints) {
+    // Pathological zig-zag: keep ends + evenly spaced interiors.
+    const out: Point[] = [{ ...points[0] }];
+    const interior = maxPoints - 2;
+    for (let i = 1; i <= interior; i++) {
+      const idx = Math.round((i * (points.length - 1)) / (interior + 1));
+      out.push({ ...points[idx] });
+    }
+    out.push({ ...points[points.length - 1] });
+    return out;
+  }
+  return simplified;
+}

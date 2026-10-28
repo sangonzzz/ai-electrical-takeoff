@@ -3,10 +3,12 @@ import type { WireRunPatchBody } from "@/api/types";
 import { wireRunLabel } from "@/lib/cableLabel";
 import { wireColorForType } from "@/lib/colors";
 import {
+  HANDLE_POINT_CAP,
   insertVertexAtClick,
   nearestDetection,
   planLengthFt,
   removeVertexAt,
+  simplifyPolylineForHandles,
   totalLengthFt,
 } from "@/lib/wires";
 import type { Detection, Point, WireRun } from "@/types/contracts";
@@ -38,6 +40,12 @@ function clientToSvgPoint(svg: SVGSVGElement, clientX: number, clientY: number):
   return { x: local.x, y: local.y };
 }
 
+/** Editable polyline: simplified when dense so handles stay usable. */
+function editBasePoints(full: Point[]): Point[] {
+  if (full.length > HANDLE_POINT_CAP) return simplifyPolylineForHandles(full);
+  return full.map((p) => ({ ...p }));
+}
+
 export function WireLayer({
   wires,
   detections = [],
@@ -58,9 +66,16 @@ export function WireLayer({
   } | null>(null);
   const lowDensity = wires.length <= LOW_DENSITY_MAX;
 
-  function pointsOf(wire: WireRun): Point[] {
+  /** Full geometry for drawing until an edit draft exists. */
+  function drawPointsOf(wire: WireRun): Point[] {
     if (draft && draft.id === wire.id) return draft.points;
     return wire.points;
+  }
+
+  /** Handle polyline (simplified when dense). */
+  function handlePointsOf(wire: WireRun): Point[] {
+    if (draft && draft.id === wire.id) return draft.points;
+    return editBasePoints(wire.points);
   }
 
   function setDraftPoints(next: { id: string; points: Point[] } | null) {
@@ -92,7 +107,7 @@ export function WireLayer({
     e.preventDefault();
     const svg = (e.target as SVGElement).ownerSVGElement;
     if (!svg) return;
-    const basePoints = pointsOf(wire).map((p) => ({ ...p }));
+    const basePoints = handlePointsOf(wire).map((p) => ({ ...p }));
     dragRef.current = { wireId: wire.id, vertexIndex, moved: false };
     setDraftPoints({ id: wire.id, points: basePoints });
 
@@ -152,10 +167,13 @@ export function WireLayer({
   return (
     <g data-layer="wires">
       {wires.map((wire) => {
-        const points = pointsOf(wire);
-        if (points.length < 2) return null;
-        const d = points.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`).join(" ");
-        const mid = points[Math.floor(points.length / 2)];
+        const drawPoints = drawPointsOf(wire);
+        if (drawPoints.length < 2) return null;
+        const handlePoints = handlePointsOf(wire);
+        const d = drawPoints
+          .map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`)
+          .join(" ");
+        const mid = drawPoints[Math.floor(drawPoints.length / 2)];
         const color = wireColorForType(wire.cable_type);
         const label = wireRunLabel(wire.cable_type, wire.total_length_ft);
         const approxW = label.length * 4.2 + 8;
@@ -205,7 +223,6 @@ export function WireLayer({
                 style={{ pointerEvents: "none" }}
               />
             )}
-            {/* Wider invisible hit target */}
             <path
               d={d}
               fill="none"
@@ -229,7 +246,8 @@ export function WireLayer({
                 if (!svg) return;
                 const local = clientToSvgPoint(svg, e.clientX, e.clientY);
                 if (!local) return;
-                const next = insertVertexAtClick(points, local, 16);
+                const base = handlePointsOf(wire);
+                const next = insertVertexAtClick(base, local, 16);
                 if (!next) return;
                 commitPoints(wire, next);
               }}
@@ -260,9 +278,10 @@ export function WireLayer({
                 </text>
               </g>
             )}
-            {editable && selected &&
-              points.map((p, i) => {
-                const isEnd = i === 0 || i === points.length - 1;
+            {editable &&
+              selected &&
+              handlePoints.map((p, i) => {
+                const isEnd = i === 0 || i === handlePoints.length - 1;
                 return (
                   <circle
                     key={`${wire.id}-h-${i}`}
@@ -280,14 +299,15 @@ export function WireLayer({
                     onClick={(e) => {
                       e.stopPropagation();
                       if (!e.altKey || !onPatchWire) return;
-                      const next = removeVertexAt(points, i);
+                      const base = handlePointsOf(wire);
+                      const next = removeVertexAt(base, i);
                       if (!next) return;
                       const extra: Pick<
                         WireRunPatchBody,
                         "from_detection_id" | "to_detection_id"
                       > = {};
                       if (i === 0) extra.from_detection_id = null;
-                      if (i === points.length - 1) extra.to_detection_id = null;
+                      if (i === base.length - 1) extra.to_detection_id = null;
                       commitPoints(wire, next, extra);
                     }}
                   />

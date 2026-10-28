@@ -1,15 +1,17 @@
 import { describe, expect, it } from "vitest";
 import { wireColorForType } from "./colors";
 import {
+  HANDLE_POINT_CAP,
   insertVertexAtClick,
   nearestDetection,
   planLengthFt,
   removeVertexAt,
+  simplifyPolylineForHandles,
   straightRunPoints,
   totalLengthFt,
   wiresAfterDetectionMove,
 } from "./wires";
-import type { Detection, WireRun } from "@/types/contracts";
+import type { Detection, Point, WireRun } from "@/types/contracts";
 
 describe("wires helpers", () => {
   it("computes plan and total length", () => {
@@ -94,5 +96,33 @@ describe("wires helpers", () => {
     ] as Detection[];
     expect(nearestDetection(dets, { x: 5, y: 0 }, 20)?.id).toBe("a");
     expect(nearestDetection(dets, { x: 50, y: 0 }, 20)).toBeNull();
+  });
+
+  it("simplifies dense runs for handles: ends kept, straight→2, L keeps corner, ≤12", () => {
+    const straight: Point[] = Array.from({ length: 40 }, (_, i) => ({
+      x: i * 2,
+      y: 0,
+    }));
+    const simpleStraight = simplifyPolylineForHandles(straight);
+    expect(simpleStraight).toHaveLength(2);
+    expect(simpleStraight[0]).toEqual(straight[0]);
+    expect(simpleStraight[simpleStraight.length - 1]).toEqual(straight[straight.length - 1]);
+
+    const L: Point[] = [
+      ...Array.from({ length: 20 }, (_, i) => ({ x: i, y: 0 })),
+      ...Array.from({ length: 20 }, (_, i) => ({ x: 19, y: i + 1 })),
+    ];
+    const simpleL = simplifyPolylineForHandles(L);
+    expect(simpleL[0]).toEqual(L[0]);
+    expect(simpleL[simpleL.length - 1]).toEqual(L[L.length - 1]);
+    expect(simpleL.some((p) => Math.abs(p.x - 19) < 0.01 && Math.abs(p.y) < 1)).toBe(true);
+    expect(simpleL.length).toBeLessThanOrEqual(HANDLE_POINT_CAP);
+    expect(simpleL.length).toBeGreaterThanOrEqual(3);
+
+    const zig: Point[] = Array.from({ length: 74 }, (_, i) => ({
+      x: i,
+      y: i % 2 === 0 ? 0 : 5,
+    }));
+    expect(simplifyPolylineForHandles(zig).length).toBeLessThanOrEqual(HANDLE_POINT_CAP);
   });
 });
