@@ -2,42 +2,43 @@
 
 ## Estado
 
-Tres fixes UI para demo: BOM card, decimales locale-proof, handles RDP. Listo para v1.0.3.
+Búsqueda en palette + chips Engine/App/PDF listos. **Bloqueado** la marca “for Atreyus”: falta el logo oficial.
 
 ## Hecho
 
-- BOM summary card: label “Estimated material cost”, amount sans `$2,254.09` (`bom-total`), footnote HD; e2e `getByTestId("bom-total")`
-- Plan length / Vertical / X / Y: `type="text" inputMode="decimal"`, parse `,` o `.`, display con punto
-- Handles en runs densos (>12 pts): RDP ≤12; trazo completo hasta el primer edit
-- Commits: `9092991`, `1306b87`, `40eafaf`
+- Palette search: input + sinónimos + `/` / Esc / Enter (`2a32a9c`)
+- Chips: `Engine 0.6.7`, `App v1.0.4` (desde `package.json`), `PDF {hash}…` (`66692ce`)
+- package.json → `1.0.4`
+
+## Bloqueos
+
+- Logo Atreyus: `web/public/brand/atreyus-logo.svg` (o `.png`) no existe; descarga desde
+  atreyus.ai devolvió 429/403. **No inventé el logo.** Necesito el archivo de Santiago.
 
 ## Cómo probarlo
 
 ```bash
 cd web
 pnpm exec tsc --noEmit && pnpm exec vitest run && pnpm build
+# Palette: escribir "outlet" / "3-way" / "/"
+# Header: chips Engine / App v1.0.4 / PDF …
 ```
 
 ## Siguiente
 
-- Agente 1 tag v1.0.3 (reviewer corre cable e2e)
-
-## Bloqueos
-
-- Ninguno
+- Colocar logo + “for Atreyus” / “Prepared for” cuando Santiago deje el archivo
+- Luego mensaje final v1.0.4 a Agente 1
 
 ## Decisions
 
-- Subtotales en card solo si suman al total ±$0.01
-- No inventar fecha de precios si el BOM no la trae
+- `__APP_VERSION__` inyectado en Vite desde `package.json`
 
 ## Needs from Santiago
 
-- (ninguno)
+- Archivo oficial del logo en `web/public/brand/atreyus-logo.svg` o `.png` (sin redibujar)
 
 ## Explicación para Santiago
 
-El BOM ahora muestra una tarjeta clara con el costo estimado (número grande, sin mono).
-Los campos de largo y X/Y ya no se confunden en español (punto siempre). En cables
-muy densos solo ves hasta 12 bolitas de edición; el trazo se ve completo hasta que
-muevas un handle. Tres commits locales; no hice push.
+Ya hay búsqueda en Components y chips claros de versión en el header. Para el sello
+“for Atreyus” necesito el logo real: atreyus.ai no dejó descargarlo. Déjalo en
+`web/public/brand/` y termino esa parte + el mensaje de v1.0.4.

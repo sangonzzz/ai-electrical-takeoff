@@ -22,9 +22,9 @@ radius 10 px, transitions ~150 ms. Light theme default.
 1. **Home** — hero, “Load demo plans”, upload, sheet cards with `sheet_number` /
    `title` and job status from `GET /api/documents/{id}` (poll every 2 s while
    queued/running).
-2. **Sheet** — header (plan tabs, pipeline + short `file_hash`, Undo/Redo,
-   review/export, **Re-run fresh analysis**), KPI strip, component palette,
-   plan canvas, right panel.
+2. **Sheet** — header (plan tabs, **Engine** / **App v** chips + **PDF** hash,
+   Undo/Redo, review/export, **Re-run fresh analysis**), KPI strip, searchable
+   component palette (`/` focuses search), plan canvas, right panel.
 
 ## Editing
 
@@ -32,8 +32,9 @@ radius 10 px, transitions ~150 ms. Light theme default.
   Fixture: snapshot stacks. Real API: client command stack
   (create↔delete/restore, update/move↔PATCH previous values; wire create/delete/restore
   and wire PATCH previous values); clears redo on new action; refreshes sheet/BOM/corrections.
-- **Component palette** — drag subtypes onto the plan (ghost + “Drop on the plan”);
-  click-to-add still works in Add mode. Room auto-assigned on create.
+- **Component palette** — search (`data-testid="palette-search"`, synonyms like
+  outlet→receptacle, 3-way→three way); drag subtypes onto the plan; click-to-add
+  in Add mode. `/` focuses search; Esc clears; Enter arms first match.
 - **Details** — editable X/Y in PDF points (locale-proof text decimal fields; also drag).
 - **Edit cables** (header + toolbar toggle, off by default) — turns Wires layer on; runs
   colored by type (`nm_14_2` pink, `nm_14_3` green `#16A34A`); hover label keeps type +
