@@ -217,7 +217,13 @@ function fixtureDocumentSummary(): DocumentSummary {
       error: null,
     };
   });
-  return { document_id: DEMO_DOC_ID, sheets };
+  return {
+    document_id: DEMO_DOC_ID,
+    filename: "Escondido demo",
+    file_hash: "fixture0000000000000000000000000000000000000000000000000000000000",
+    created_at: "2024-01-15T12:00:00Z",
+    sheets,
+  };
 }
 
 export async function fixtureLoadDemo(): Promise<DocumentSummary> {

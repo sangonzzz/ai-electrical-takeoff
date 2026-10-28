@@ -19,9 +19,13 @@ radius 10 px, transitions ~150 ms. Light theme default.
 
 ## Screens
 
-1. **Home** — hero (“Prepared for” + Atreyus logo), “Load demo plans”, upload,
-   sheet cards with `sheet_number` / `title` and job status from
-   `GET /api/documents/{id}` (poll every 2 s while queued/running).
+1. **Home** — hero (“Prepared for” + Atreyus logo), “Load demo plans”, upload.
+   Document ids live in `localStorage` key `takeoff.documents` (ordered list;
+   migrates legacy `sessionStorage` `takeoff.documentId`). One **Sheets** heading;
+   per-document group (filename / “Escondido demo”, `N sheets · date` + short hash,
+   ⋯ **Remove from list** with inline confirm — hides from list only). Each group
+   polls `GET /api/documents/{id}` every 2 s while queued/running; 404 drops the id
+   silently. Demo group sorts first.
 2. **Sheet** — header (“Electrical Takeoff · for” + Atreyus logo; plan tabs;
    **Engine** / **App v** chips + **PDF** hash; Undo/Redo; review/export;
    **Re-run fresh analysis**), KPI strip, searchable component palette

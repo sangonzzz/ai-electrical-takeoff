@@ -1,67 +1,65 @@
-import { useRef, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useCallback, useRef, useState } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { FileUp, FlaskConical, LayoutGrid } from "lucide-react";
-import { useNavigate } from "react-router-dom";
 import {
-  getDocument,
   isFixtureMode,
   loadDemoPlans,
   uploadDocument,
 } from "@/api/client";
 import type { DocumentSummary } from "@/api/types";
-import { SheetCard } from "@/components/SheetCard";
+import { DocumentGroup } from "@/components/DocumentGroup";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { Skeleton } from "@/components/ui/Skeleton";
-import { documentHasPendingJobs, sheetIsOpenable } from "@/lib/jobs";
-
-const POLL_MS = 2000;
+import {
+  addDemoDocumentId,
+  addDocumentId,
+  getDemoDocumentId,
+  loadDocumentIds,
+  orderDocumentIdsForDisplay,
+  removeDocumentId,
+} from "@/lib/documentList";
 
 export function HomePage() {
-  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const fileRef = useRef<HTMLInputElement>(null);
-  const [documentId, setDocumentId] = useState<string | null>(() =>
-    sessionStorage.getItem("takeoff.documentId"),
-  );
+  const [documentIds, setDocumentIds] = useState<string[]>(() => loadDocumentIds());
+  const [demoId, setDemoId] = useState<string | null>(() => getDemoDocumentId());
   const [error, setError] = useState<string | null>(null);
 
-  function rememberDoc(doc: DocumentSummary) {
-    setDocumentId(doc.document_id);
-    sessionStorage.setItem("takeoff.documentId", doc.document_id);
+  const dropFromList = useCallback((id: string) => {
+    setDocumentIds((prev) => removeDocumentId(prev, id));
+    setDemoId((prev) => (prev === id ? null : prev));
+  }, []);
+
+  function onDemoSuccess(doc: DocumentSummary) {
+    setDocumentIds((prev) => addDemoDocumentId(prev, doc.document_id));
+    setDemoId(doc.document_id);
+    queryClient.setQueryData(["document", doc.document_id], doc);
+    setError(null);
+  }
+
+  function onUploadSuccess(doc: DocumentSummary) {
+    setDocumentIds((prev) => addDocumentId(prev, doc.document_id));
     queryClient.setQueryData(["document", doc.document_id], doc);
     setError(null);
   }
 
   const demoMut = useMutation({
     mutationFn: loadDemoPlans,
-    onSuccess: rememberDoc,
+    onSuccess: onDemoSuccess,
     onError: (e: Error) => setError(e.message),
   });
 
   const uploadMut = useMutation({
     mutationFn: uploadDocument,
-    onSuccess: rememberDoc,
+    onSuccess: onUploadSuccess,
     onError: (e: Error) => setError(e.message),
   });
 
-  /**
-   * Poll GET /documents every 2s while any sheet is queued/running.
-   * Document sheets[].status / job_id are the source of truth (no separate jobs merge).
-   */
-  const docQuery = useQuery({
-    queryKey: ["document", documentId],
-    queryFn: () => getDocument(documentId!),
-    enabled: !!documentId,
-    refetchInterval: (q) => {
-      const data = q.state.data;
-      if (!data) return POLL_MS;
-      return documentHasPendingJobs(data) ? POLL_MS : false;
-    },
-  });
-
-  const doc = docQuery.data;
   const loading = demoMut.isPending || uploadMut.isPending;
+  const orderedIds = orderDocumentIdsForDisplay(documentIds, demoId);
+  const empty = orderedIds.length === 0;
 
   return (
     <div className="min-h-full">
@@ -143,7 +141,7 @@ export function HomePage() {
           />
         )}
 
-        {loading && !doc && (
+        {loading && empty && (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {Array.from({ length: 4 }).map((_, i) => (
               <Skeleton key={i} className="h-56" />
@@ -151,7 +149,7 @@ export function HomePage() {
           </div>
         )}
 
-        {!doc && !loading && !error && (
+        {empty && !loading && !error && (
           <div className="card">
             <EmptyState
               icon={<LayoutGrid size={28} strokeWidth={1.5} />}
@@ -171,28 +169,19 @@ export function HomePage() {
           </div>
         )}
 
-        {doc && (
-          <section>
-            <div className="mb-4 flex items-baseline justify-between gap-3">
-              <h2 className="text-sm font-semibold text-[var(--ink)]">Sheets</h2>
-              <span className="font-mono text-[11px] text-[var(--muted)]">{doc.document_id}</span>
-            </div>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              {doc.sheets.map((sheet) => (
-                <SheetCard key={sheet.sheet_id} sheet={sheet} documentId={doc.document_id} />
-              ))}
-            </div>
-            {doc.sheets[0] && sheetIsOpenable(doc.sheets[0]) && (
-              <button
-                type="button"
-                className="btn btn-ghost mt-4 !px-0 text-[var(--accent-ink)]"
-                onClick={() =>
-                  navigate(`/documents/${doc.document_id}/sheets/${doc.sheets[0].sheet_id}`)
-                }
-              >
-                Open Plan 1 sheet view →
-              </button>
-            )}
+        {!empty && (
+          <section className="flex flex-col gap-10">
+            <h2 className="text-sm font-semibold text-[var(--ink)]">Sheets</h2>
+            {orderedIds.map((id, index) => (
+              <DocumentGroup
+                key={id}
+                documentId={id}
+                isDemo={id === demoId}
+                showOpenPlan1={index === 0}
+                onGone={dropFromList}
+                onRemoveFromList={dropFromList}
+              />
+            ))}
           </section>
         )}
       </div>

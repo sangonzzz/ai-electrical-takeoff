@@ -75,6 +75,9 @@ export function documentFromUpload(api: {
  */
 export function documentFromDetail(api: {
   id: string;
+  filename?: string;
+  file_hash?: string;
+  created_at?: string;
   sheets: Array<{
     sheet_id: string;
     page_index: number;
@@ -88,6 +91,9 @@ export function documentFromDetail(api: {
 }): DocumentSummary {
   return {
     document_id: api.id,
+    filename: api.filename,
+    file_hash: api.file_hash,
+    created_at: api.created_at,
     sheets: api.sheets.map((s): SheetSummary => {
       const runId = s.job_id ?? s.current_run_id ?? null;
       return {

@@ -68,6 +68,10 @@ export interface SheetSummary {
 export interface DocumentSummary {
   document_id: string;
   sheets: SheetSummary[];
+  /** Present on GET /documents/{id}; optional on upload 202. */
+  filename?: string;
+  file_hash?: string;
+  created_at?: string;
 }
 
 export interface CorrectionEvent {
