@@ -1,5 +1,6 @@
 import type { Detection, WireRun } from "@/types/contracts";
 import type { WireRunPatchBody } from "@/api/types";
+import { DecimalField } from "./DecimalField";
 import { EmptyState } from "./ui/EmptyState";
 
 interface Props {
@@ -87,40 +88,28 @@ export function WireDetailsPanel({
         </div>
 
         <div className="grid grid-cols-2 gap-2">
-          <label className="flex flex-col gap-1">
-            <span className="text-[11px] font-medium text-[var(--muted)]">Plan length (ft)</span>
-            <input
-              className="field font-mono"
-              type="number"
-              step="0.1"
-              value={wire.plan_length_ft}
-              onChange={(e) => {
-                const plan = Number.parseFloat(e.target.value);
-                if (!Number.isFinite(plan)) return;
-                onChange({
-                  plan_length_ft: plan,
-                  total_length_ft: Math.round((plan + wire.vertical_allowance_ft) * 100) / 100,
-                });
-              }}
-            />
-          </label>
-          <label className="flex flex-col gap-1">
-            <span className="text-[11px] font-medium text-[var(--muted)]">Vertical (ft)</span>
-            <input
-              className="field font-mono"
-              type="number"
-              step="0.1"
-              value={wire.vertical_allowance_ft}
-              onChange={(e) => {
-                const vertical = Number.parseFloat(e.target.value);
-                if (!Number.isFinite(vertical)) return;
-                onChange({
-                  vertical_allowance_ft: vertical,
-                  total_length_ft: Math.round((wire.plan_length_ft + vertical) * 100) / 100,
-                });
-              }}
-            />
-          </label>
+          <DecimalField
+            label="Plan length (ft)"
+            value={wire.plan_length_ft}
+            digits={1}
+            onCommit={(plan) =>
+              onChange({
+                plan_length_ft: plan,
+                total_length_ft: Math.round((plan + wire.vertical_allowance_ft) * 100) / 100,
+              })
+            }
+          />
+          <DecimalField
+            label="Vertical (ft)"
+            value={wire.vertical_allowance_ft}
+            digits={1}
+            onCommit={(vertical) =>
+              onChange({
+                vertical_allowance_ft: vertical,
+                total_length_ft: Math.round((wire.plan_length_ft + vertical) * 100) / 100,
+              })
+            }
+          />
         </div>
 
         <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-[12px]">
