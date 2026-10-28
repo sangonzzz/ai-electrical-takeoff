@@ -354,7 +354,7 @@ test.describe("cable / box editing", () => {
     const wiresBefore = await page.getByTestId("wire-run").count();
     await createBtn.click();
     await expect(
-      page.getByText(/New cable — click device A/i),
+      page.getByText(/New cable: click device A/i),
     ).toBeVisible({ timeout: 5_000 });
 
     const marks = page.getByTestId("detection-mark");

@@ -333,7 +333,7 @@ test("demo plans quality pass", async ({ page }) => {
       await expect(paletteBtn).toBeVisible();
       await paletteBtn.click();
       await expect(
-        page.getByText("Add mode — click the plan · Esc to cancel"),
+        page.getByText("Add mode: click the plan · Esc to cancel"),
       ).toBeVisible({ timeout: 5_000 });
 
       const respPromise = page
