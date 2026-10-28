@@ -61,16 +61,7 @@ stack. Until then, use `cd e2e && npm test` — do **not** run Playwright agains
 | Spec | What |
 |------|------|
 | `tests/demo-flow.spec.ts` | Demo load, marks, palette add, undo/redo, X/Y, Excel/PDF |
-| `tests/cable-edit.spec.ts` | Edit cables: select/type/delete/create runs, move switch, undo |
-
-Unfinished contract pieces use `test.skip(reason)` so overnight runs stay green.
-
-## Suites
-
-| Spec | What |
-|------|------|
-| `tests/demo-flow.spec.ts` | Demo load, marks, palette add, undo/redo, X/Y, Excel/PDF |
-| `tests/cable-edit.spec.ts` | Edit cables: select/type/delete/create runs, move switch, undo |
+| `tests/cable-edit.spec.ts` | Edit cables: select/type/delete/create, reshape/reconnect handles, Delete key, move switch, undo |
 
 Unfinished contract pieces use `test.skip(reason)` so overnight runs stay green.
 
@@ -83,12 +74,7 @@ Unfinished contract pieces use `test.skip(reason)` so overnight runs stay green.
 ## Golden analysis lock
 
 `engine/tests/eval/test_golden.py` compares `analyze_sheet(..., use_llm=False, with_bom=True)`
-to `eval/golden/v0.6.4/planN.json` (captured from tag `v0.6.4-stable`).
-
-## Golden analysis lock
-
-`engine/tests/eval/test_golden.py` compares `analyze_sheet(..., use_llm=False, with_bom=True)`
-to `eval/golden/v0.6.4/planN.json` (captured from tag `v0.6.4-stable`).
+to `eval/golden/current/planN.json` (see `eval/golden/CHANGES.md` for accepted diffs vs v0.6.4).
 
 ## Requirements
 

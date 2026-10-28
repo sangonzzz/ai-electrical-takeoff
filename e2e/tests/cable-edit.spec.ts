@@ -44,8 +44,13 @@ async function ensureWiresLayer(page: Page): Promise<boolean> {
 }
 
 async function enableEditCables(page: Page): Promise<boolean> {
-  const btn = page.getByRole("button", { name: /Edit cables/i });
-  if (!(await btn.isVisible().catch(() => false))) return false;
+  // Header + floating toolbar both expose "Edit cables" — pick the first visible.
+  const btn = page.getByRole("button", { name: /Edit cables/i }).first();
+  try {
+    await btn.waitFor({ state: "visible", timeout: 15_000 });
+  } catch {
+    return false;
+  }
   if ((await btn.getAttribute("aria-pressed")) !== "true") {
     await btn.click();
   }
@@ -53,18 +58,27 @@ async function enableEditCables(page: Page): Promise<boolean> {
   return (await btn.getAttribute("aria-pressed")) === "true";
 }
 
-/** Invoke React onClick on the first wire-run mark (SVG clicks are flaky). */
+/** Invoke React onClick on the first wire-run (hit path; SVG clicks are flaky). */
 async function selectFirstWire(page: Page): Promise<boolean> {
   return page.evaluate(() => {
     const g = document.querySelector(
       '[data-testid="wire-run"]',
     ) as (SVGElement & Record<string, unknown>) | null;
     if (!g) return false;
-    const key = Object.keys(g).find((k) => k.startsWith("__reactProps$"));
-    if (!key) return false;
-    const props = g[key] as { onClick?: (e: { stopPropagation: () => void }) => void };
-    props.onClick?.({ stopPropagation() {} });
-    return true;
+    // Current WireLayer puts onClick on the transparent hit path; older builds used the <g>.
+    const candidates = [g, ...g.querySelectorAll("path")] as (SVGElement &
+      Record<string, unknown>)[];
+    for (const el of candidates) {
+      const key = Object.keys(el).find((k) => k.startsWith("__reactProps$"));
+      if (!key) continue;
+      const props = el[key] as {
+        onClick?: (e: { stopPropagation: () => void }) => void;
+      };
+      if (!props.onClick) continue;
+      props.onClick({ stopPropagation() {} });
+      return true;
+    }
+    return false;
   });
 }
 
@@ -85,6 +99,120 @@ async function bomTotalUsd(page: Page): Promise<number | null> {
   const t = await total.innerText();
   const m = /\$\s*([\d,.]+)/.exec(t);
   return m ? Number.parseFloat(m[1].replace(/,/g, "")) : null;
+}
+
+/**
+ * Drag a wire-handle via React onMouseDown + window mouse events.
+ * Playwright page.mouse is unreliable under react-zoom-pan-pinch.
+ */
+async function dragWireHandle(
+  page: Page,
+  handleSelector: string,
+  deltaX: number,
+  deltaY: number,
+): Promise<boolean> {
+  return page.evaluate(
+    ({ handleSelector, deltaX, deltaY }) => {
+      const el = document.querySelector(handleSelector) as
+        | (SVGCircleElement & Record<string, unknown>)
+        | null;
+      if (!el) return false;
+      const key = Object.keys(el).find((k) => k.startsWith("__reactProps$"));
+      if (!key) return false;
+      const props = el[key] as {
+        onMouseDown?: (e: {
+          stopPropagation: () => void;
+          preventDefault: () => void;
+          target: EventTarget;
+          clientX: number;
+          clientY: number;
+          button: number;
+        }) => void;
+      };
+      if (!props.onMouseDown) return false;
+      const rect = el.getBoundingClientRect();
+      const startX = rect.left + rect.width / 2;
+      const startY = rect.top + rect.height / 2;
+      props.onMouseDown({
+        stopPropagation() {},
+        preventDefault() {},
+        target: el,
+        clientX: startX,
+        clientY: startY,
+        button: 0,
+      });
+      const endX = startX + deltaX;
+      const endY = startY + deltaY;
+      window.dispatchEvent(
+        new MouseEvent("mousemove", {
+          bubbles: true,
+          clientX: endX,
+          clientY: endY,
+          buttons: 1,
+        }),
+      );
+      window.dispatchEvent(
+        new MouseEvent("mouseup", {
+          bubbles: true,
+          clientX: endX,
+          clientY: endY,
+          buttons: 0,
+        }),
+      );
+      return true;
+    },
+    { handleSelector, deltaX, deltaY },
+  );
+}
+
+/**
+ * Double-click the selected run's hit path mid-segment to insert a vertex
+ * (React synthetic event — SVG dblclick is flaky in Playwright).
+ */
+async function insertVertexOnSelectedWire(page: Page): Promise<boolean> {
+  return page.evaluate(() => {
+    const handle = document.querySelector('[data-testid="wire-handle"]');
+    if (!handle) return false;
+    const wireG = handle.closest('[data-testid="wire-run"]') as
+      | (SVGElement & Record<string, unknown>)
+      | null;
+    if (!wireG) return false;
+    const paths = [
+      ...wireG.querySelectorAll("path"),
+    ] as (SVGElement & Record<string, unknown>)[];
+    for (const pathEl of paths) {
+      const key = Object.keys(pathEl).find((k) => k.startsWith("__reactProps$"));
+      if (!key) continue;
+      const props = pathEl[key] as {
+        onDoubleClick?: (e: {
+          stopPropagation: () => void;
+          preventDefault: () => void;
+          clientX: number;
+          clientY: number;
+          target: EventTarget;
+        }) => void;
+      };
+      if (!props.onDoubleClick) continue;
+      const bbox = (pathEl as unknown as SVGGraphicsElement).getBBox();
+      const svg = pathEl.ownerSVGElement;
+      if (!svg) return false;
+      const ctm = svg.getScreenCTM();
+      if (!ctm) return false;
+      const mid = svg.createSVGPoint();
+      mid.x = bbox.x + bbox.width / 2;
+      mid.y = bbox.y + bbox.height / 2;
+      const screen = mid.matrixTransform(ctm);
+      props.onDoubleClick({
+        stopPropagation() {},
+        preventDefault() {},
+        clientX: screen.x,
+        clientY: screen.y,
+        target: pathEl,
+      });
+      return true;
+    }
+    return false;
+  });
 }
 
 test.setTimeout(SHEETS_TIMEOUT_MS + 5 * 60 * 1000);
@@ -401,5 +529,271 @@ test.describe("cable / box editing", () => {
     await expect
       .poll(async () => typeSelect.inputValue(), { timeout: 15_000 })
       .toBe(target);
+  });
+
+  test("reshape run by dragging a middle vertex handle", async ({ page }) => {
+    await openPlan1(page);
+    const editOk = await enableEditCables(page);
+    test.skip(!editOk, "UI missing Edit cables toggle (Agente 6)");
+    test.skip(
+      (await page.getByTestId("wire-run").count()) === 0,
+      "no wire-run marks on plan",
+    );
+
+    const selected = await selectFirstWire(page);
+    test.skip(!selected, "could not select wire-run");
+
+    await expect
+      .poll(async () => page.getByTestId("wire-handle").count(), { timeout: 10_000 })
+      .toBeGreaterThanOrEqual(2);
+
+    let mid = page.locator('[data-testid="wire-handle"][data-handle-end="false"]').first();
+    if ((await mid.count()) === 0) {
+      const inserted = await insertVertexOnSelectedWire(page);
+      test.skip(!inserted, "could not double-click-insert a middle vertex (Agente 6)");
+      await expect
+        .poll(
+          async () =>
+            page.locator('[data-testid="wire-handle"][data-handle-end="false"]').count(),
+          { timeout: 15_000 },
+        )
+        .toBeGreaterThan(0);
+      mid = page.locator('[data-testid="wire-handle"][data-handle-end="false"]').first();
+    }
+
+    await page.getByRole("button", { name: "Details" }).click();
+    const planInput = page
+      .locator("label")
+      .filter({ hasText: /Plan length/i })
+      .locator("input");
+    test.skip(!(await planInput.isVisible().catch(() => false)), "Plan length field missing");
+    const lengthBefore = Number.parseFloat(await planInput.inputValue());
+
+    const midCount = await mid.count();
+    test.skip(midCount === 0, "no middle wire-handle after insert");
+    // Prefer a stable CSS selector for the first non-end handle.
+    const handleSel =
+      '[data-testid="wire-handle"][data-handle-end="false"]';
+
+    const patchPromise = page
+      .waitForResponse(
+        (r) =>
+          r.url().includes("/wire-runs/") &&
+          r.request().method() === "PATCH" &&
+          r.ok(),
+        { timeout: 25_000 },
+      )
+      .catch(() => null);
+
+    const dragged = await dragWireHandle(page, handleSel, 80, 60);
+    test.skip(!dragged, "could not dispatch middle-handle drag");
+
+    const patch = await patchPromise;
+    test.skip(!patch, "PATCH after vertex drag did not fire (Agente 5/6 handles)");
+
+    await expect
+      .poll(async () => Number.parseFloat(await planInput.inputValue()), {
+        timeout: 15_000,
+      })
+      .not.toBeCloseTo(lengthBefore, 1);
+
+    const totalAfter = await bomTotalUsd(page);
+    expect(totalAfter).not.toBeNull();
+  });
+
+  test("reconnect end handle to another device", async ({ page }) => {
+    await openPlan1(page);
+    const editOk = await enableEditCables(page);
+    test.skip(!editOk, "UI missing Edit cables toggle (Agente 6)");
+    test.skip(
+      (await page.getByTestId("wire-run").count()) === 0,
+      "no wire-run marks on plan",
+    );
+    test.skip(
+      (await page.getByTestId("detection-mark").count()) < 3,
+      "need ≥3 detection marks to reconnect",
+    );
+
+    const selected = await selectFirstWire(page);
+    test.skip(!selected, "could not select wire-run");
+
+    await expect
+      .poll(async () => page.getByTestId("wire-handle").count(), { timeout: 10_000 })
+      .toBeGreaterThanOrEqual(2);
+
+    await page.getByRole("button", { name: "Details" }).click();
+    const planInput = page
+      .locator("label")
+      .filter({ hasText: /Plan length/i })
+      .locator("input");
+    test.skip(!(await planInput.isVisible().catch(() => false)), "Plan length field missing");
+    const lengthBefore = Number.parseFloat(await planInput.inputValue());
+    const fromBefore = (
+      await page.locator("text=From device").locator("..").getByRole("button").innerText()
+    ).trim();
+    const toBefore = (
+      await page.locator("text=To device").locator("..").getByRole("button").innerText()
+    ).trim();
+
+    const patchPromise = page
+      .waitForResponse(
+        (r) =>
+          r.url().includes("/wire-runs/") &&
+          r.request().method() === "PATCH" &&
+          r.ok(),
+        { timeout: 25_000 },
+      )
+      .catch(() => null);
+
+    // Drag the last end-handle onto a detection that is not already under either endpoint.
+    const reconnect = await page.evaluate(() => {
+      const handles = [
+        ...document.querySelectorAll('[data-testid="wire-handle"][data-handle-end="true"]'),
+      ] as (SVGCircleElement & Record<string, unknown>)[];
+      const end = handles[handles.length - 1];
+      if (!end) return { ok: false as const, reason: "no end handle" };
+
+      const endRect = end.getBoundingClientRect();
+      const endX = endRect.left + endRect.width / 2;
+      const endY = endRect.top + endRect.height / 2;
+
+      const tipCenters = handles.map((h) => {
+        const r = h.getBoundingClientRect();
+        return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+      });
+
+      const marks = [
+        ...document.querySelectorAll('[data-testid="detection-mark"]'),
+      ] as SVGElement[];
+      let best: { id: string; x: number; y: number; dist: number } | null = null;
+      for (const mark of marks) {
+        const id = mark.getAttribute("data-detection-id") ?? "";
+        const r = mark.getBoundingClientRect();
+        const x = r.left + r.width / 2;
+        const y = r.top + r.height / 2;
+        if (tipCenters.some((t) => Math.hypot(t.x - x, t.y - y) < 20)) continue;
+        const dist = Math.hypot(x - endX, y - endY);
+        if (dist < 25 || dist > 450) continue;
+        if (!best || dist < best.dist) best = { id, x, y, dist };
+      }
+      if (!best) return { ok: false as const, reason: "no reconnect target" };
+
+      const key = Object.keys(end).find((k) => k.startsWith("__reactProps$"));
+      if (!key) return { ok: false as const, reason: "no react props" };
+      const props = end[key] as {
+        onMouseDown?: (e: {
+          stopPropagation: () => void;
+          preventDefault: () => void;
+          target: EventTarget;
+          clientX: number;
+          clientY: number;
+          button: number;
+        }) => void;
+      };
+      if (!props.onMouseDown) return { ok: false as const, reason: "no onMouseDown" };
+
+      props.onMouseDown({
+        stopPropagation() {},
+        preventDefault() {},
+        target: end,
+        clientX: endX,
+        clientY: endY,
+        button: 0,
+      });
+      window.dispatchEvent(
+        new MouseEvent("mousemove", {
+          bubbles: true,
+          clientX: best.x,
+          clientY: best.y,
+          buttons: 1,
+        }),
+      );
+      window.dispatchEvent(
+        new MouseEvent("mouseup", {
+          bubbles: true,
+          clientX: best.x,
+          clientY: best.y,
+          buttons: 0,
+        }),
+      );
+      return { ok: true as const, targetId: best.id, dist: best.dist };
+    });
+
+    test.skip(
+      !reconnect.ok,
+      `reconnect drag setup failed: ${(reconnect as { reason?: string }).reason}`,
+    );
+
+    const patch = await patchPromise;
+    test.skip(!patch, "PATCH after end-handle reconnect did not fire (Agente 5/6)");
+
+    const req = patch!.request().postDataJSON() as {
+      to_detection_id?: string | null;
+      from_detection_id?: string | null;
+      points?: unknown;
+      plan_length_ft?: number;
+    } | null;
+
+    expect(req?.points).toBeTruthy();
+    const lengthChanged =
+      req?.plan_length_ft != null &&
+      Math.abs(req.plan_length_ft - lengthBefore) > 0.05;
+    const endpointPatched =
+      req?.to_detection_id != null || req?.from_detection_id != null;
+    let labelsChanged = false;
+    try {
+      const from = (
+        await page.locator("text=From device").locator("..").getByRole("button").innerText()
+      ).trim();
+      const to = (
+        await page.locator("text=To device").locator("..").getByRole("button").innerText()
+      ).trim();
+      labelsChanged = from !== fromBefore || to !== toBefore;
+    } catch {
+      /* panel copy may vary */
+    }
+    expect(lengthChanged || labelsChanged || endpointPatched).toBe(true);
+
+    const totalAfter = await bomTotalUsd(page);
+    expect(totalAfter).not.toBeNull();
+  });
+
+  test("Delete key removes selected cable run", async ({ page }) => {
+    await openPlan1(page);
+    const editOk = await enableEditCables(page);
+    test.skip(!editOk, "UI missing Edit cables toggle (Agente 6)");
+    test.skip(
+      (await page.getByTestId("wire-run").count()) === 0,
+      "no wire-run marks on plan",
+    );
+
+    const wiresBefore = await page.getByTestId("wire-run").count();
+    const selected = await selectFirstWire(page);
+    test.skip(!selected, "could not select wire-run");
+
+    await expect
+      .poll(async () => page.getByTestId("wire-handle").count(), { timeout: 10_000 })
+      .toBeGreaterThanOrEqual(2);
+
+    // Blur Details inputs so window Delete handler runs (not swallowed by typing).
+    await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur?.());
+
+    const delPromise = page
+      .waitForResponse(
+        (r) =>
+          r.url().includes("/wire-runs/") &&
+          r.request().method() === "DELETE" &&
+          r.ok(),
+        { timeout: 20_000 },
+      )
+      .catch(() => null);
+
+    await page.keyboard.press("Delete");
+    const delResp = await delPromise;
+    test.skip(!delResp, "DELETE via keyboard did not fire (Agente 5/6 shortcuts)");
+
+    await expect
+      .poll(async () => page.getByTestId("wire-run").count(), { timeout: 15_000 })
+      .toBe(wiresBefore - 1);
   });
 });

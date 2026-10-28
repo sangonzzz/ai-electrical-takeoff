@@ -158,6 +158,9 @@ uv run python -m eval.regression
 - Review UI coverage (Agente 6): palette click-add + drag-drop, undo/redo,
   Details X/Y edit, Download Excel / quote PDF. Exports under
   `e2e/results/downloads/` validated with openpyxl + pymupdf.
+- Cable handles (`e2e/tests/cable-edit.spec.ts`): reshape middle `wire-handle`,
+  reconnect end handle onto another `detection-mark`, Delete key removes run
+  (isolated `:5174` / `takeoff_e2e` only).
 - Generalization probe (no engine tuning): `eval/scripts/generalization_probe.py` on
   PDFs under `data/plans/generalization/` → `eval/reports/generalization/`.
 
